@@ -59,7 +59,15 @@ backend/data/auth.json
 # Cache
 backend/data/episodes_cache.json
 backend/data/sites.json
+backend/data/audio_cache/
 __pycache__/
+
+# Audio files (generated)
+*.mp3
+backend/test_output.mp3
+
+# Gradle wrapper jar (download on demand)
+frontend/android/gradle/wrapper/gradle-wrapper.jar
 
 # OS
 .DS_Store
