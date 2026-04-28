@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HomeCast</string>
+    <string name="title_activity_main">HomeCast</string>
+    <string name="package_name">com.homecast.app</string>
+    <string name="custom_url_scheme">com.homecast.app</string>
+</resources>
