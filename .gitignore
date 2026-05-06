@@ -91,3 +91,9 @@ frontend/android/app/src/main/assets/public/
 
 # Playwright
 .playwright/
+
+# Reference projects
+reference/
+MiAir/
+nisheng/
+xiaomusic/
