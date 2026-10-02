@@ -27,11 +27,6 @@ const router = createRouter({
       name: 'favlist',
       component: () => import('@/views/FavlistView.vue'),
     },
-    {
-      path: '/cache',
-      name: 'cache',
-      component: () => import('@/views/CacheView.vue'),
-    },
   ],
 })
 

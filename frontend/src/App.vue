@@ -95,7 +95,6 @@ const navItems = [
   { path: '/search', label: '搜索', icon: SearchOutline },
   { path: '/favlist', label: '收藏夹', icon: HeartOutline },
   { path: '/cast', label: '投屏', icon: TvOutline },
-  { path: '/cache', label: '缓存', icon: SaveOutline },
 ]
 
 // 初始化播放器（加载本地存储的数据）
