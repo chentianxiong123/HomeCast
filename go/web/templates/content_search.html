@@ -12,8 +12,12 @@
   </form>
 </div>
 <div id="results">
+  {{if .ResultsHTML}}
+  {{.ResultsHTML}}
+  {{else}}
   <div class="text-center py-20 text-gray-500 dark:text-gray-400">
     <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg>
     <p class="text-lg font-medium">输入关键词开始搜索</p>
   </div>
+  {{end}}
 </div>

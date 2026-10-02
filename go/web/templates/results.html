@@ -20,7 +20,8 @@
         <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"
              class="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-xl shadow-sm">
         <button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                data-bvid="{{.BVID}}" title="播放">
+                data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
+                onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})" title="播放">
           <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
       </div>
@@ -37,7 +38,8 @@
       <!-- 操作按钮（照抄 Vue 版） -->
       <div class="flex items-center space-x-2 flex-shrink-0">
         <button class="hx-play flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
-                data-bvid="{{.BVID}}">
+                data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
+                onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           <span>播放</span>
         </button>
