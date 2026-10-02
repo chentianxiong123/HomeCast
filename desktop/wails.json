@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "homecast",
+  "outputfilename": "homecast",
+  "assetdir": "dist",
+  "reloaddirs": "../frontend/src",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "wailsjsdir": "./wailsjs",
+  "debounceMS": 250
+}
