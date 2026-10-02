@@ -18,12 +18,17 @@ import {
   next,
   prev,
   setPlayMode,
+  setQuality,
+  quality,
   removeFromPlaylist,
   setCurrentIndex,
+  lyrics,
+  lyricMeta,
+  lyricLoading,
+  loadLyric,
 } from '../core/player'
-import type { SpeakerDevice, DLNADevice, Episode, MusicItem } from '../api'
-
-export type { CurrentSong, CastState }
+import type { SpeakerDevice, DLNADevice, Episode } from '../api'
+import type { MusicItem } from '@/types'
 
 export const speakerState = reactive({
   pushTargetDid: '' as string | null,
@@ -57,6 +62,12 @@ export function usePlayerStore() {
     volume: computed(() => state.value.volume),
     isMuted: computed(() => state.value.isMuted),
     playMode: computed(() => state.value.playMode),
+    quality: computed(() => state.value.quality),
+    setQuality,
+    lyrics,
+    lyricMeta,
+    lyricLoading,
+    loadLyric,
     play,
     togglePlay,
     pause,

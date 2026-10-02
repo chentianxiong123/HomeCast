@@ -141,6 +141,22 @@
               </template>
             </n-button>
 
+            <!-- 音质切换（全局统一：由切换决定，不按歌记忆） -->
+            <div
+              v-if="!speakerState.isPushing"
+              class="hidden sm:flex items-center rounded-lg bg-gray-100 dark:bg-gray-700/60 px-1 py-0.5"
+            >
+              <button
+                v-for="q in [{ v: 64, l: '64k' }, { v: 128, l: '128k' }, { v: 192, l: '192k' }]"
+                :key="q.v"
+                class="px-1.5 py-0.5 rounded text-xs font-medium transition-colors"
+                :class="store.quality.value === q.v ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'"
+                @click="handleQualityChange(q.v)"
+              >
+                {{ q.l }}
+              </button>
+            </div>
+
             <!-- 音量控制 -->
             <div class="flex items-center space-x-2 min-w-[100px] sm:min-w-[120px]">
               <n-button quaternary circle size="small" @click="handleToggleMute">
@@ -208,6 +224,17 @@ import {
 import type { PlayMode } from '@/types'
 
 const store = usePlayerStore()
+
+// 歌词面板开关（封面点击打开）
+const lyricOpen = ref(false)
+
+// 音质切换：全局统一，切换后若正在播放则按新音质重载当前歌
+async function handleQualityChange(q: number) {
+  await store.setQuality(q)
+  if (store.currentSong.value && store.isPlaying.value) {
+    await store.play(store.currentSong.value)
+  }
+}
 
 const progressValue = ref(0)
 const volumeValue = ref(store.volume.value)
