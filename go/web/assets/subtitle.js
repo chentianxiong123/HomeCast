@@ -58,8 +58,8 @@
   hcBus.on('subsize', (d) => { if (d && typeof d.idx === 'number') subIdx = Math.min(SUB_SIZES.length - 1, Math.max(0, d.idx)); applySubSize(); });
   applySubSize();
 
-  function showBar() { bar.hidden = false; place(); if (tickBtn) tickBtn.classList.add('text-pink-400'); }
-  function hideBar() { bar.hidden = true; if (tickBtn) tickBtn.classList.remove('text-pink-400'); }
+  function showBar() { bar.hidden = false; place(); if (tickBtn) tickBtn.classList.add('d-tick-on'); }
+  function hideBar() { bar.hidden = true; if (tickBtn) tickBtn.classList.remove('d-tick-on'); }
   if (xBtn) xBtn.addEventListener('click', () => setEnabled(false)); // 字幕条自带 X 关闭
   // 悬停浮现控制（行为对齐桌面挂件）：JS mouseenter 显式控制，不依赖 CSS 变体环境差异
   if (xBtn && bar) {
