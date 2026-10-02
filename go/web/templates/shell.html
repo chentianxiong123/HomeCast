@@ -154,7 +154,7 @@
     <audio id="audio" preload="auto"></audio>
 
     <!-- 进度条 -->
-    <div class="dock-hide-collapsed w-full px-3 sm:px-4 pt-2">
+    <div class="w-full px-3 sm:px-4 pt-2">
       <div class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400 mb-1">
         <span id="d-cur" class="w-12 text-right font-mono">0:00</span>
         <input id="d-progress" type="range" min="0" max="1000" step="1" value="0"
@@ -182,13 +182,8 @@
             <div class="absolute inset-0 rounded-xl bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
               <span class="text-[10px] text-white font-medium bg-black/60 rounded-full px-2 py-0.5">歌词</span>
             </div>
-            <!-- 封面左下角：收缩/展开 dock -->
-            <button id="d-collapse" title="收缩播放器"
-                    class="dock-collapse-btn absolute bottom-0.5 left-0.5 w-5 h-5 rounded-full bg-black/50 text-white/90 hover:bg-black/70 flex items-center justify-center transition-all">
-              <svg class="w-3 h-3 dock-collapse-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
-            </button>
           </div>
-          <div class="dock-hide-collapsed min-w-0">
+          <div class="min-w-0">
             <p id="d-title" class="text-base font-semibold text-gray-900 dark:text-white truncate"></p>
             <p id="d-artist" class="text-sm text-gray-500 dark:text-gray-400 truncate"></p>
           </div>
@@ -196,11 +191,11 @@
 
         <!-- 控制按钮 -->
         <div class="flex items-center space-x-2 sm:space-x-4">
-          <button id="d-tick" title="字幕开关（横向歌词字幕条）" class="dock-hide-collapsed w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hidden sm:flex">
+          <button id="d-tick" title="字幕开关（横向歌词字幕条）" class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hidden sm:flex">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h10M7 13.5h6"/></svg>
           </button>
           <button id="d-prev" title="上一首" disabled
-                  class="dock-hide-collapsed hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  class="hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
           </button>
           <button id="d-toggle" title="播放/暂停"
@@ -208,13 +203,13 @@
             <svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </button>
           <button id="d-next" title="下一首" disabled
-                  class="dock-hide-collapsed hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  class="hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
           </button>
         </div>
 
         <!-- 音量（<640px 收起） -->
-        <div class="dock-hide-collapsed hidden sm:flex items-center space-x-2 flex-1 justify-end">
+        <div class="hidden sm:flex items-center space-x-2 flex-1 justify-end">
           <button id="d-quality" title="音质（点击切换 64/128/192k）"
                   class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">192k</button>
           <button id="d-speed" title="播放速度（点击切换）"
