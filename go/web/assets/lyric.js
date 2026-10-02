@@ -45,6 +45,10 @@
     lines = []; lastIdx = -1; linesEl.innerHTML = '';
   }
 
+  // 歌词时间显示开关（YesPlayMusic showLyricsTime 同款；hc:lytime 持久）
+  let lyTime = false;
+  try { lyTime = localStorage.getItem('hc:lytime') === '1'; } catch (e) {}
+
   function renderLines() {
     linesEl.innerHTML = '';
     if (!lines.length) {
@@ -53,8 +57,16 @@
     }
     lines.forEach((l, i) => {
       const d = document.createElement('div');
-      d.className = 'ly-line text-gray-500 my-1 transition-all duration-300 px-4 py-1 text-center cursor-pointer hover:text-white/70';
-      d.textContent = l[1];
+      d.className = 'ly-line text-gray-500 my-1 transition-all duration-300 px-4 py-1 text-center cursor-pointer hover:text-white/70 flex items-center justify-center gap-2';
+      if (lyTime) {
+        const t = document.createElement('span');
+        t.className = 'text-[10px] text-gray-500 font-mono tabular-nums flex-shrink-0 opacity-60';
+        t.textContent = fmt(l[0]);
+        d.appendChild(t);
+      }
+      const txt = document.createElement('span');
+      txt.textContent = l[1];
+      d.appendChild(txt);
       // 点击行 → 跳到该句时间（YesPlayMusic 同款）
       d.addEventListener('click', () => {
         const t = lines[i][0];
@@ -126,6 +138,7 @@
   // 打开：player 封面点击广播（Vue 版同款交互）
   hcBus.on('lyric-open', (song) => {
     if (!song || !song.bvid) return;
+    try { lyTime = localStorage.getItem('hc:lytime') === '1'; } catch (e) {} // 打开时同步开关（防页面加载后外部改动）
     show();
     load(song);
   });
@@ -158,6 +171,7 @@
 
   // 设置页联动（hc:lysize 绝对档位）与字号按钮
   hcBus.on('lysize', (d) => { if (d && typeof d.idx === 'number') setLyIdx(d.idx - lyIdx); });
+  hcBus.on('lytime', (d) => { if (d && typeof d.on === 'boolean') { lyTime = d.on; renderLines(); lastIdx = -1; sync(audio.currentTime); } });
   document.getElementById('ly-small').addEventListener('click', () => setLyIdx(-1));
   document.getElementById('ly-big').addEventListener('click', () => setLyIdx(1));
   setLyIdx(0); // 应用已存档位并显示
