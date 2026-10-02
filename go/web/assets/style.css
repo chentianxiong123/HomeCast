@@ -42,3 +42,6 @@
 .ly-panel { transform: translateY(32px); opacity: 0; transition: transform 0.3s cubic-bezier(0.32, 0.72, 0.28, 1), opacity 0.3s; }
 .ly-panel.ly-show { transform: translateY(0); opacity: 1; }
 .ly-panel.ly-hidden { display: none; }
+
+/* 透明字幕条：白字投影兜底（Tailwind CDN 任意值 drop-shadow 可能不编译） */
+#subtitle-text { text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.8); }
