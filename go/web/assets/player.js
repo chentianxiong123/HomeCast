@@ -10,7 +10,7 @@
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
     cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
-    qualityBtn: $('d-quality'), speedBtn: $('d-speed'),
+    qualityBtn: $('d-quality'), speedBtn: $('d-speed'), eq: $('d-eq'),
   };
   if (!el.dock || !el.toggle) return;
 
@@ -60,6 +60,7 @@
     el.toggle.innerHTML = playing
       ? '<svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
       : '<svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    if (el.eq) el.eq.hidden = !playing || !song;
     el.prev.disabled = el.next.disabled = !song || queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);

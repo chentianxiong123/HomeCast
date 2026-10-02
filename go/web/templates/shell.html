@@ -101,8 +101,18 @@
       <div class="flex items-center justify-between gap-2 sm:gap-4">
         <!-- 歌曲信息 -->
         <div class="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
-          <img id="d-cover" src="" alt=""
-               class="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-md flex-shrink-0" referrerpolicy="no-referrer">
+          <div class="relative flex-shrink-0">
+            <img id="d-cover" src="" alt=""
+                 class="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-md" referrerpolicy="no-referrer">
+            <!-- 播放频谱（播放中跳动，纯 CSS 动画） -->
+            <div id="d-eq" hidden class="absolute inset-x-0 bottom-0 h-6 flex items-end justify-center gap-[2px] px-1 bg-black/30 rounded-b-xl">
+              <span class="eq-bar w-[3px] rounded-full bg-pink-400"></span>
+              <span class="eq-bar w-[3px] rounded-full bg-pink-400"></span>
+              <span class="eq-bar w-[3px] rounded-full bg-pink-400"></span>
+              <span class="eq-bar w-[3px] rounded-full bg-pink-400"></span>
+              <span class="eq-bar w-[3px] rounded-full bg-pink-400"></span>
+            </div>
+          </div>
           <div class="min-w-0">
             <p id="d-title" class="text-base font-semibold text-gray-900 dark:text-white truncate"></p>
             <p id="d-artist" class="text-sm text-gray-500 dark:text-gray-400 truncate"></p>
@@ -158,6 +168,11 @@
         <p id="ly-artist" class="text-sm text-gray-400 mt-1"></p>
       </div>
       <div id="ly-lines" class="w-full max-w-2xl h-[50vh] overflow-y-auto flex flex-col items-center justify-center"></div>
+      <!-- 歌词面板底部进度条（可拖跳转） -->
+      <div class="absolute bottom-4 inset-x-0 px-8 sm:px-14">
+        <input id="ly-progress" type="range" min="0" max="1000" step="1" value="0"
+               class="w-full h-1 accent-pink-500 cursor-pointer">
+      </div>
       <button id="ly-close" title="关闭"
               class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
