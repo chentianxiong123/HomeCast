@@ -146,59 +146,6 @@
     </div>
   </div>
 
-  <!-- 竖向歌词面板：覆盖除 player-dock 外的整个画面（dock z-50 保持可见） -->
-  <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40 bg-gray-950">
-    <div class="h-full max-w-3xl mx-auto px-5 sm:px-8 py-6 sm:py-8 flex flex-col">
-      <!-- 顶部：歌曲信息（水平居中）+ 控制按钮（右上角） -->
-      <div class="relative mb-6">
-        <div class="flex items-center justify-center space-x-4 text-center">
-          <img id="ly-cover" src="" alt="" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-lg flex-shrink-0" referrerpolicy="no-referrer">
-          <div class="text-left min-w-0">
-            <p id="ly-title" class="text-lg font-bold text-white truncate"></p>
-            <p id="ly-artist" class="text-sm text-gray-400 truncate mt-0.5"></p>
-          </div>
-        </div>
-        <div class="absolute top-0 right-0 flex items-center space-x-1">
-          <button id="ly-small" title="字号减小" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
-          </button>
-          <span id="ly-size" class="w-11 text-center text-xs text-gray-400 font-mono">3/5</span>
-          <button id="ly-big" title="字号增大" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
-          </button>
-          <button id="ly-close" title="关闭" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
-        </div>
-      </div>
-      <!-- 竖向 KTV 歌词列表（实底、撑满中部） -->
-      <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900/80 border border-gray-800 px-2"></div>
-      <!-- 底部进度条（可拖 + 当前/总时长） -->
-      <div class="mt-4 flex items-center space-x-3">
-        <span id="ly-cur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
-        <input id="ly-progress" type="range" min="0" max="1000" step="1" value="0"
-               class="flex-1 w-full h-1.5 accent-pink-500 cursor-pointer">
-        <span id="ly-dur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- 横向歌词字幕：桌面挂件网页版——透明无背景、纯文字+阴影、悬停才浮现 X；
-       卡拉OK进度=文字下方极淡细线（不破坏透明感） -->
-  <div id="subtitle-bar" hidden
-       class="fixed bottom-[104px] left-1/2 -translate-x-1/2 z-40 group w-full max-w-[80vw] sm:max-w-[640px] flex items-center justify-center gap-2">
-    <span id="subtitle-text"
-          class="text-white/95 text-base sm:text-lg font-medium text-center whitespace-nowrap overflow-hidden text-ellipsis select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"></span>
-    <button id="subtitle-x" title="关闭字幕"
-            class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 w-7 h-7 rounded-full bg-black/40 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center shrink-0">
-      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
-    </button>
-    <!-- 卡拉OK横向进度：极淡细线（悬停时略微可见，常态不打扰） -->
-    <div class="absolute left-1/2 -translate-x-1/2 -bottom-[7px] w-3/4 h-[2px] bg-white/10 rounded-full overflow-hidden group-hover:bg-white/20 transition-colors">
-      <div id="subtitle-prog" class="h-full w-0 rounded-full bg-pink-400/80 transition-[width] duration-200 ease-linear"></div>
-    </div>
-  </div>
-
   <div id="player-dock" class="hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
     <audio id="audio" preload="auto"></audio>
 
