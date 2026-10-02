@@ -9,15 +9,16 @@
   const el = {
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
-    cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'),
+    cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
   };
   if (!el.dock || !el.toggle) return;
 
   let song = null; // {bvid,title,artist,cover}
   let state = 'idle'; // idle/loading/playing/paused/ended
-  let queue = []; // 播放历史（去重），prev/next 队列走位
+  let queue = []; // 播放队列（自动上下文），prev/next 队列走位
   let qidx = -1;
   let lastSaveAt = 0;
+  let playMode = localStorage.getItem('hc:mode') || 'order'; // order/loop/single/random
 
   const fmt = (s) => {
     if (!isFinite(s) || !s) return '0:00';
@@ -59,6 +60,32 @@
     el.prev.disabled = el.next.disabled = !song || queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);
+    renderMode();
+  }
+
+  // ---- 播放模式：order/loop/single/random（Vue 版同款轮换 + localStorage P 态） ----
+  const MODE_ICONS = {
+    order: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+    loop: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+    single: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2 21 6l-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><text x="9" y="17" font-size="7" fill="currentColor" stroke="none">1</text>',
+    random: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>',
+  };
+  const MODE_ORDER = ['order', 'loop', 'single', 'random'];
+  function renderMode() {
+    if (!el.mode) return;
+    el.mode.innerHTML = MODE_ICONS[playMode] || MODE_ICONS.order;
+    el.mode.title = { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' }[playMode];
+    el.mode.classList.toggle('text-pink-400', playMode !== 'order');
+    el.mode.classList.toggle('hover:bg-gray-100', true);
+  }
+  function setPlayMode(m) {
+    playMode = m;
+    try { localStorage.setItem('hc:mode', m); } catch (e) {}
+    renderMode();
+    hcBus.emit('toast', { msg: { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' }[m] });
+  }
+  function cycleMode() {
+    setPlayMode(MODE_ORDER[(MODE_ORDER.indexOf(playMode) + 1) % MODE_ORDER.length]);
   }
 
   // ---- 播放队列（C 态，进程内）：自动上下文 + 插队（参照 YesPlayMusic next 页） ----
@@ -110,6 +137,27 @@
     state = s;
     render();
     hcBus.emit('state', { state, song });
+    updateMediaMeta();
+  }
+
+  // ---- MediaSession：系统媒体键 / 媒体栏可见（YesPlayMusic 同款） ----
+  function updateMediaMeta() {
+    if (!('mediaSession' in navigator)) return;
+    if (song) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: song.title || '',
+        artist: song.artist || '',
+        artwork: song.cover ? [{ src: song.cover, sizes: '512x512' }] : [],
+      });
+    }
+    const acting = { playing: !audio.paused, paused: audio.paused, previoustrack: true, nexttrack: true };
+    navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
+    try {
+      navigator.mediaSession.setActionHandler('play', () => audio.play().catch(() => {}));
+      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => step('prev'));
+      navigator.mediaSession.setActionHandler('nexttrack', () => step('next'));
+    } catch (e) {}
   }
 
   // ---- widget 上报（节流 5s；桌面挂件轮询用，薄封装直连 API） ----
@@ -129,7 +177,20 @@
   // ---- audio 事件 → 状态机 ----
   audio.addEventListener('play', () => setState('playing'));
   audio.addEventListener('pause', () => setState(audio.ended ? 'ended' : 'paused'));
-  audio.addEventListener('ended', () => { setState('ended'); step('next'); }); // 播完自动下一首
+  audio.addEventListener('ended', () => {
+    setState('ended');
+    if (playMode === 'single' && song) { audio.currentTime = 0; audio.play().catch(() => {}); return; } // 单曲循环
+    if (playMode === 'random') { // 随机下一首（不重复当前）
+      if (queue.length < 2) return;
+      let n;
+      do { n = Math.floor(Math.random() * queue.length); } while (n === qidx);
+      qidx = n;
+      loadSong(queue[qidx]);
+      emitQueue();
+      return;
+    }
+    step('next'); // order/loop：走队（循环）
+  });
   audio.addEventListener('loadedmetadata', () => { el.dur.textContent = fmt(audio.duration); });
   audio.addEventListener('timeupdate', () => {
     if (!song) return;
@@ -151,6 +212,9 @@
   el.cover.addEventListener('click', () => {
     if (song) hcBus.emit('lyric-open', song); // 封面点击 → 歌词面板（Vue 版同款）
   });
+  if (el.mode) el.mode.addEventListener('click', cycleMode);
+  function mute() { audio.muted = !audio.muted; }
+  if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
   audio.volume = 0.8;
 
   // ---- 总线 ----
@@ -160,6 +224,8 @@
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
   hcBus.on('play-next', playNext);
+  hcBus.on('mute', mute);
+  hcBus.on('mode-cycle', cycleMode);
 
   // ---- 投送桥接：cast 页按钮只广播 hc:cast-play，这里持当前歌调后端投送 ----
   hcBus.on('cast-play', (d) => {
