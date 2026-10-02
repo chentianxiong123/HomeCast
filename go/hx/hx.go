@@ -58,7 +58,7 @@ func (h *H) Router() http.Handler {
 
 // searchPage 搜索页（含搜索框 + 空态）
 func (h *H) searchPage(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, "search", "content_search.html", nil)
+	h.renderPage(w, "search", "content_search.html", &searchPageData{})
 }
 
 // musicPage 音乐页（播放列表，M2 实现，当前占位）
