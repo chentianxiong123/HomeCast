@@ -2,6 +2,8 @@
 // 本环境为网页/浏览器时显示网页内字幕条；壳环境 window.hcEnv==='desktop' 默认关）
 (function () {
   const bar = document.getElementById('subtitle-bar');
+  const textEl = document.getElementById('subtitle-text');
+  const xBtn = document.getElementById('subtitle-x');
   const tickBtn = document.getElementById('d-tick');
   const audio = document.getElementById('audio');
   if (!bar || !audio) return;
@@ -15,6 +17,7 @@
 
   function showBar() { bar.hidden = false; if (tickBtn) tickBtn.classList.add('text-pink-400'); }
   function hideBar() { bar.hidden = true; if (tickBtn) tickBtn.classList.remove('text-pink-400'); }
+  if (xBtn) xBtn.addEventListener('click', () => setEnabled(false)); // 字幕条自带 X 关闭
   function setEnabled(v) {
     enabled = v;
     try { localStorage.setItem('hc:subtitle', v ? '1' : '0'); } catch (e) {}
@@ -30,7 +33,7 @@
       lines = (cand && cand.lines) || [];
     } catch (e) { lines = []; }
     lastIdx = -1;
-    bar.textContent = lines.length ? lines[0][1] : '';
+    if (textEl) textEl.textContent = lines.length ? lines[0][1] : '';
   }
 
   function sync(sec) {
@@ -39,7 +42,7 @@
     for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= sec) idx = i; else break; }
     if (idx === lastIdx) return;
     lastIdx = idx;
-    bar.textContent = idx >= 0 ? lines[idx][1] : (songTitle || '');
+    if (textEl) textEl.textContent = idx >= 0 ? lines[idx][1] : (songTitle || '');
   }
 
   // 播放状态（含歌曲信息）：无歌隐藏，换歌重新取词
