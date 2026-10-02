@@ -143,3 +143,42 @@ body {
 /* ============ htmx ============ */
 .htmx-indicator { display: none; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
+/* ============ Shoelace 品牌 token 覆盖（粉紫主题） ============ */
+:root {
+  --sl-color-primary-50:  #fdf2f8;
+  --sl-color-primary-100: #fce7f3;
+  --sl-color-primary-200: #fbcfe8;
+  --sl-color-primary-300: #f9a8d4;
+  --sl-color-primary-400: #f472b6;
+  --sl-color-primary-500: #ec4899;
+  --sl-color-primary-600: #db2777;
+  --sl-color-primary-700: #be185d;
+  --sl-color-primary-800: #9d174d;
+  --sl-color-primary-900: #831843;
+  --sl-focus-ring-color-primary: rgba(236, 72, 153, .35);
+  --sl-border-radius-medium: 10px;
+}
+/* 主按钮保持粉紫渐变（组件上覆盖） */
+sl-button[variant="primary"]::part(base) {
+  background: linear-gradient(135deg, var(--pink), var(--violet));
+  border: none;
+  box-shadow: 0 4px 14px rgba(236, 72, 153, .3);
+}
+sl-button[variant="primary"]::part(base):hover {
+  filter: brightness(1.08);
+}
+/* 搜索输入框宽度 */
+.sl-input-wide { flex: 1; min-width: 0; }
+.search-form { display: flex; align-items: center; gap: .5rem; }
+/* 封面 */
+.song-cover {
+  width: 80px; height: 56px; object-fit: cover; border-radius: 8px; flex-shrink: 0;
+  background: var(--line);
+}
+/* 空态图标 */
+.empty-icon { font-size: 2.5rem; --sl-icon-font-size: 2.5rem; color: var(--muted); }
+/* hero */
+.hero { display: flex; flex-direction: column; align-items: center; gap: .75rem;
+  margin-top: 4rem; text-align: center; }
+.hero-title { font-size: 1.875rem; font-weight: 700; }
+.hero-sub { margin: 0; line-height: 1.7; }
