@@ -5,8 +5,8 @@ package server
 import (
 	"log"
 	"net/http"
-	"strings"
 	"os"
+	"strings"
 	"time"
 
 	"homecast/internal/api"
@@ -38,12 +38,21 @@ func New() http.Handler {
 	speakerSvc := service.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speaker.NewQRLogin()}
 	sitesHandler := &api.SitesHandler{Sites: service.NewSitesService("")}
+	widgetState := service.NewWidgetState()
+	widgetStateGlobal = widgetState
+	widgetHandler := &api.WidgetHandler{State: widgetState}
 
-	return withCORS(api.NewMux(
+	mux := api.NewMux(
 		musicHandler, favHandler, lyricHandler, playlistHandler,
-		castHandler, proxyHandler, speakerHandler, sitesHandler,
-	))
+		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler,
+	)
+	return withCORS(mux)
 }
+
+// WidgetStateRef 挂件（同进程）读取播放状态用
+func WidgetStateRef() *service.WidgetState { return widgetStateGlobal }
+
+var widgetStateGlobal *service.WidgetState
 
 // withCORS 允许任意来源（本地单用户服务；桌面壳 wails:// 域跨域访问）
 func withCORS(h http.Handler) http.Handler {
@@ -71,6 +80,6 @@ func ListenAndServe(addr string) error {
 		}
 		addr = "0.0.0.0:" + port
 	}
-	log.Printf("homecast-go listening on http://%s (music + fav + lyric + playlist + cast + speaker + sites)", addr)
+	log.Printf("homecast-go listening on http://%s (music + fav + lyric + playlist + cast + speaker + sites + widget)", addr)
 	return http.ListenAndServe(addr, New())
 }
