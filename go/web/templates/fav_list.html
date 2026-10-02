@@ -9,9 +9,16 @@
 </div>
 {{else}}
 <div class="flex items-center justify-between mb-4">
-  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">收藏夹</h2>
-  <button hx-post="/hx/fav/clear" hx-target="#fav-list" hx-swap="innerHTML" hx-confirm="清空全部收藏？"
-          class="text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">清空收藏</button>
+  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">收藏夹（{{len .Items}} 首）</h2>
+  <div class="flex items-center space-x-3">
+    <button onclick="hcBus.emit('play-fav-all')"
+            class="flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      <span class="hidden sm:inline">播放全部</span>
+    </button>
+    <button hx-post="/hx/fav/clear" hx-target="#fav-list" hx-swap="innerHTML" hx-confirm="清空全部收藏？"
+            class="text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">清空收藏</button>
+  </div>
 </div>
 <div class="grid gap-3">
   {{range .Items}}
