@@ -16,6 +16,8 @@ import (
 // H 功能上下文：只有各功能要用的数据句柄，无接口无抽象
 type H struct {
 	Music *service.MusicService
+	Fav   *service.FavService
+	PL    *service.PlaylistService
 	Tpl   *template.Template
 }
 
@@ -26,7 +28,7 @@ type page struct {
 	Content template.HTML // content 模板渲染结果
 }
 
-// renderPage 渲染完整页面（shell + content），tab 高亮由服务端决定（多页天然正确）
+// renderPage 渲染完整页面（shell + content），tab 高亮由 nav.js 按 URL 推导
 func (h *H) renderPage(w http.ResponseWriter, active, content string, data any) {
 	var buf bytes.Buffer
 	if err := h.Tpl.ExecuteTemplate(&buf, content, data); err != nil {
@@ -43,32 +45,30 @@ func (h *H) Router() http.Handler {
 	mux.Handle("GET /assets/", http.FileServerFS(web.Assets()))
 	// 页面（对照 Vue 版 nav：音乐/搜索/收藏夹/投屏）
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { h.searchPage(w, r) })
-	mux.HandleFunc("GET /hx/music", h.musicPage)
+	mux.HandleFunc("GET /hx/music", h.MusicPage)
 	mux.HandleFunc("GET /hx/search", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.URL.Query()["kw"]; ok {
-			h.Search(w, r) // 带 kw = 结果片段
+			h.Search(w, r) // 带 kw = 结果片段或完整页（按 HX-Request 区分）
 		} else {
 			h.searchPage(w, r) // 无 kw = 搜索页
 		}
 	})
-	mux.HandleFunc("GET /hx/favs", h.favsPage)
+	mux.HandleFunc("GET /hx/favs", h.FavsPage)
 	mux.HandleFunc("GET /hx/cast", h.castPage)
+	// 播放列表切面
+	mux.HandleFunc("POST /hx/playlist/add", h.AddPL)
+	mux.HandleFunc("POST /hx/playlist/remove/{bvid}", h.RemovePL)
+	mux.HandleFunc("POST /hx/playlist/clear", h.ClearPL)
+	// 收藏切面
+	mux.HandleFunc("POST /hx/fav/toggle", h.FavToggle)
+	mux.HandleFunc("POST /hx/fav/remove/{bvid}", h.FavRemove)
+	mux.HandleFunc("POST /hx/fav/clear", h.FavClear)
 	return mux
 }
 
 // searchPage 搜索页（含搜索框 + 空态）
 func (h *H) searchPage(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, "search", "content_search.html", &searchPageData{})
-}
-
-// musicPage 音乐页（播放列表，M2 实现，当前占位）
-func (h *H) musicPage(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, "music", "content_music.html", nil)
-}
-
-// favsPage 收藏夹页（M2 实现，当前占位）
-func (h *H) favsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, "favs", "content_favs.html", nil)
 }
 
 // castPage 投屏页（M4 实现，当前占位）

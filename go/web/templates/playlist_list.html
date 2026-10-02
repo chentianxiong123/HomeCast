@@ -1,0 +1,50 @@
+{{/* 播放列表片段（空态 or 歌曲行；Remove/Clear 返回此片段替换 #pl-list） */}}
+{{if not .Items}}
+<div class="text-center py-24 text-gray-500 dark:text-gray-400">
+  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg>
+  <p class="text-lg font-medium">播放列表还是空的</p>
+  <p class="text-sm mt-1">去搜索，点歌曲卡片上的 + 加进来</p>
+  <a href="/hx/search" hx-get="/hx/search" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
+     class="inline-block mt-6 px-8 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-medium rounded-full shadow-md hover:brightness-105 transition-all">去搜索</a>
+</div>
+{{else}}
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">播放列表</h2>
+  <button hx-post="/hx/playlist/clear" hx-target="#pl-list" hx-swap="innerHTML" hx-confirm="清空播放列表？"
+          class="text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors">清空列表</button>
+</div>
+<div class="grid gap-3">
+  {{range .Items}}
+  <div class="group flex items-center space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700">
+    <div class="relative flex-shrink-0">
+      <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"
+           class="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-xl shadow-sm">
+      <button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+              data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
+              onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})" title="播放">
+        <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+    </div>
+    <div class="flex-1 min-w-0">
+      <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">{{.Title}}</h3>
+      <div class="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <span class="truncate max-w-[120px]">{{.Artist}}</span>
+        <span>{{.Duration}}</span>
+      </div>
+    </div>
+    <div class="flex items-center space-x-2 flex-shrink-0">
+      <button class="hx-play flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
+              data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
+              onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span>播放</span>
+      </button>
+      <button hx-post="/hx/playlist/remove/{{.BVID}}" hx-target="#pl-list" hx-swap="innerHTML"
+              class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-500 transition-colors" title="移除">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M10 11v6M14 11v6"/><path d="M4 6h16"/></svg>
+      </button>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{end}}

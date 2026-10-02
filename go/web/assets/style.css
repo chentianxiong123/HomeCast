@@ -8,3 +8,11 @@
   color: #fff;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
+
+/* 当前播放卡片高亮（list-highlight.js 切换 .is-playing） */
+.group.is-playing {
+  box-shadow: 0 0 0 2px #ec4899, 0 4px 12px -2px rgb(236 72 153 / 0.25);
+}
+/* 歌词面板滚动条隐藏（KTV 纯视觉） */
+#ly-lines::-webkit-scrollbar { display: none; }
+#ly-lines { scrollbar-width: none; }
