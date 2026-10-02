@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>哔哩音乐</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <style>
+    body { min-height: 100vh; }
+    .song-card:hover { transform: translateY(-1px); }
+    .song-card img { width: 72px; height: 48px; object-fit: cover; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <header class="navbar bg-base-100 shadow-sm sticky top-0 z-40">
+    <div class="navbar-start">
+      <a href="/" class="flex items-center gap-2">
+        <div class="logo">♪</div>
+        <span class="text-lg font-bold hidden sm:block">哔哩音乐</span>
+      </a>
+    </div>
+    <div class="navbar-center flex-1 max-w-xl">
+      <form hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
+            class="flex items-center gap-2 w-full">
+        <input type="text" name="kw" placeholder="搜索喜欢的音乐..." autofocus
+               class="input flex-1"
+               hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
+               hx-trigger="keyup[!event.isComposing] changed delay:600ms" hx-params="kw">
+        <button type="submit" class="btn btn-primary">搜索</button>
+      </form>
+    </div>
+    <div class="navbar-end gap-1">
+      <a href="/hx/favs" class="btn btn-ghost btn-sm" hx-boost="true" title="M2 上线">收藏</a>
+      <a href="/hx/playlist" class="btn btn-ghost btn-sm" hx-boost="true" title="M2 上线">列表</a>
+      <a href="/hx/cast" class="btn btn-ghost btn-sm" hx-boost="true" title="M4 上线">投屏</a>
+    </div>
+  </header>
+
+  <!-- 内容 -->
+  <main class="max-w-5xl mx-auto p-4 pb-40">
+    <div id="results">
+      <!-- htmx 搜索片段替换这里 -->
+      <div class="card">
+        <div class="card-body items-center py-16 muted">
+          <div class="text-5xl mb-4">🎵</div>
+          <p class="text-lg">输入关键词开始搜索</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 播放器孤岛（M1 接管：进度/控制/歌词） -->
+  <div id="player-dock" class="fixed bottom-0 inset-x-0 z-50">
+    <audio id="audio" preload="auto"></audio>
+  </div>
+
+  <script src="/assets/htmx.min.js"></script>
+  <script src="/assets/alpine.min.js" defer></script>
+</body>
+</html>
