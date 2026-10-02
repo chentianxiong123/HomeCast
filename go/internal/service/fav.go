@@ -1,9 +1,7 @@
 package service
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"database/sql"
 	"sync"
 )
 
@@ -18,42 +16,48 @@ type FavSong struct {
 	PlayCount   int    `json:"play_count"`
 }
 
-// FavService 本地 JSON 收藏（对齐桌面 music.py：去重置顶，新的在前）
-// 注意：json.Marshal 对非法 UTF-8 自动替换 U+FFFD 不抛错，写盘永不崩
+// FavService 本地收藏（SQLite 持久化；首启迁移自旧 JSON，见 internal/store）
 type FavService struct {
-	mu   sync.Mutex
-	path string
+	mu sync.Mutex
+	db *sql.DB
 }
 
-func NewFavService(path string) *FavService {
-	if path == "" {
-		home, _ := os.UserHomeDir()
-		path = filepath.Join(home, ".config", "homecast", "favorites.json")
-	}
-	return &FavService{path: path}
+func NewFavService(db *sql.DB) *FavService {
+	return &FavService{db: db}
 }
 
 func (f *FavService) load() []FavSong {
-	data, err := os.ReadFile(f.path)
+	rows, err := f.db.Query(`SELECT bvid,title,artist,cover,duration,duration_sec,play_count FROM favs ORDER BY rowid DESC`)
 	if err != nil {
 		return nil
 	}
+	defer rows.Close()
 	var favs []FavSong
-	if err := json.Unmarshal(data, &favs); err != nil {
-		return nil // 文件损坏当空处理，不崩
+	for rows.Next() {
+		var s FavSong
+		if rows.Scan(&s.BVID, &s.Title, &s.Artist, &s.Cover, &s.Duration, &s.DurationSec, &s.PlayCount) == nil {
+			favs = append(favs, s)
+		}
 	}
 	return favs
 }
 
 func (f *FavService) save(favs []FavSong) error {
-	if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.Marshal(favs)
+	tx, err := f.db.Begin()
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(f.path, data, 0o644)
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM favs`); err != nil {
+		return err
+	}
+	for _, s := range favs {
+		if _, err := tx.Exec(`INSERT INTO favs (bvid,title,artist,cover,duration,duration_sec,play_count) VALUES (?,?,?,?,?,?,?)`,
+			s.BVID, s.Title, s.Artist, s.Cover, s.Duration, s.DurationSec, s.PlayCount); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // List 收藏列表（新的在前）

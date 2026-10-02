@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"homecast/internal/bilibili"
 	"homecast/internal/service"
 	"homecast/internal/speaker"
+	"homecast/internal/store"
 	"homecast/web"
 )
 
@@ -29,11 +31,22 @@ func New() http.Handler {
 		30*time.Second,
 	)
 
+	// SQLite 单文件持久层：首启自动从旧 JSON 迁移（JSON 保留只读备份）
+	home, _ := os.UserHomeDir()
+	dataDir := filepath.Join(home, ".config", "homecast")
+	db, err := store.Open(filepath.Join(dataDir, "homecast.db"))
+	if err != nil {
+		log.Fatalf("open db: %v", err)
+	}
+	if err := store.Migrate(db, dataDir); err != nil {
+		log.Fatalf("migrate db: %v", err)
+	}
+
 	musicSvc := &service.MusicService{Client: client}
 	musicHandler := api.NewMusicHandler(musicSvc)
-	favHandler := &api.FavHandler{Fav: service.NewFavService("")}
+	favHandler := &api.FavHandler{Fav: service.NewFavService(db)}
 	lyricHandler := &api.LyricHandler{}
-	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, "")}
+	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, db)}
 	tokenStore := service.NewTokenStore()
 	castHandler := &api.CastHandler{Cast: service.NewCastService(client, tokenStore)}
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
@@ -50,7 +63,7 @@ func New() http.Handler {
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
-	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(""), PL: service.NewPlaylistService(client, ""), Tpl: web.MustTemplates()}
+	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), PL: service.NewPlaylistService(client, db), Tpl: web.MustTemplates()}
 	outer := http.NewServeMux()
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)
