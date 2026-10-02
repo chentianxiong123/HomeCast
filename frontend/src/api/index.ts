@@ -1,5 +1,4 @@
-// API 基础地址：dev 走 vite proxy（相对路径）；生产（Wails 桌面壳/静态托管）走内嵌后端
-const API_BASE: string = (window as any).__HC_BACKEND__ || (import.meta.env.DEV ? '' : 'http://127.0.0.1:28976')
+import { API_BASE } from './base'
 
 export interface DLNADevice {
 
