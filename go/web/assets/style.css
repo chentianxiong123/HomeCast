@@ -1,0 +1,98 @@
+/* homecast 暗色主题 —— 全项目唯一样式（~5KB，替代 daisyUI 全家桶） */
+:root {
+  --bg0: #0b1120;        /* 页面底 */
+  --bg1: #1e293b;        /* 卡片 */
+  --border: #334155;     /* 边框 */
+  --text: #e2e8f0;       /* 主文本 */
+  --muted: #94a3b8;      /* 次要文本 */
+  --accent: #ec4899;     /* 主色（粉） */
+  --accent2: #8b5cf6;    /* 次色（紫） */
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg0); color: var(--text);
+  font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  min-height: 100vh;
+}
+
+/* ===== 布局工具 ===== */
+.flex { display: flex; } .flex-1 { flex: 1; min-width: 0; }
+.flex-row { display: flex; align-items: center; }
+.items-center { align-items: center; } .justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: .25rem; } .gap-2 { gap: .5rem; } .gap-3 { gap: .75rem; }
+.w-full { width: 100%; } .min-w-0 { min-width: 0; }
+.w-9 { width: 2.25rem; } .h-9 { height: 2.25rem; }
+.max-w-xl { max-width: 36rem; } .max-w-5xl { max-width: 64rem; }
+.max-w-\[180px\] { max-width: 180px; }
+.mx-auto { margin-inline: auto; }
+.p-3 { padding: .75rem; } .p-4 { padding: 1rem; }
+.py-16 { padding-block: 4rem; } .pb-40 { padding-bottom: 10rem; }
+.mt-4 { margin-top: 1rem; } .mb-3 { margin-bottom: .75rem; } .mb-4 { margin-bottom: 1rem; }
+.space-y-2 > * + * { margin-top: .5rem; }
+.rounded-xl { border-radius: .75rem; } .rounded-full { border-radius: 9999px; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hidden { display: none; }
+
+/* ===== 导航 ===== */
+.navbar {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .6rem 1rem;
+  background: var(--bg1); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 40;
+}
+.navbar-start { display: flex; align-items: center; flex-shrink: 0; }
+.navbar-center { display: flex; align-items: center; flex: 1; min-width: 0; padding-inline: 1rem; }
+.navbar-end { display: flex; align-items: center; gap: .25rem; flex-shrink: 0; }
+.logo {
+  width: 2.25rem; height: 2.25rem; border-radius: .75rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700;
+}
+
+/* ===== 按钮 ===== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .3rem;
+  padding: .45rem .85rem; border: 1px solid var(--border); border-radius: .5rem;
+  background: var(--bg1); color: var(--text); font-size: .875rem;
+  cursor: pointer; transition: opacity .15s, transform .1s;
+}
+.btn:hover { opacity: .9; } .btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+.btn-ghost { background: transparent; border-color: transparent; }
+.btn-ghost:hover { background: rgba(255,255,255,.06); }
+.btn-outline { background: transparent; border-color: var(--border); }
+.btn-sm { padding: .3rem .6rem; font-size: .8rem; }
+.btn-circle { border-radius: 9999px; padding: 0; width: 2.2rem; height: 2.2rem; }
+
+/* ===== 输入框 ===== */
+.input {
+  padding: .5rem .75rem; border: 1px solid var(--border); border-radius: .5rem;
+  background: #0f172a; color: var(--text); font-size: .95rem; outline: none;
+}
+.input:focus { border-color: var(--accent); }
+
+/* ===== 卡片 ===== */
+.card { background: var(--bg1); border: 1px solid var(--border); border-radius: .75rem; }
+.card-body { padding: 1rem; }
+.song-card { transition: border-color .15s; }
+.song-card:hover { border-color: var(--accent2); }
+.song-card img {
+  width: 72px; height: 48px; object-fit: cover; border-radius: .5rem; flex-shrink: 0;
+  background: var(--border);
+}
+
+/* ===== 文本 ===== */
+.text-lg { font-size: 1.125rem; } .text-sm { font-size: .875rem; } .text-5xl { font-size: 3rem; }
+.font-bold { font-weight: 700; } .font-medium { font-weight: 500; }
+.text-white { color: #fff; }
+.text-base-content { color: var(--text); }
+.text-base-content\/60, .muted { color: var(--muted); }
+
+/* ===== 播放器 dock（M1 用） ===== */
+#player-dock { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; }
+
+/* ===== htmx 工具 ===== */
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
