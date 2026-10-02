@@ -145,6 +145,19 @@
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
 
+  // ---- 投送桥接：cast 页按钮只广播 hc:cast-play，这里持当前歌调后端投送 ----
+  hcBus.on('cast-play', (d) => {
+    if (!song) {
+      hcBus.emit('cast-result', { ok: false, udn: d.udn, msg: '请先播放一首歌' });
+      return;
+    }
+    const body = new URLSearchParams({ bvid: song.bvid, udn: d.udn, title: song.title });
+    fetch('/hx/cast/play', { method: 'POST', body })
+      .then((r) => r.text())
+      .then((t) => hcBus.emit('cast-result', { ok: t.includes('成功'), udn: d.udn, msg: '投送失败' }))
+      .catch(() => hcBus.emit('cast-result', { ok: false, udn: d.udn, msg: '网络错误' }));
+  });
+
   restoreP();
   render();
 })();
