@@ -45,6 +45,16 @@
 
 Wails 壳后面以 `go/wails/` 引入（v2 桌面先行），不并入 cmd/server。
 
+## 迁移进度（2026-10-02 实测）
+
+- ✅ 阶段1 搜索 + DASH 流（duration/字节数对齐 Python）
+- ✅ 阶段2 收藏 + 歌词（网易云）
+- ✅ 阶段3 播放列表
+- ✅ 阶段4 cast/DLNA 投屏（goupnp 库）+ token 流代理
+- ✅ 音箱：找到 Go 库 lsongdev/miservice-go（Player 全套），QR 登录手写协议实测生成成功
+- ✅ sites 站点管理 + 集缓存
+- ⏳ 静态托管（FastAPI 方案对应 Go 版）/ Wails v2 桌面壳 / Wails v3 安卓 APK（等转正）
+
 ## 迁移顺序（分阶段，每阶段可独立验证）
 
 1. **阶段 1（当前）**：Go 骨架 + B站 client + 搜索 + DASH 音频流直转
