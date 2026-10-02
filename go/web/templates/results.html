@@ -21,7 +21,7 @@
 
   <div class="grid gap-3">
     {{range .Items}}
-    <div class="group flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-2xl min-w-0 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700">
+    <div class="group flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-2xl min-w-0 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700" data-ctx-bvid="{{.BVID}}" data-ctx-title="{{.Title}}" data-ctx-artist="{{.Artist}}" data-ctx-cover="{{coverURL .Cover}}" data-ctx-duration="{{.DurationSec}}">
       <!-- 封面 + hover 播放 -->
       <div class="relative flex-shrink-0">
         <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"

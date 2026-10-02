@@ -90,6 +90,7 @@
     titleEl.textContent = song.title || '';
     artistEl.textContent = song.artist || '';
     if (coverEl && song.cover) coverEl.src = song.cover;
+    if (bgCover && song.cover) bgCover.style.backgroundImage = 'url("' + song.cover + '")'; // 封面模糊背景（网易云同款）
     linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载中…</p></div>';
     try {
       const kw = encodeURIComponent(((song.title || '') + ' ' + (song.artist || '')).trim());
@@ -108,6 +109,19 @@
       linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载失败</p></div>';
     }
   }
+
+  // ---- 歌词背景模式：封面模糊（cover，默认）/ 纯色（solid）----
+  const bgCover = document.getElementById('ly-bg-cover');
+  const bgSolid = document.getElementById('ly-bg-solid');
+  let lyBg = 'cover';
+  try { lyBg = localStorage.getItem('hc:lybg') || 'cover'; } catch (e) {}
+  function applyLyBg() {
+    const cover = lyBg === 'cover';
+    if (bgCover) bgCover.classList.toggle('hidden', !cover);
+    if (bgSolid) bgSolid.classList.toggle('hidden', cover);
+  }
+  hcBus.on('lybg', (d) => { if (d && d.v) { lyBg = d.v; applyLyBg(); } });
+  applyLyBg();
 
   // 打开：player 封面点击广播（Vue 版同款交互）
   hcBus.on('lyric-open', (song) => {

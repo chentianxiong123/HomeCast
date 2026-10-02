@@ -32,7 +32,7 @@
       const active = i === idx;
       html +=
         '<div class="group flex items-center space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 ' +
-        (active ? 'is-playing border border-pink-500/50' : 'border border-gray-100 dark:border-gray-700') + '">' +
+        (active ? 'is-playing border border-pink-500/50' : 'border border-gray-100 dark:border-gray-700') + '" data-ctx-bvid="' + esc(q.bvid) + '" data-ctx-title="' + esc(q.title) + '" data-ctx-artist="' + esc(q.artist) + '" data-ctx-cover="' + esc(q.cover) + '">' +
         '<div class="relative flex-shrink-0">' +
         '<img src="' + esc(q.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-20 h-14 object-cover rounded-xl shadow-sm">' +
         '<button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" data-bvid="' + esc(q.bvid) + '">' +
