@@ -123,6 +123,10 @@
 
         <!-- 音量（<640px 收起） -->
         <div class="hidden sm:flex items-center space-x-2 flex-1 justify-end">
+          <button id="d-mode" title="播放模式"
+                  class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
           <button id="d-mute" title="静音"
                   class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>
@@ -147,6 +151,15 @@
               class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
+      <!-- 歌词字号调节 -->
+      <div class="absolute top-6 right-20 flex items-center space-x-1">
+        <button id="ly-small" title="字号减小" class="w-9 h-9 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+        </button>
+        <button id="ly-big" title="字号增大" class="w-9 h-9 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -158,5 +171,7 @@
   <script src="/assets/lyric.js"></script>
   <script src="/assets/queue.js"></script>
   <script src="/assets/cast-ui.js"></script>
+  <script src="/assets/shortcuts.js"></script>
+  <script src="/assets/toast.js"></script>
 </body>
 </html>
