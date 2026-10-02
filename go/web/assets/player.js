@@ -280,6 +280,14 @@
       emitQueue();
     } catch (e) { hcBus.emit('toast', { msg: '加载失败' }); }
   });
+  hcBus.on('play-all-list', (d) => { // 任意列表「播放全部」（调用侧从 DOM 收集数据）
+    const items = ((d && d.items) || []).filter((x) => x && x.bvid);
+    if (!items.length) return;
+    queue = items;
+    qidx = 0;
+    loadSong(queue[0]);
+    emitQueue();
+  });
   hcBus.on('queue-clear', () => { // 清空队列：保留当前歌继续播，其余移除
     queue = [];
     qidx = -1;
