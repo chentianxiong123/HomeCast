@@ -52,6 +52,14 @@ func New() http.Handler {
 // WidgetStateRef 挂件（同进程）读取播放状态用
 func WidgetStateRef() *service.WidgetState { return widgetStateGlobal }
 
+// WidgetStateSnapshot 公开快照（desktop/widget 轮询用，不暴露内部类型）
+func WidgetStateSnapshot() (bvid, title, artist string, currentTime, duration float64, playing bool) {
+	if widgetStateGlobal != nil {
+		return widgetStateGlobal.Get()
+	}
+	return "", "", "", 0, 0, false
+}
+
 var widgetStateGlobal *service.WidgetState
 
 // withCORS 允许任意来源（本地单用户服务；桌面壳 wails:// 域跨域访问）

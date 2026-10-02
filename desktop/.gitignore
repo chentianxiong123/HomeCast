@@ -1,4 +1,4 @@
 dist/
 build/bin/
 wailsjs/
-*.log
+*.log/homecast-desktop

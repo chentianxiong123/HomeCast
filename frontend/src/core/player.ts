@@ -147,9 +147,22 @@ export async function initPlayer() {
   // 从后端加载播放列表
   await loadPlaylistFromBackend()
 
-  // 不预创建媒体元素，根据播放内容动态创建
-  console.log('Player initialized')
+  // 桌面歌词挂件命令监听（Wails EventsEmit → toggle/seek）
+  const rt = (window as any).runtime
+  if (rt?.EventsOn) {
+    rt.EventsOn('widget-cmd', (data: any) => {
+      const cmd = Array.isArray(data) ? data[0] : data?.cmd
+      if (cmd === 'toggle') {
+        togglePlay()
+      } else if (cmd === 'seek') {
+        const delta = Array.isArray(data) ? Number(data[1] || 0) : 0
+        seekTo(state.value.currentTime + delta)
+      }
+    })
+    console.log('widget-cmd 监听已注册')
+  }
 
+  // 不预创建媒体元素，根据播放内容动态创建
   console.log('Player initialized')
 }
 

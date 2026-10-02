@@ -1,20 +1,36 @@
 // homecast 桌面壳（Wails v2）：内嵌全部 Go 后端 + 加载 Vue 前端构建产物
+// + 桌面歌词挂件窗口（同进程，GTK3）
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"os"
 
+	"homecast-desktop/widget"
 	"homecast/server"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:dist
 var assets embed.FS
+
+// wailEvents EventsEmit 包装（挂件 → 前端）
+type wailEvents struct{}
+
+func (wailEvents) Emit(cmd string, payload ...any) {
+	if runtimeApp == nil {
+		return
+	}
+	runtime.EventsEmit(runtimeApp, "widget-cmd", append([]any{cmd}, payload...)...)
+}
+
+var runtimeApp context.Context
 
 func main() {
 	port := os.Getenv("HC_PORT")
@@ -38,6 +54,15 @@ func main() {
 		MinHeight: 620,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+		},
+		OnStartup: func(ctx context.Context) {
+			runtimeApp = ctx
+			// 桌面歌词挂件（主线程内创建 GTK 窗口）
+			if os.Getenv("HC_NO_WIDGET") == "" {
+				if err := widget.Start(server.WidgetStateSnapshot, wailEvents{}, "http://127.0.0.1:"+port); err != nil {
+					log.Printf("[widget] 启动失败: %v", err)
+				}
+			}
 		},
 		Bind: []interface{}{
 			app,
