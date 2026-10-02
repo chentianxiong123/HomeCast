@@ -1,0 +1,19 @@
+{{/* 搜索页内容：胶囊搜索框 + 空态 + 结果容器（对照 Vue 版 SearchView） */}}
+<div class="max-w-2xl mx-auto mb-8">
+  <form hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
+        class="flex items-center shadow-lg rounded-full overflow-hidden bg-white dark:bg-gray-800 p-1 pl-5">
+    <input type="text" name="kw" placeholder="搜索喜欢的音乐..." autofocus
+           class="flex-1 bg-transparent text-base outline-none py-2.5 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+           hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
+           hx-trigger="input changed delay:600ms" hx-params="kw">
+    <button type="submit" class="px-8 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-medium rounded-full shadow-md hover:brightness-105 transition-all">
+      搜索
+    </button>
+  </form>
+</div>
+<div id="results">
+  <div class="text-center py-20 text-gray-500 dark:text-gray-400">
+    <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg>
+    <p class="text-lg font-medium">输入关键词开始搜索</p>
+  </div>
+</div>
