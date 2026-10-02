@@ -135,7 +135,7 @@
     // 播放源：缓存命中 → blob URL（秒开）；未命中 → 网络流（播过 60s 后台缓存）
     const streamURL = '/api/v1/music/stream/' + d.bvid + '?quality=' + quality;
     const useCached = () => {
-      window.hcCache.get(d.bvid).then((blob) => {
+      window.hcCache.get(d.bvid, quality).then((blob) => {
         if (!blob) { audio.src = streamURL; audio.play().catch(() => {}); }
         else {
           curBlobURL = URL.createObjectURL(blob);
