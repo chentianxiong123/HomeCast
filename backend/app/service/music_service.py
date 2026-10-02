@@ -78,7 +78,7 @@ class MusicService:
         )
 
     async def get_audio_stream(
-        self, bvid: str, quality: int = AUDIO_64K
+        self, bvid: str, quality: int = AUDIO_192K
     ) -> AudioStreamResult:
         info = await bilibili_video.get_video_info(self.client, bvid)
         result = await bilibili_audio.get_best_audio_url(
@@ -92,5 +92,5 @@ class MusicService:
             codecs=result.codecs,
         )
 
-    async def get_audio_proxy_url(self, bvid: str, quality: int = AUDIO_64K) -> str:
+    async def get_audio_proxy_url(self, bvid: str, quality: int = AUDIO_192K) -> str:
         return f"/api/v1/music/stream/{bvid}?quality={quality}"

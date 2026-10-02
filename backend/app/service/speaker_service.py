@@ -3,7 +3,7 @@ from loguru import logger
 from app.speaker.device_manager import SpeakerManager
 from app.speaker.auth import SpeakerAuth
 from app.bilibili.client import BilibiliClient
-from app.bilibili.audio import get_best_audio_url, AUDIO_64K
+from app.bilibili.audio import get_best_audio_url, AUDIO_192K
 from app.bilibili.video import get_video_info
 from app.proxy.token_store import token_store
 from app.config import get_config
@@ -21,7 +21,7 @@ class SpeakerDeviceResult(BaseModel):
 class PlayRequest(BaseModel):
     bvid: str
     did: str
-    quality: int = AUDIO_64K
+    quality: int = AUDIO_192K
 
 
 class ControlRequest(BaseModel):

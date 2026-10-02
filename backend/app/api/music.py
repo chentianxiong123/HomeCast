@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Path, Request
 from fastapi.responses import Response
 from app.service.music_service import MusicService
-from app.bilibili.audio import AUDIO_64K
+from app.bilibili.audio import AUDIO_192K
 from app.proxy.audio_proxy import proxy_bvid_audio
 from app.proxy.bvid_cache import bvid_cache
 
@@ -42,7 +42,7 @@ async def get_video_info(bvid: str = Path(..., description="BV号")):
 @router.get("/audio/{bvid}")
 async def get_audio_info(
     bvid: str = Path(..., description="BV号"),
-    quality: int = Query(AUDIO_64K, description="音质"),
+    quality: int = Query(AUDIO_192K, description="音质"),
 ):
     """
     获取音频信息，包括是否有本地缓存
@@ -77,12 +77,36 @@ async def get_audio_info(
 async def proxy_audio_stream(
     request: Request,
     bvid: str = Path(..., description="BV号"),
-    quality: int = Query(AUDIO_64K, description="音质"),
+    quality: int = Query(AUDIO_192K, description="音质"),
 ):
-    """
-    音频流端点
-
-    - 有缓存: 返回本地MP3文件
-    - 无缓存: 代理B站原始音频流（MP4容器）
-    """
+    """音频流端点（DASH 直转，无 ffmpeg/无缓存）"""
     return await proxy_bvid_audio(request, bvid, quality)
+
+
+# ── 歌词（对齐桌面播放器：网易云 API，免费无需登录） ──
+
+@router.get("/lyric")
+async def get_lyric(
+    keyword: str = Query(..., description="歌名关键字"),
+    sid: int | None = Query(None, description="指定网易云歌曲id"),
+):
+    """按歌名自动取第一个有词的歌词；或按 sid 精确取"""
+    from app.service.lyric_service import get_lyric_lines
+
+    result = await get_lyric_lines(keyword, sid)
+    if not result:
+        # 找不到歌词是正常业务（很多歌无词），code=0 避免前端拦截器当错误弹框
+        return {"code": 0, "message": "success", "data": None}
+    return {"code": 0, "message": "success", "data": result}
+
+
+@router.get("/lyric/candidates")
+async def lyric_candidates(
+    keyword: str = Query(..., description="歌名关键字"),
+    limit: int = Query(8, ge=1, le=20),
+):
+    """搜索歌词候选列表（只含有词的），前端可弹窗选择"""
+    from app.service.lyric_service import search_candidates
+
+    cands = await search_candidates(keyword, limit)
+    return {"code": 0, "message": "success", "data": cands}
