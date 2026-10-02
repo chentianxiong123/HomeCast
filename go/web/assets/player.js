@@ -224,6 +224,24 @@
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
   hcBus.on('play-next', playNext);
+  hcBus.on('queue-remove', (d) => { // 从队列删除：删当前则自动切下一首，删空则收 dock
+    const i = queue.findIndex((q) => q.bvid === d.bvid);
+    if (i < 0) return;
+    queue.splice(i, 1);
+    if (i < qidx) qidx--;
+    else if (i === qidx) {
+      if (queue.length) {
+        qidx = Math.min(qidx, queue.length - 1);
+        loadSong(queue[qidx]);
+      } else {
+        song = null;
+        audio.pause();
+        setState('idle');
+        hcBus.emit('nowplaying', { bvid: '' });
+      }
+    }
+    emitQueue();
+  });
   hcBus.on('mute', mute);
   hcBus.on('mode-cycle', cycleMode);
 
