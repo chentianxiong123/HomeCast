@@ -53,7 +53,12 @@ Wails 壳后面以 `go/wails/` 引入（v2 桌面先行），不并入 cmd/serve
 - ✅ 阶段4 cast/DLNA 投屏（goupnp 库）+ token 流代理
 - ✅ 音箱：找到 Go 库 lsongdev/miservice-go（Player 全套），QR 登录手写协议实测生成成功
 - ✅ sites 站点管理 + 集缓存
-- ⏳ 静态托管（FastAPI 方案对应 Go 版）/ Wails v2 桌面壳 / Wails v3 安卓 APK（等转正）
+- ✅ Wails v2 桌面壳（阶段5）：desktop/ 单二进制内嵌全后端+前端；webkit2gtk-4.1 构建
+  （Debian 13 用 4.1 而非 4.0！wails build -tags webkit2_41）
+- ✅ 桌面歌词挂件：desktop/widget（cgo+GTK3 移植 lyric_widget.py）：
+  前端上报 /widget/state → 后端内存 → 挂件轮询快照；X11 真穿透+悬停控制条+锁定小锁
+- ⏳ Wails v3 安卓 APK（阶段6，等转正）
+- ⏳ 静态托管（Go 托管 frontend/dist 单端口，阶段5 前置）
 
 ## 迁移顺序（分阶段，每阶段可独立验证）
 
