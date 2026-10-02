@@ -10,6 +10,7 @@ import (
 	"homecast/internal/api"
 	"homecast/internal/bilibili"
 	"homecast/internal/service"
+	"homecast/internal/speaker"
 )
 
 func main() {
@@ -30,10 +31,15 @@ func main() {
 	favHandler := &api.FavHandler{Fav: service.NewFavService("")}
 	lyricHandler := &api.LyricHandler{}
 	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, "")}
+	tokenStore := service.NewTokenStore()
+	castHandler := &api.CastHandler{Cast: service.NewCastService(client, tokenStore)}
+	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
+	speakerSvc := service.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
+	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speaker.NewQRLogin()}
 
 	addr := "0.0.0.0:" + port
-	log.Printf("homecast-go listening on http://%s (search + stream + fav + lyric + playlist)", addr)
-	if err := http.ListenAndServe(addr, api.NewMux(musicHandler, favHandler, lyricHandler, playlistHandler)); err != nil {
+	log.Printf("homecast-go listening on http://%s (music + fav + lyric + playlist + cast + speaker)", addr)
+	if err := http.ListenAndServe(addr, api.NewMux(musicHandler, favHandler, lyricHandler, playlistHandler, castHandler, proxyHandler, speakerHandler)); err != nil {
 		log.Fatal(err)
 	}
 }
