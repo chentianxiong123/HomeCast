@@ -19,16 +19,16 @@
           <h1 class="text-xl font-bold bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent hidden sm:block">哔哩音乐</h1>
         </a>
         <nav class="hidden md:flex space-x-2">
-          <a href="/hx/music"  hx-boost="true" class="nav-tab {{if eq .Active "music"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
+          <a href="/hx/music"  hx-boost="true" class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 {{if eq .Active "music"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>音乐</span>
           </a>
-          <a href="/hx/search" hx-boost="true" class="nav-tab {{if eq .Active "search"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
+          <a href="/hx/search" hx-boost="true" class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 {{if eq .Active "search"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>搜索</span>
           </a>
-          <a href="/hx/favs"   hx-boost="true" class="nav-tab {{if eq .Active "favs"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
+          <a href="/hx/favs"   hx-boost="true" class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 {{if eq .Active "favs"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg><span>收藏夹</span>
           </a>
-          <a href="/hx/cast"   hx-boost="true" class="nav-tab {{if eq .Active "cast"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
+          <a href="/hx/cast"   hx-boost="true" class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 {{if eq .Active "cast"}}bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md{{else}}text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg><span>投屏</span>
           </a>
         </nav>
