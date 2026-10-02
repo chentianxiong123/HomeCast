@@ -307,36 +307,6 @@ export const castApi = {
   },
 }
 
-export const favlistApi = {
-  async getList() {
-    if (USE_MOCK) {
-      await delay(200)
-      return { code: 0, data: (await import('../mock/data')).MOCK_FAVLISTS, message: 'success' }
-    }
-    try {
-      const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/favlist/list')
-      return res.data
-    } catch (e: any) {
-      return { code: -1, data: [], message: e.message || '获取失败' }
-    }
-  },
-
-  async getInfo(mid: number) {
-    if (USE_MOCK) {
-      await delay(300)
-      return { code: 0, data: (await import('../mock/data')).MOCK_FAV_INFO, message: 'success' }
-    }
-    try {
-      const axios = (await import('axios')).default
-      const res = await axios.get(`/api/v1/favlist/info/${mid}`)
-      return res.data
-    } catch (e: any) {
-      return { code: -1, data: null, message: e.message || '获取失败' }
-    }
-  },
-}
-
 export const sitesApi = {
   async getList() {
     try {
