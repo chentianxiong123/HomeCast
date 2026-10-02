@@ -33,13 +33,13 @@
     });
   }
 
-  // 取缓存（命中则刷新 lastUsed）
-  async function get(bvid) {
+  // 取缓存（音质需匹配，否则不算命中；命中刷新 lastUsed）
+  async function get(bvid, quality) {
     if (!bvid || limitMB() === 0) return null;
     try {
       const db = await openDB();
       const row = await tx(db, 'readwrite', (st) => st.get(bvid));
-      if (row && row.data) {
+      if (row && row.data && row.quality === quality) {
         row.lastUsed = Date.now();
         await tx(db, 'readwrite', (st) => st.put(row));
         return row.data;
@@ -48,11 +48,12 @@
     } catch (e) { return null; }
   }
 
-  async function put(bvid, blob) {
+  // 缓存当前音质的流（存 quality 标记；切音质后按需重新缓存）
+  async function put(bvid, blob, quality) {
     if (!bvid || !blob || limitMB() === 0) return;
     try {
       const db = await openDB();
-      await tx(db, 'readwrite', (st) => st.put({ bvid, data: blob, size: blob.size, lastUsed: Date.now() }));
+      await tx(db, 'readwrite', (st) => st.put({ bvid, quality: quality || '', data: blob, size: blob.size, lastUsed: Date.now() }));
       await trimIfNeeded();
     } catch (e) {}
   }
@@ -106,7 +107,7 @@
       if (!resp.ok) return;
       const blob = await resp.blob();
       if (blob && blob.size > 1024 * 64) { // 防坏流/极小响应
-        await put(bvid, blob);
+        await put(bvid, blob, (streamURL.match(/quality=(\d+)/) || [0, ''])[1]);
         hcBus.emit('cache-changed');
       }
     } catch (e) {} finally {
