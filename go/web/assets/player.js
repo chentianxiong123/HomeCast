@@ -23,6 +23,7 @@
   let lastSaveAt = 0;
   let playMode = localStorage.getItem('hc:mode') || 'order'; // order/loop/single/random
   let quality = parseInt(localStorage.getItem('hc:quality') || '192', 10); // 64/128/192
+  if (el && el.qualityBtn) el.qualityBtn.textContent = quality + 'k'; // 按钮初始值跟随持久化音质
   let speed = parseFloat(localStorage.getItem('hc:speed') || '1'); // 0.75~2.0
 
   const fmt = (s) => {
@@ -48,7 +49,7 @@
       el.title.textContent = song.title;
       el.artist.textContent = song.artist || '未知作者';
       el.cover.src = song.cover || '';
-      audio.src = '/api/v1/music/stream/' + song.bvid + '?quality=192';
+      audio.src = '/api/v1/music/stream/' + song.bvid + '?quality=' + quality; // P 态恢复也跟随持久化音质
       if (d.at > 5) audio.currentTime = d.at;
       setState('paused');
       hcBus.emit('nowplaying', { bvid: song.bvid });
