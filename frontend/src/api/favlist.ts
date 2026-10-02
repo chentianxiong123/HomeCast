@@ -1,9 +1,33 @@
+// 收藏夹类型定义（原代码自引用 './favlist' 导致类型缺失，补全于此）
+export interface FavMedia {
+  id: number
+  bvid: string
+  title: string
+  cover: string
+  duration: number
+  artist: string
+}
+
+export interface FavListInfo {
+  id: number
+  title: string
+  cover: string
+  media_count: number
+  intro: string
+  upper?: { mid: number; name: string; face: string }
+}
+
+export interface FavListResult {
+  info: FavListInfo
+  medias: FavMedia[]
+  has_more: boolean
+}
+
 import {
   MOCK_FAVLISTS,
   MOCK_FAV_INFO,
   MOCK_FAV_MEDIA,
 } from '../mock/data'
-import type { FavListInfo, FavMedia, FavListResult } from './favlist'
 
 const USE_MOCK = false
 

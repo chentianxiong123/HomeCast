@@ -23,7 +23,7 @@ export async function searchMusic(keyword: string, page = 1, pageSize = 20): Pro
 export async function getVideoInfo(bvid: string): Promise<VideoInfo> {
   if (USE_MOCK) {
     await delay(300)
-    const song = MOCK_SONGS.find(s => s.bvid === bvid) || MOCK_SONGS[0]
+    const song = MOCK_SONGS.find(s => s.bvid === bvid) ?? MOCK_SONGS[0]!
     return {
       bvid: song.bvid,
       aid: 12345678,
