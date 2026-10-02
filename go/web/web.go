@@ -73,9 +73,26 @@ func pad2(n int) string {
 	return itoa(n)
 }
 
-// Templates 解析全部模板（页面 + htmx 片段）
+// Templates 解析全部模板（页面 + htmx 片段），模板名 = 文件名（如 content_favs.html）
 func Templates() (*template.Template, error) {
-	return template.New("").Funcs(Funcs()).ParseFS(templatesFS, "templates/*.html")
+	tpl := template.New("").Funcs(Funcs())
+	entries, err := templatesFS.ReadDir("templates")
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".html") {
+			continue
+		}
+		b, err := templatesFS.ReadFile("templates/" + e.Name())
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tpl.New(e.Name()).Parse(string(b)); err != nil {
+			return nil, err
+		}
+	}
+	return tpl, nil
 }
 
 // MustTemplates 解析失败即 panic（模板是启动期资产）
