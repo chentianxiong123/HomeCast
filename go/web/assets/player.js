@@ -315,6 +315,7 @@
   });
   hcBus.on('mute', mute);
   hcBus.on('mode-cycle', cycleMode);
+  hcBus.on('mode', (d) => { if (d && d.m) setPlayMode(d.m); });
   hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
   hcBus.on('speed', (d) => { if (d && d.v) setSpeed(d.v); });
 

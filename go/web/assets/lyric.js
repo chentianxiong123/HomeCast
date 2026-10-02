@@ -110,6 +110,8 @@
     });
   }
 
+  hcBus.on('lysize', (d) => { if (d && typeof d.idx === 'number') setLyIdx(d.idx - lyIdx); });
+
   // 字号按钮（标准化档位切换）
   document.getElementById('ly-small').addEventListener('click', () => setLyIdx(-1));
   document.getElementById('ly-big').addEventListener('click', () => setLyIdx(1));
