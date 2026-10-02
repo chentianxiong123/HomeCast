@@ -27,6 +27,7 @@
     const subIdx = Math.max(0, SUB_SIZES.indexOf(parseInt(S('hc:subsize', '24'), 10)));
     const lybg = S('hc:lybg', 'cover');
     const lytime = S('hc:lytime', '0') === '1';
+    const cachelimit = parseInt(S('hc:cachelimit', '500'), 10);
     const hisCount = (JSON.parse(S('hc:searches', '[]')) || []).length;
 
     view.innerHTML =
@@ -119,6 +120,24 @@
         '" data-i="' + i + '">' + v + 'px</button>').join('') +
       '</div></div>' +
 
+      // 歌曲缓存（自动缓存播放过的歌，LRU 上限淘汰）
+      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
+      '<p class="font-medium text-gray-900 dark:text-white mb-1">歌曲缓存</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">自动缓存播放超过 60 秒的歌，再次播放秒开；超上限自动淘汰最旧</p>' +
+      '<div class="flex items-center justify-between mb-3">' +
+      '<span class="text-sm text-gray-500 dark:text-gray-400">已用：<span id="cache-used" class="text-gray-700 dark:text-gray-200 font-medium">计算中…</span></span>' +
+      '<button id="cache-clear" class="px-3 py-1.5 rounded-full text-sm text-gray-400 hover:text-red-400 border border-gray-700 transition-colors">清空缓存</button>' +
+      '</div>' +
+      '<div class="flex items-center justify-between">' +
+      '<span class="text-sm text-gray-500 dark:text-gray-400">缓存上限</span>' +
+      '<select id="cache-limit" class="bg-gray-100 dark:bg-gray-700 text-sm rounded-lg px-2 py-1 border border-gray-300 dark:border-gray-600">' +
+      '<option value="0"' + (cachelimit === 0 ? ' selected' : '') + '>关闭</option>' +
+      '<option value="200"' + (cachelimit === 200 ? ' selected' : '') + '>200MB</option>' +
+      '<option value="500"' + (cachelimit === 500 ? ' selected' : '') + '>500MB</option>' +
+      '<option value="1000"' + (cachelimit === 1000 ? ' selected' : '') + '>1GB</option>' +
+      '<option value="2000"' + (cachelimit === 2000 ? ' selected' : '') + '>2GB</option>' +
+      '</select></div></div>' +
+
       // 数据
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">数据</p>' +
@@ -158,6 +177,25 @@
     const lytimeCtl = document.getElementById('set-lytime');
     if (lytimeCtl) lytimeCtl.addEventListener('change', () => {
       W('hc:lytime', lytimeCtl.checked ? '1' : '0'); hcBus.emit('lytime', { on: lytimeCtl.checked }); render();
+    });
+    // 缓存管理
+    function refreshCacheUI() {
+      if (window.hcCache) {
+        window.hcCache.sizeMB().then((mb) => {
+          const el = document.getElementById('cache-used');
+          if (el) el.textContent = mb > 0 ? mb + ' MB' : '0 MB';
+        });
+      }
+    }
+    refreshCacheUI();
+    const cacheLimit = document.getElementById('cache-limit');
+    if (cacheLimit) cacheLimit.addEventListener('change', () => {
+      W('hc:cachelimit', cacheLimit.value); hcBus.emit('toast', { msg: '缓存上限已更新' }); refreshCacheUI();
+    });
+    const cacheClear = document.getElementById('cache-clear');
+    if (cacheClear) cacheClear.addEventListener('click', () => {
+      if (!window.confirm('确定清空全部歌曲缓存？')) return;
+      window.hcCache.clear().then(() => { hcBus.emit('toast', { msg: '缓存已清空' }); refreshCacheUI(); });
     });
     const clr = view.querySelector('.set-clrhis');
     if (clr) clr.addEventListener('click', () => {
