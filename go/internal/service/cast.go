@@ -76,7 +76,7 @@ func (c *CastService) Discover() []*dlna.Device {
 	return devices
 }
 
-type deviceDTO struct {
+type DeviceDTO struct {
 	Name       string `json:"name"`
 	UDN        string `json:"udn"`
 	IP         string `json:"ip"`
@@ -85,12 +85,12 @@ type deviceDTO struct {
 }
 
 // DeviceList 设备列表 DTO
-func (c *CastService) DeviceList() []deviceDTO {
+func (c *CastService) DeviceList() []DeviceDTO {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	out := make([]deviceDTO, 0, len(c.devices))
+	out := make([]DeviceDTO, 0, len(c.devices))
 	for _, d := range c.devices {
-		out = append(out, deviceDTO{Name: d.Name, UDN: d.UDN, IP: d.IP, Port: d.Port, DeviceType: d.DeviceType})
+		out = append(out, DeviceDTO{Name: d.Name, UDN: d.UDN, IP: d.IP, Port: d.Port, DeviceType: d.DeviceType})
 	}
 	return out
 }

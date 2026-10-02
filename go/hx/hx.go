@@ -18,6 +18,7 @@ type H struct {
 	Music *service.MusicService
 	Fav   *service.FavService
 	PL    *service.PlaylistService
+	Cast  *service.CastService
 	Tpl   *template.Template
 }
 
@@ -54,7 +55,10 @@ func (h *H) Router() http.Handler {
 		}
 	})
 	mux.HandleFunc("GET /hx/favs", h.FavsPage)
-	mux.HandleFunc("GET /hx/cast", h.castPage)
+	mux.HandleFunc("GET /hx/cast", h.CastPage)
+	mux.HandleFunc("POST /hx/cast/rescan", h.Rescan)
+	mux.HandleFunc("POST /hx/cast/play", h.CastPlay)
+	mux.HandleFunc("GET /hx/cast/status/{udn}", h.CastStatus)
 	// 播放列表切面
 	mux.HandleFunc("POST /hx/playlist/add", h.AddPL)
 	mux.HandleFunc("POST /hx/playlist/remove/{bvid}", h.RemovePL)
@@ -71,7 +75,3 @@ func (h *H) searchPage(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, "search", "content_search.html", &searchPageData{})
 }
 
-// castPage 投屏页（M4 实现，当前占位）
-func (h *H) castPage(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, "cast", "content_cast.html", nil)
-}
