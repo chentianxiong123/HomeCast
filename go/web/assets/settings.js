@@ -1,8 +1,12 @@
 // 设置页（零件）：集中展示全部 P 态开关（无黑盒——当前值全部可见），
 // 修改即写 localStorage + 广播 hc:* 事件（对应孤岛各取其值）
 (function () {
+  let inited = false;
+  function init() {
   const view = document.getElementById('settings-view');
-  if (!view) return;
+  if (!view) { inited = false; return; }
+  if (inited) return;
+  inited = true;
   const envDesktop = window.hcEnv === 'desktop';
 
   const S = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } };
@@ -116,4 +120,7 @@
   }
 
   render();
+  }
+  document.addEventListener('htmx:afterSwap', init);
+  init();
 })();

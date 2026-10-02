@@ -112,6 +112,7 @@
   function loadSong(d) {
     song = d;
     notify(d);
+    hcBus.emit('now', d); // 歌词页/其他孤岛取当前曲
     el.title.textContent = d.title;
     el.artist.textContent = d.artist || '未知作者';
     el.cover.src = d.cover || '';
@@ -243,7 +244,7 @@
   el.prev.addEventListener('click', () => step('prev'));
   el.next.addEventListener('click', () => step('next'));
   el.cover.addEventListener('click', () => {
-    if (song) hcBus.emit('lyric-open', song); // 封面点击 → 歌词面板（Vue 版同款）
+    if (song) hcBus.emit('goto-lyric'); // 封面点击 → 独立歌词页（dock/播放不中断）
   });
   // 标题点击 → 新标签打开 B 站原视频页（只广播事件，打开动作在页面层）
   el.title.addEventListener('click', () => {
@@ -316,6 +317,7 @@
   hcBus.on('mute', mute);
   hcBus.on('mode-cycle', cycleMode);
   hcBus.on('mode', (d) => { if (d && d.m) setPlayMode(d.m); });
+  hcBus.on('request-now', () => { if (song) hcBus.emit('now', song); }); // 歌词页初始化拉当前曲
   hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
   hcBus.on('speed', (d) => { if (d && d.v) setSpeed(d.v); });
 
