@@ -62,11 +62,9 @@ async function handleSniff() {
       emit('sniff', res.data)
     } else {
       console.error('[Sniffer] API error:', res.message || 'Unknown error')
-      window.$message?.error?.(res.message || '嗅探失败')
     }
   } catch (e: any) {
     console.error('[Sniffer] Request failed:', e)
-    window.$message?.error?.(e.message || '请求失败')
   } finally { loading.value = false }
 }
 </script>

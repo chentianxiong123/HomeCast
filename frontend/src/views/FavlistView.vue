@@ -59,7 +59,7 @@
             <h3 class="text-xl font-bold">{{ favInfo.title }}</h3>
             <p class="text-white/80 text-sm mt-1 flex items-center space-x-2">
               <n-icon size="16"><PersonOutline /></n-icon>
-              <span>{{ favInfo.upper.name }}</span>
+              <span>{{ favInfo.upper?.name }}</span>
             </p>
             <p class="text-white/60 text-sm mt-1">
               共 {{ favInfo.media_count }} 首歌曲
@@ -258,7 +258,7 @@ async function playAll() {
     return
   }
 
-  const musicItems: MusicItem[] = songs.value.map(item => ({
+  const musicItems: MusicItem[] = songs.value.map((item: FavMedia) => ({
     bvid: item.bvid,
     title: item.title,
     artist: item.artist,

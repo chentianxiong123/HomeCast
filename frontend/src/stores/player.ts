@@ -189,7 +189,6 @@ export async function pushToSpeaker(deviceDid: string) {
     const res: any = await speakerApi.play(
       deviceDid,
       currentSong.value?.bvid || '',
-      currentSong.value?.title || '',
     )
 
     if (res.code === 0) {
