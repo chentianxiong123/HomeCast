@@ -61,36 +61,51 @@
     el.next.classList.toggle('opacity-40', el.next.disabled);
   }
 
-  // ---- 播放 ----
-  function enqueue(d) {
-    const i = queue.findIndex((q) => q.bvid === d.bvid);
-    if (i >= 0) { qidx = i; return; }
-    queue.push({ bvid: d.bvid, title: d.title, artist: d.artist, cover: d.cover });
-    qidx = queue.length - 1;
+  // ---- 播放队列（C 态，进程内）：自动上下文 + 插队（参照 YesPlayMusic next 页） ----
+  function emitQueue() {
+    hcBus.emit('queue', {
+      list: queue.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover })),
+      idx: qidx,
+    });
   }
-  function play(data) {
-    enqueue(data);
-    song = data;
-    el.title.textContent = data.title;
-    el.artist.textContent = data.artist || '未知作者';
-    el.cover.src = data.cover || '';
-    el.cover.alt = data.title;
-    audio.src = '/api/v1/music/stream/' + data.bvid + '?quality=192';
+  function loadSong(d) {
+    song = d;
+    el.title.textContent = d.title;
+    el.artist.textContent = d.artist || '未知作者';
+    el.cover.src = d.cover || '';
+    el.cover.alt = d.title;
+    audio.src = '/api/v1/music/stream/' + d.bvid + '?quality=192';
     audio.play().catch(() => {});
     setState('loading');
-    hcBus.emit('nowplaying', { bvid: data.bvid });
+    hcBus.emit('nowplaying', { bvid: d.bvid });
     saveP();
+  }
+  function play(data) { // 外部点播：去重后进队尾并播放
+    const i = queue.findIndex((q) => q.bvid === data.bvid);
+    if (i >= 0) queue.splice(i, 1);
+    queue.push({ bvid: data.bvid, title: data.title, artist: data.artist, cover: data.cover });
+    qidx = queue.length - 1;
+    loadSong(data);
+    emitQueue();
+  }
+  function playNext(data) { // 「下一首播放」：插到当前歌后面，不打断播放
+    if (!song) { play(data); return; }
+    const i = queue.findIndex((q) => q.bvid === data.bvid);
+    if (i >= 0) queue.splice(i, 1);
+    queue.splice(qidx + 1, 0, { bvid: data.bvid, title: data.title, artist: data.artist, cover: data.cover });
+    emitQueue();
+  }
+  function step(dir) { // 队列走位：next 向后 / prev 向前（循环；prev 播放中先回秒）
+    if (queue.length < 2) return;
+    if (dir === 'prev' && audio.currentTime > 3) { audio.currentTime = 0; return; }
+    qidx = (qidx + (dir === 'next' ? 1 : -1) + queue.length) % queue.length;
+    const t = queue[qidx];
+    if (t) loadSong(t);
+    emitQueue();
   }
   function toggle() { if (!song) return; audio.paused ? audio.play().catch(() => {}) : audio.pause(); }
   function seek(pct) { if (!song || !audio.duration) return; audio.currentTime = (pct / 100) * audio.duration; }
   function setVol(v) { audio.volume = v / 100; audio.muted = v === 0; }
-  function step(dir) { // 队列走位：next 向后、prev 向前（循环）
-    if (queue.length < 2) return;
-    const i = queue.findIndex((q) => q.bvid === (song && song.bvid));
-    qidx = dir === 'next' ? (i + 1) % queue.length : (i - 1 + queue.length) % queue.length;
-    const t = queue[qidx];
-    if (t) play({ bvid: t.bvid, title: t.title, artist: t.artist, cover: t.cover });
-  }
   function setState(s) {
     state = s;
     render();
@@ -114,7 +129,7 @@
   // ---- audio 事件 → 状态机 ----
   audio.addEventListener('play', () => setState('playing'));
   audio.addEventListener('pause', () => setState(audio.ended ? 'ended' : 'paused'));
-  audio.addEventListener('ended', () => setState('ended'));
+  audio.addEventListener('ended', () => { setState('ended'); step('next'); }); // 播完自动下一首
   audio.addEventListener('loadedmetadata', () => { el.dur.textContent = fmt(audio.duration); });
   audio.addEventListener('timeupdate', () => {
     if (!song) return;
@@ -144,6 +159,7 @@
   hcBus.on('seek', (d) => seek(d.pct));
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
+  hcBus.on('play-next', playNext);
 
   // ---- 投送桥接：cast 页按钮只广播 hc:cast-play，这里持当前歌调后端投送 ----
   hcBus.on('cast-play', (d) => {
