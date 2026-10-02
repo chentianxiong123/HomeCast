@@ -7,6 +7,7 @@ package hx
 import (
 	"bytes"
 	"html/template"
+	"io/fs"
 	"net/http"
 
 	"homecast/internal/service"
@@ -45,7 +46,8 @@ func (h *H) renderPage(w http.ResponseWriter, active, content string, data any) 
 // Router 组装 hx 路由（挂在 server 外层 mux 的 "/" 上）
 func (h *H) Router() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("GET /assets/", http.FileServerFS(web.Assets()))
+	// 静态资源 no-store：本地开发异步加载，浏览器缓存会造成「我改了你没看到」的错位
+	mux.Handle("GET /assets/", assetHandler(web.Assets()))
 	// 页面（对照 Vue 版 nav：音乐/搜索/收藏夹/投屏）
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { h.searchPage(w, r) })
 	mux.HandleFunc("GET /hx/queue", h.QueuePage)
@@ -74,6 +76,15 @@ func (h *H) Router() http.Handler {
 	mux.HandleFunc("POST /hx/fav/remove/{bvid}", h.FavRemove)
 	mux.HandleFunc("POST /hx/fav/clear", h.FavClear)
 	return mux
+}
+
+// assetHandler 静态资源包装：HTTP 返回强制不缓存（asset 治理为服务端最新）
+func assetHandler(assets fs.FS) http.Handler {
+	fsrv := http.FileServerFS(assets)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		fsrv.ServeHTTP(w, r)
+	})
 }
 
 // QueuePage GET /hx/queue → 播放队列（自动上下文，前端收 hc:queue 渲染）
