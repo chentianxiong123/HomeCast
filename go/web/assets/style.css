@@ -51,3 +51,6 @@
 .dock-collapse-btn { opacity: 0; transition: opacity 0.2s; }
 .group:hover .dock-collapse-btn { opacity: 1; }
 .dock-collapsed .dock-collapse-chev { transform: rotate(180deg); }
+
+/* 字幕开关激活态（d-tick 打开时明显区分；!important 防 Tailwind text-* 同优先级覆盖） */
+#d-tick.d-tick-on { color: #f472b6 !important; background: rgba(244, 114, 182, 0.12) !important; }
