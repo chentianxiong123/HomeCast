@@ -4,11 +4,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"log"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	"homecast-desktop/widget"
 	"homecast/server"
@@ -47,6 +52,18 @@ func main() {
 	// 壳窗口直载 htmx 页：wails:// 所有请求代理到内嵌后端（同源，无跨域）
 	backend, _ := url.Parse("http://127.0.0.1:" + port)
 	proxy := httputil.NewSingleHostReverseProxy(backend)
+	// 多态注入：网页 UI 据此知晓运行在桌面壳环境（字幕条默认关，由桌面 GTK 挂件承担）
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		if strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			inject := "<script>window.hcEnv='desktop'</script>"
+			body = append(body, []byte(inject)...)
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+		}
+		return nil
+	}
 
 	app := NewApp(port)
 	err := wails.Run(&options.App{
