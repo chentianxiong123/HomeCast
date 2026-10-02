@@ -60,6 +60,7 @@ func (h *H) Router() http.Handler {
 	})
 	mux.HandleFunc("GET /hx/favs", h.FavsPage)
 	mux.HandleFunc("GET /hx/cast", h.CastPage)
+	mux.HandleFunc("GET /hx/settings", h.SettingsPage)
 	mux.HandleFunc("POST /hx/cast/rescan", h.Rescan)
 	mux.HandleFunc("POST /hx/cast/play", h.CastPlay)
 	mux.HandleFunc("GET /hx/cast/status/{udn}", h.CastStatus)
@@ -85,6 +86,11 @@ func assetHandler(assets fs.FS) http.Handler {
 		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		fsrv.ServeHTTP(w, r)
 	})
+}
+
+// SettingsPage GET /hx/settings → 设置页（P 态开关集中可见可改，settings.js 渲染）
+func (h *H) SettingsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderPage(w, "settings", "content_settings.html", nil)
 }
 
 // QueuePage GET /hx/queue → 播放队列（自动上下文，前端收 hc:queue 渲染）
