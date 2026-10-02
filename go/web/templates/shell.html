@@ -80,6 +80,10 @@
   </main>
 
   <!-- 播放器控制栏（孤岛 player.js 管辖；照抄 Vue 版 PlayerBar 结构） -->
+  <!-- 网页字幕条（多态：网页版显示；桌面版由 GTK 挂件承担，壳注入 hcEnv 默认关） -->
+  <div id="subtitle-bar" hidden
+       class="fixed bottom-[104px] left-1/2 -translate-x-1/2 z-40 max-w-[70vw] px-5 py-2 rounded-full bg-gray-900/70 backdrop-blur-md border border-gray-700/60 text-pink-100 text-sm text-center whitespace-nowrap overflow-hidden text-ellipsis shadow-xl transition-all duration-300"></div>
+
   <div id="player-dock" class="hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
     <audio id="audio" preload="auto"></audio>
 
@@ -123,6 +127,9 @@
 
         <!-- 音量（<640px 收起） -->
         <div class="hidden sm:flex items-center space-x-2 flex-1 justify-end">
+          <button id="d-tick" title="网页字幕开关" class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v10H8l-4 4z"/><path d="M9 13h6"/></svg>
+          </button>
           <button id="d-mode" title="播放模式"
                   class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -173,5 +180,6 @@
   <script src="/assets/cast-ui.js"></script>
   <script src="/assets/shortcuts.js"></script>
   <script src="/assets/toast.js"></script>
+  <script src="/assets/subtitle.js"></script>
 </body>
 </html>
