@@ -48,7 +48,8 @@ func New() http.Handler {
 	lyricHandler := &api.LyricHandler{}
 	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, db)}
 	tokenStore := service.NewTokenStore()
-	castHandler := &api.CastHandler{Cast: service.NewCastService(client, tokenStore)}
+	castSvc := service.NewCastService(client, tokenStore)
+	castHandler := &api.CastHandler{Cast: castSvc}
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
 	speakerSvc := service.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speaker.NewQRLogin()}
@@ -63,7 +64,7 @@ func New() http.Handler {
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
-	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), PL: service.NewPlaylistService(client, db), Tpl: web.MustTemplates()}
+	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), PL: service.NewPlaylistService(client, db), Cast: castSvc, Tpl: web.MustTemplates()}
 	outer := http.NewServeMux()
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)

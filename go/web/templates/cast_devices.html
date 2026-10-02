@@ -1,0 +1,39 @@
+{{/* DLNA 设备列表片段（空态 or 设备卡片；投送按钮只广播，player 孤岛响应） */}}
+{{if not .Devices}}
+<div class="text-center py-20 text-gray-500 dark:text-gray-400">
+  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg>
+  <p class="text-lg font-medium">未发现投屏设备</p>
+  <p class="text-sm mt-1">确保电视与电脑在同一 WiFi，点右上角重新扫描</p>
+</div>
+{{else}}
+<div class="grid gap-3 sm:grid-cols-2">
+  {{range .Devices}}
+  <div class="p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-200">
+    <div class="flex items-start justify-between">
+      <div class="flex items-center space-x-3 min-w-0">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="m8 21 4-4 4 4"/></svg>
+        </div>
+        <div class="min-w-0">
+          <p class="font-semibold text-gray-900 dark:text-white truncate">{{.Name}}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{.DeviceType}} · {{.IP}}</p>
+        </div>
+      </div>
+      <span id="cast-status-{{.UDN}}" class="flex-shrink-0">
+        <span class="text-xs text-green-500">在线</span>
+      </span>
+    </div>
+    <div class="flex items-center justify-end mt-3 space-x-2">
+      <button hx-get="/hx/cast/status/{{.UDN}}" hx-target="#cast-status-{{.UDN}}" hx-swap="innerHTML"
+              class="px-3 py-1.5 rounded-full text-xs text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">查状态</button>
+      <button class="cast-play-btn flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
+              data-udn="{{.UDN}}" data-name="{{.Name}}"
+              onclick="hcBus.emit('cast-play', {udn:this.dataset.udn, name:this.dataset.name})">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span>投送</span>
+      </button>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{end}}
