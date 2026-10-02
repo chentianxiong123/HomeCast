@@ -19,6 +19,12 @@
   function showBar() { bar.hidden = false; if (tickBtn) tickBtn.classList.add('text-pink-400'); }
   function hideBar() { bar.hidden = true; if (tickBtn) tickBtn.classList.remove('text-pink-400'); }
   if (xBtn) xBtn.addEventListener('click', () => setEnabled(false)); // 字幕条自带 X 关闭
+  // 悬停浮现控制（行为对齐桌面挂件）：JS mouseenter 显式控制，不依赖 CSS 变体环境差异
+  if (xBtn && bar) {
+    bar.addEventListener('mouseenter', () => { xBtn.style.opacity = '1'; });
+    bar.addEventListener('mouseleave', () => { xBtn.style.opacity = '0'; });
+    xBtn.style.opacity = '0';
+  }
   function setEnabled(v) {
     enabled = v;
     try { localStorage.setItem('hc:subtitle', v ? '1' : '0'); } catch (e) {}
