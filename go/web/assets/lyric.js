@@ -1,13 +1,9 @@
-// 歌词页孤岛：竖向 KTV（独立页面 /hx/lyric，实底不透明）。
-// 宿主元素在本页内（ly-lines/ly-progress/字号按钮...），其他页面元素缺省即跳过。
-// 数据直连 JSON API（孤岛职责内取数），当前曲经 hc:now / hc:request-now 获取。
+// 歌词面板孤岛：竖向 KTV（dock 封面点击弹出，实底不透明、非独立页面）。
+// 宿主元素在 shell（lyric-panel 常驻 DOM），一次绑定即可。
+// 数据直连 JSON API；当前曲经 hc:lyric-open 传入（player 封面点击广播）。
 (function () {
-  let inited = false;
-  function init() {
-  const view = document.getElementById('lyric-view');
-  if (!view) { inited = false; return; }
-  if (inited) return;
-  inited = true;
+  const panel = document.getElementById('lyric-panel');
+  if (!panel) return;
   const linesEl = document.getElementById('ly-lines');
   const titleEl = document.getElementById('ly-title');
   const artistEl = document.getElementById('ly-artist');
@@ -17,7 +13,6 @@
 
   let lines = []; // [[sec, text], ...]
   let lastIdx = -1;
-  let current = null; // 当前曲 {bvid,title,artist,cover}
 
   // 字号标准化 5 档（14/16/18/22/26px），档位数字展示（无黑盒）
   const LY_SIZES = [14, 16, 18, 22, 26];
@@ -39,8 +34,11 @@
     return m + ':' + String(r).padStart(2, '0');
   }
 
-  function esc(x) {
-    return String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function show() { panel.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function hide() {
+    panel.classList.add('hidden');
+    document.body.style.overflow = '';
+    lines = []; lastIdx = -1; linesEl.innerHTML = '';
   }
 
   function renderLines() {
@@ -53,6 +51,7 @@
       const d = document.createElement('div');
       d.className = 'ly-line text-gray-500 my-1 transition-all duration-300 px-4 py-1 text-center cursor-pointer hover:text-white/70';
       d.textContent = l[1];
+      // 点击行 → 跳到该句时间（YesPlayMusic 同款）
       d.addEventListener('click', () => {
         const t = lines[i][0];
         audio.currentTime = t + 0.1;
@@ -84,10 +83,9 @@
   }
 
   async function load(song) {
-    current = song;
     titleEl.textContent = song.title || '';
     artistEl.textContent = song.artist || '';
-    if (coverEl) coverEl.src = song.cover || '';
+    if (coverEl && song.cover) coverEl.src = song.cover;
     linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载中…</p></div>';
     try {
       const kw = encodeURIComponent(((song.title || '') + ' ' + (song.artist || '')).trim());
@@ -107,50 +105,42 @@
     }
   }
 
-  // 当前曲获取：直接响应 now，或主动请求（进页面前的事件可能已错过）
-  hcBus.on('now', (song) => { if (song && song.bvid) load(song); });
-  hcBus.emit('request-now');
-  setTimeout(() => { if (!current) hcBus.emit('request-now'); }, 400);
+  // 打开：player 封面点击广播（Vue 版同款交互）
+  hcBus.on('lyric-open', (song) => {
+    if (!song || !song.bvid) return;
+    show();
+    load(song);
+  });
 
-  // KTV 跟随 + 时间显示（直接听 audio，孤岛内）
+  // 关闭：X 按钮 / ESC
+  document.getElementById('ly-close').addEventListener('click', hide);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.classList.contains('hidden')) hide(); });
+
+  // KTV 跟随 + 时间显示（直接听 audio，孤岛内；面板关闭时不更新）
   const curEl = document.getElementById('ly-cur');
   const durEl = document.getElementById('ly-dur');
   audio.addEventListener('timeupdate', () => {
+    if (panel.classList.contains('hidden')) return;
     sync(audio.currentTime);
     if (curEl) curEl.textContent = fmt(audio.currentTime);
-    if (durEl) durEl.textContent = fmt(audio.duration);
+    if (durEl && audio.duration) durEl.textContent = fmt(audio.duration);
   });
-  audio.addEventListener('loadedmetadata', () => { if (durEl && audio.duration) durEl.textContent = fmt(audio.duration); });
 
   // 底部进度条：跟随播放 + 可拖跳转
   const lyProg = document.getElementById('ly-progress');
   if (lyProg) {
     audio.addEventListener('timeupdate', () => {
+      if (panel.classList.contains('hidden')) return;
       lyProg.value = audio.duration ? Math.round((audio.currentTime / audio.duration) * 1000) : 0;
     });
     lyProg.addEventListener('change', () => {
       if (audio.duration) audio.currentTime = (lyProg.value / 1000) * audio.duration;
     });
-    // 时长空态
-    if (durEl && !audio.duration) durEl.textContent = '--:--';
   }
-
-  // 返回按钮：回上一页（无历史则回队列）
-  const back = document.getElementById('ly-back');
-  if (back) back.addEventListener('click', () => {
-    if (history.length > 1) history.back();
-    else if (window.htmx) htmx.ajax('GET', '/hx/queue', { target: '#main', select: '#main', swap: 'innerHTML', pushUrl: true });
-    else location.href = '/hx/queue';
-  });
 
   // 设置页联动（hc:lysize 绝对档位）与字号按钮
   hcBus.on('lysize', (d) => { if (d && typeof d.idx === 'number') setLyIdx(d.idx - lyIdx); });
-  const sBtn = document.getElementById('ly-small');
-  const bBtn = document.getElementById('ly-big');
-  if (sBtn) sBtn.addEventListener('click', () => setLyIdx(-1));
-  if (bBtn) bBtn.addEventListener('click', () => setLyIdx(1));
+  document.getElementById('ly-small').addEventListener('click', () => setLyIdx(-1));
+  document.getElementById('ly-big').addEventListener('click', () => setLyIdx(1));
   setLyIdx(0); // 应用已存档位并显示
-  }
-  document.addEventListener('htmx:afterSwap', init);
-  init();
 })();

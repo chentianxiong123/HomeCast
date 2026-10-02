@@ -244,7 +244,7 @@
   el.prev.addEventListener('click', () => step('prev'));
   el.next.addEventListener('click', () => step('next'));
   el.cover.addEventListener('click', () => {
-    if (song) hcBus.emit('goto-lyric'); // 封面点击 → 独立歌词页（dock/播放不中断）
+    if (song) hcBus.emit('lyric-open', song); // 封面点击 → 歌词面板（Vue 版同款，实底）
   });
   // 标题点击 → 新标签打开 B 站原视频页（只广播事件，打开动作在页面层）
   el.title.addEventListener('click', () => {
