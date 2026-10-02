@@ -117,14 +117,13 @@ async def proxy_audio_handler(request: Request, token: str):
     return await _stream_from_url(url, req_headers)
 
 
-async def proxy_bvid_audio(request: Request, bvid: str, quality: int = 64):
+async def proxy_bvid_audio(request: Request, bvid: str, quality: int = 192):
     """
-    音乐流代理端点
+    音乐流代理端点（对齐桌面项目已验证方案：DASH 音频直转，无 ffmpeg）
 
-    策略：
-    1. 检查是否有MP3缓存（基于BVID），有则直接返回本地MP3
-    2. 无缓存则实时转码推流：FFmpeg读取B站URL → MP3 → StreamingResponse
-       同时写入缓存文件，供下次直接播放
+    策略：取 B站 DASH 纯音频流(baseUrl)，带 referer 头直接转发。
+    WebView/浏览器 audio 元素原生可播 AAC/mp4a，无需转码。
+    支持 Range（seek/进度拖动）。
     """
     from app.bilibili.client import BilibiliClient
     from app.bilibili.video import get_video_info
@@ -132,22 +131,6 @@ async def proxy_bvid_audio(request: Request, bvid: str, quality: int = 64):
     from app.config import get_config
 
     config = get_config()
-
-    # 1. 检查是否有基于BVID的MP3缓存
-    if bvid_cache.exists(bvid):
-        cached_path = bvid_cache.get_path(bvid)
-        if cached_path:
-            logger.info(f"Serving cached MP3 for bvid={bvid}: {cached_path.name}")
-            return FileResponse(
-                path=str(cached_path),
-                media_type="audio/mpeg",
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                    "Accept-Ranges": "bytes",
-                },
-            )
-
-    # 2. 无缓存，获取B站音频URL并实时转码推流
     client = BilibiliClient(config.bilibili)
 
     try:
@@ -161,59 +144,13 @@ async def proxy_bvid_audio(request: Request, bvid: str, quality: int = 64):
     if not url:
         return Response(content="Empty audio URL", status_code=500)
 
-    logger.info(f"No cache for bvid={bvid}, real-time transcoding...")
-    bitrate = config.ffmpeg.audio_bitrate or "64k"
-    cache_path = bvid_cache._cache_path(bvid)
+    # DASH 音频直转（B站流带 referer 头可直下，浏览器原生可播）
+    range_header = request.headers.get("range")
+    req_headers = {}
+    if range_header:
+        req_headers["Range"] = range_header
 
-    # 标记为正在转码，防止重复转码
-    if bvid not in bvid_cache._transcoding:
-        bvid_cache._transcoding.add(bvid)
-
-        async def transcode_with_cleanup():
-            """转码完成后清理标记"""
-            try:
-                async for chunk in stream_transcoder.transcode_audio_stream(
-                    bvid=bvid,
-                    cid=info.cid,
-                    output_format="mp3",
-                    bitrate=bitrate,
-                    cache_path=cache_path,
-                ):
-                    yield chunk
-            finally:
-                bvid_cache._transcoding.discard(bvid)
-                # 如果缓存文件生成成功，保存metadata
-                if cache_path.exists() and cache_path.stat().st_size > 0:
-                    bvid_cache._save_meta(bvid, cache_path.stat().st_size, bitrate)
-                    logger.info(f"Cache created for {bvid}")
-
-        return StreamingResponse(
-            transcode_with_cleanup(),
-            media_type="audio/mpeg",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Accept-Ranges": "none",
-            },
-        )
-    else:
-        # 已经在转码中，等待缓存生成后返回
-        logger.info(f"Transcoding already in progress for {bvid}, waiting...")
-        for _ in range(60):  # 最多等60秒
-            if bvid_cache.exists(bvid):
-                cached_path = bvid_cache.get_path(bvid)
-                if cached_path:
-                    return FileResponse(
-                        path=str(cached_path),
-                        media_type="audio/mpeg",
-                        headers={
-                            "Access-Control-Allow-Origin": "*",
-                            "Accept-Ranges": "bytes",
-                        },
-                    )
-            await asyncio.sleep(1)
-        return Response(content="Transcoding timeout", status_code=504)
-
-
+    return await _stream_from_url(url, req_headers)
 async def proxy_video_handler(request: Request, token: str):
     data = token_store.get(token)
     if not data:
