@@ -89,34 +89,35 @@
 
   <!-- 播放器控制栏（孤岛 player.js 管辖；照抄 Vue 版 PlayerBar 结构） -->
   <!-- 网页字幕条（多态：网页版显示；桌面版由 GTK 挂件承担，壳注入 hcEnv 默认关） -->
-  <!-- 竖向歌词面板：dock 控制台上方抽屉（dock 保留在底，面板从上方滑出） -->
-  <div id="lyric-panel" class="ly-panel ly-hidden fixed bottom-[96px] inset-x-0 z-40 mx-auto w-full max-w-2xl h-[46vh] rounded-2xl bg-gray-950 border border-gray-800 shadow-2xl px-5 sm:px-8 pt-5 pb-4">
-    <div class="h-full flex flex-col">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center space-x-3 min-w-0">
-          <img id="ly-cover" src="" alt="" class="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shadow-md flex-shrink-0" referrerpolicy="no-referrer">
-          <div class="min-w-0">
-            <p id="ly-title" class="text-sm font-bold text-white truncate"></p>
-            <p id="ly-artist" class="text-xs text-gray-400 truncate mt-0.5"></p>
+  <!-- 竖向歌词面板：覆盖除 player-dock 外的整个画面（dock z-50 保持可见） -->
+  <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40 bg-gray-950">
+    <div class="h-full max-w-3xl mx-auto px-5 sm:px-8 py-6 sm:py-8 flex flex-col">
+      <!-- 顶部：歌曲信息（水平居中）+ 控制按钮（右上角） -->
+      <div class="relative mb-6">
+        <div class="flex items-center justify-center space-x-4 text-center">
+          <img id="ly-cover" src="" alt="" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-lg flex-shrink-0" referrerpolicy="no-referrer">
+          <div class="text-left min-w-0">
+            <p id="ly-title" class="text-lg font-bold text-white truncate"></p>
+            <p id="ly-artist" class="text-sm text-gray-400 truncate mt-0.5"></p>
           </div>
         </div>
-        <div class="flex items-center space-x-1 flex-shrink-0">
-          <button id="ly-small" title="字号减小" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+        <div class="absolute top-0 right-0 flex items-center space-x-1">
+          <button id="ly-small" title="字号减小" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
           </button>
-          <span id="ly-size" class="w-10 text-center text-xs text-gray-400 font-mono">3/5</span>
-          <button id="ly-big" title="字号增大" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <span id="ly-size" class="w-11 text-center text-xs text-gray-400 font-mono">3/5</span>
+          <button id="ly-big" title="字号增大" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
           </button>
-          <button id="ly-close" title="关闭" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-close" title="关闭" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
         </div>
       </div>
-      <!-- 竖向 KTV 歌词列表（实底） -->
-      <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900 border border-gray-800 px-2"></div>
+      <!-- 竖向 KTV 歌词列表（实底、撑满中部） -->
+      <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900/80 border border-gray-800 px-2"></div>
       <!-- 底部进度条（可拖 + 当前/总时长） -->
-      <div class="mt-3 flex items-center space-x-3">
+      <div class="mt-4 flex items-center space-x-3">
         <span id="ly-cur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
         <input id="ly-progress" type="range" min="0" max="1000" step="1" value="0"
                class="flex-1 w-full h-1.5 accent-pink-500 cursor-pointer">
