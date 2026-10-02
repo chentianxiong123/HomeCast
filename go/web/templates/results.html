@@ -1,49 +1,65 @@
-{{/* 搜索结果片段：htmx 替换 #results */}}
+{{/* 搜索结果片段（照抄 Vue 版 SearchView 卡片结构） */}}
 {{if not .Items}}
-<sl-card class="empty-card">
-  <div class="empty-body items-center py-12 muted">
-    <sl-icon name="music-note" class="empty-icon"></sl-icon>
-    <p class="text-lg">未找到相关音乐</p>
-    <p class="text-sm">换个关键词试试</p>
-  </div>
-</sl-card>
-{{else}}
-<div class="result-head flex items-center justify-between mb-3 px-1">
-  <h2 class="result-title text-lg font-bold">搜索结果</h2>
-  <sl-badge variant="neutral" pill>共 {{.Total}} 首 · 第 {{.Page}} 页</sl-badge>
+<div class="text-center py-20 text-gray-500 dark:text-gray-400">
+  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg>
+  <p class="text-lg font-medium">未找到相关音乐</p>
+  <p class="text-sm">换个关键词试试</p>
 </div>
-<div class="space-y-2">
-  {{range .Items}}
-  <sl-card class="song-card">
-    <div class="song-row flex items-center gap-3">
-      <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" class="song-cover" referrerpolicy="no-referrer">
+{{else}}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">搜索结果</h2>
+    <span class="text-sm text-gray-500 dark:text-gray-400">共 {{.Total}} 首 · 第 {{.Page}} 页</span>
+  </div>
+
+  <div class="grid gap-3">
+    {{range .Items}}
+    <div class="group flex items-center space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700">
+      <!-- 封面 + hover 播放 -->
+      <div class="relative flex-shrink-0">
+        <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"
+             class="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-xl shadow-sm">
+        <button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                data-bvid="{{.BVID}}" title="播放">
+          <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+      </div>
+
+      <!-- 信息 -->
       <div class="flex-1 min-w-0">
-        <div class="song-title font-medium truncate">{{.Title}}</div>
-        <div class="song-meta text-sm muted flex items-center gap-2 mt-0.5">
-          <span class="truncate max-w-[180px]">{{.Artist}}</span>
-          <sl-badge size="small" pill>{{.Duration}}</sl-badge>
+        <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">{{.Title}}</h3>
+        <div class="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <span class="truncate max-w-[120px]">{{.Artist}}</span>
+          <span>{{.Duration}}</span>
         </div>
       </div>
-      <div class="song-actions flex items-center gap-1">
-        <sl-button variant="primary" circle class="hx-play" data-bvid="{{.BVID}}" title="播放">
-          <sl-icon name="play-fill"></sl-icon>
-        </sl-button>
-        <sl-button circle fill="clear" class="hx-fav" data-bvid="{{.BVID}}" title="收藏">
-          <sl-icon name="star"></sl-icon>
-        </sl-button>
-        <sl-button circle fill="clear" class="hx-addpl" data-bvid="{{.BVID}}" title="加入列表">
-          <sl-icon name="plus-lg"></sl-icon>
-        </sl-button>
+
+      <!-- 操作按钮（照抄 Vue 版） -->
+      <div class="flex items-center space-x-2 flex-shrink-0">
+        <button class="hx-play flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
+                data-bvid="{{.BVID}}">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <span>播放</span>
+        </button>
+        <button class="hx-fav w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                data-bvid="{{.BVID}}" title="收藏">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
+        </button>
+        <button class="hx-addpl w-9 h-9 rounded-full hidden sm:flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                data-bvid="{{.BVID}}" title="添加">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
       </div>
     </div>
-  </sl-card>
+    {{end}}
+  </div>
+
+  {{if .HasMore}}
+  <div class="flex justify-center pt-6">
+    <button class="px-6 py-2 rounded-full text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            hx-get="/hx/search?kw={{.Keyword}}&page={{.NextPage}}"
+            hx-target="#results" hx-swap="innerHTML">加载更多</button>
+  </div>
   {{end}}
 </div>
-{{if .HasMore}}
-<div class="flex justify-center mt-4">
-  <sl-button outline size="small"
-             hx-get="/hx/search?kw={{.Keyword}}&page={{.NextPage}}"
-             hx-target="#results" hx-swap="innerHTML">加载更多</sl-button>
-</div>
-{{end}}
 {{end}}
