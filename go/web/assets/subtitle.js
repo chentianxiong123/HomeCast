@@ -3,6 +3,7 @@
 (function () {
   const bar = document.getElementById('subtitle-bar');
   const textEl = document.getElementById('subtitle-text');
+  const progEl = document.getElementById('subtitle-prog');
   const xBtn = document.getElementById('subtitle-x');
   const tickBtn = document.getElementById('d-tick');
   const audio = document.getElementById('audio');
@@ -53,7 +54,24 @@
     if (enabled) showBar();
   });
 
-  audio.addEventListener('timeupdate', () => sync(audio.currentTime));
+  audio.addEventListener('timeupdate', () => {
+    sync(audio.currentTime);
+    // 卡拉OK横向进度：当前句内推进（句起点→下一句起点）；无歌词行时整曲推进
+    if (!progEl) return;
+    let pct = 0;
+    if (lines.length && enabled) {
+      let idx = -1;
+      for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= audio.currentTime) idx = i; else break; }
+      if (idx >= 0) {
+        const t0 = lines[idx][0];
+        const t1 = idx + 1 < lines.length ? lines[idx + 1][0] : (audio.duration || t0 + 1);
+        pct = t1 > t0 ? Math.min(100, Math.max(0, ((audio.currentTime - t0) / (t1 - t0)) * 100)) : 0;
+      }
+    } else if (audio.duration) {
+      pct = (audio.currentTime / audio.duration) * 100;
+    }
+    progEl.style.width = pct + '%';
+  });
 
   if (tickBtn) tickBtn.addEventListener('click', () => setEnabled(!enabled));
   hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });

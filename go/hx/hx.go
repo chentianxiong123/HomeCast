@@ -61,6 +61,7 @@ func (h *H) Router() http.Handler {
 	mux.HandleFunc("GET /hx/favs", h.FavsPage)
 	mux.HandleFunc("GET /hx/cast", h.CastPage)
 	mux.HandleFunc("GET /hx/settings", h.SettingsPage)
+	mux.HandleFunc("GET /hx/lyric", h.LyricPage)
 	mux.HandleFunc("POST /hx/cast/rescan", h.Rescan)
 	mux.HandleFunc("POST /hx/cast/play", h.CastPlay)
 	mux.HandleFunc("GET /hx/cast/status/{udn}", h.CastStatus)
@@ -86,6 +87,11 @@ func assetHandler(assets fs.FS) http.Handler {
 		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		fsrv.ServeHTTP(w, r)
 	})
+}
+
+// LyricPage GET /hx/lyric → 歌词页（竖向 KTV，独立页面实底不透明）
+func (h *H) LyricPage(w http.ResponseWriter, r *http.Request) {
+	h.renderPage(w, "lyric", "content_lyric.html", nil)
 }
 
 // SettingsPage GET /hx/settings → 设置页（P 态开关集中可见可改，settings.js 渲染）
