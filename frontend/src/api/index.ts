@@ -46,52 +46,6 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export const cacheApi = {
-  async getList() {
-    if (USE_MOCK) {
-      await delay(300)
-      return { code: 0, data: { items: [], summary: { count: 0, total_mb: 0, max_mb: 500 } } }
-    }
-    try {
-      const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/cache/list')
-      return res.data
-    } catch (e: any) {
-      return { code: -1, message: e.message || '请求失败' }
-    }
-  },
-
-  async delete(bvid: string) {
-    try {
-      const axios = (await import('axios')).default
-      const res = await axios.delete(`/api/v1/cache/${bvid}`)
-      return res.data
-    } catch (e: any) {
-      return { code: -1, message: e.message || '删除失败' }
-    }
-  },
-
-  async clearAll() {
-    try {
-      const axios = (await import('axios')).default
-      const res = await axios.delete('/api/v1/cache/clear/all')
-      return res.data
-    } catch (e: any) {
-      return { code: -1, message: e.message || '清空失败' }
-    }
-  },
-
-  async create(bvid: string) {
-    try {
-      const axios = (await import('axios')).default
-      const res = await axios.post(`/api/v1/cache/create/${bvid}`)
-      return res.data
-    } catch (e: any) {
-      return { code: -1, message: e.message || '创建失败' }
-    }
-  },
-}
-
 export const speakerApi = {
   async getStatus() {
     if (USE_MOCK) {
