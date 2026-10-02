@@ -12,9 +12,15 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // NewMux 组装全部路由（对齐 Python /api/v1 前缀）
-func NewMux(music *MusicHandler) http.Handler {
+func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/music/search", music.Search)
 	mux.HandleFunc("GET /api/v1/music/stream/{bvid}", music.Stream)
+	mux.HandleFunc("GET /api/v1/music/lyric", lyric.Get)
+	mux.HandleFunc("GET /api/v1/music/lyric/candidates", lyric.Candidates)
+	mux.HandleFunc("GET /api/v1/fav/list", fav.List)
+	mux.HandleFunc("POST /api/v1/fav/add", fav.Add)
+	mux.HandleFunc("DELETE /api/v1/fav/{bvid}", fav.Remove)
+	mux.HandleFunc("POST /api/v1/fav/clear", fav.Clear)
 	return mux
 }
