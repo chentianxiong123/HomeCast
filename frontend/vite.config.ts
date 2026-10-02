@@ -19,7 +19,7 @@ export default defineConfig({
     port: 28975,
     proxy: {
       '/api': {
-        target: 'http://localhost:28974',
+        target: 'http://localhost:28976',
         changeOrigin: true,
         timeout: 120000,
         configure: (proxy, options) => {
@@ -29,7 +29,7 @@ export default defineConfig({
         },
       },
       '/proxy': {
-        target: 'http://localhost:28974',
+        target: 'http://localhost:28976',
         changeOrigin: true,
         timeout: 120000,
       },
