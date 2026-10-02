@@ -2,7 +2,8 @@
   <transition name="slide-up">
     <div
       v-if="store.currentSong.value"
-      class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50"
+      class="fixed bottom-14 md:bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50"
+      style="padding-bottom: env(safe-area-inset-bottom)"
       :class="{ 'speaker-mode': speakerState.isPushing }"
     >
       <!-- 音箱模式指示条 -->

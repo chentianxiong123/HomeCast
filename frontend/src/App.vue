@@ -20,8 +20,8 @@
                 </div>
               </div>
               
-              <!-- 导航 -->
-              <nav class="flex space-x-2">
+              <!-- 导航（电脑/平板横排，手机隐藏） -->
+              <nav class="hidden md:flex space-x-2">
                 <router-link
                   v-for="item in navItems"
                   :key="item.path"
@@ -41,8 +41,8 @@
           </div>
         </header>
 
-        <!-- 主内容区 -->
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36">
+        <!-- 主内容区（手机预留底部 Tab + 播放器空间） -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-48 md:pb-36">
           <router-view v-slot="{ Component }">
             <transition name="fade" mode="out-in">
               <component :is="Component" />
@@ -52,6 +52,29 @@
 
         <!-- 播放器控制栏 -->
         <PlayerBar />
+
+        <!-- 手机底部 Tab 导航 -->
+        <nav
+          class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl"
+          style="padding-bottom: env(safe-area-inset-bottom)"
+        >
+          <div class="flex items-stretch h-14">
+            <router-link
+              v-for="item in navItems"
+              :key="item.path"
+              :to="item.path"
+              class="flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200"
+              :class="$route.path === item.path
+                ? 'text-pink-500 dark:text-pink-400'
+                : 'text-gray-500 dark:text-gray-400'"
+            >
+              <n-icon :size="22">
+                <component :is="item.icon" />
+              </n-icon>
+              <span class="text-[10px] font-medium">{{ item.label }}</span>
+            </router-link>
+          </div>
+        </nav>
       </div>
     </n-message-provider>
   </n-config-provider>
@@ -60,7 +83,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useOsTheme, darkTheme } from 'naive-ui'
-import { MusicalNotesOutline, SearchOutline, HeartOutline, TvOutline, SaveOutline } from '@vicons/ionicons5'
+import { MusicalNotesOutline, SearchOutline, HeartOutline, TvOutline } from '@vicons/ionicons5'
 import PlayerBar from '@/components/player/PlayerBar.vue'
 import { initPlayer } from '@/core/player'
 
