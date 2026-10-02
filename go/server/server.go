@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"homecast/hx"
 	"homecast/internal/api"
 	"homecast/internal/bilibili"
 	"homecast/internal/service"
 	"homecast/internal/speaker"
+	"homecast/web"
 )
 
 // Port 默认端口：Go 版独立端口，与 Python 28974 并存对照
@@ -46,7 +48,13 @@ func New() http.Handler {
 		musicHandler, favHandler, lyricHandler, playlistHandler,
 		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler,
 	)
-	return withCORS(mux)
+
+	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
+	hxH := &hx.H{Music: musicSvc, Tpl: web.MustTemplates()}
+	outer := http.NewServeMux()
+	outer.Handle("/", hxH.Router())
+	outer.Handle("/api/", mux)
+	return withCORS(outer)
 }
 
 // WidgetStateRef 挂件（同进程）读取播放状态用
