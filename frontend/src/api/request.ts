@@ -1,9 +1,10 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import type { ApiResponse } from '@/types'
+import { API_BASE } from './base'
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE + '/api/v1',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
