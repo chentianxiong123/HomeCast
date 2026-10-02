@@ -90,7 +90,11 @@
   <!-- 播放器控制栏（孤岛 player.js 管辖；照抄 Vue 版 PlayerBar 结构） -->
   <!-- 网页字幕条（多态：网页版显示；桌面版由 GTK 挂件承担，壳注入 hcEnv 默认关） -->
   <!-- 竖向歌词面板：覆盖除 player-dock 外的整个画面（dock z-50 保持可见） -->
-  <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40 bg-gray-950">
+  <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40">
+    <!-- 歌词背景模式：封面模糊（默认）/ 纯色（设置页切换） -->
+    <div id="ly-bg-cover" class="absolute inset-0 bg-cover bg-center blur-2xl scale-110 opacity-45"></div>
+    <div id="ly-bg-solid" class="absolute inset-0 bg-gray-950"></div>
+    <div class="absolute inset-0 bg-gray-950/55"></div>
     <div class="h-full max-w-3xl mx-auto px-5 sm:px-8 py-6 sm:py-8 flex flex-col">
       <!-- 顶部：歌曲信息（水平居中）+ 控制按钮（右上角） -->
       <div class="relative mb-6">
@@ -115,7 +119,7 @@
         </div>
       </div>
       <!-- 竖向 KTV 歌词列表（实底、撑满中部） -->
-      <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900/80 border border-gray-800 px-2"></div>
+      <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900/70 backdrop-blur-md border border-gray-800 px-2"></div>
       <!-- 底部进度条（可拖 + 当前/总时长） -->
       <div class="mt-4 flex items-center space-x-3">
         <span id="ly-cur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
@@ -240,6 +244,8 @@
   <script src="/assets/cast-ui.js"></script>
   <script src="/assets/shortcuts.js"></script>
   <script src="/assets/toast.js"></script>
+  <script src="/assets/contextmenu.js"></script>
+  <script src="/assets/recent.js"></script>
   <script src="/assets/subtitle.js"></script>
   <script src="/assets/search-history.js"></script>
   <script src="/assets/settings.js"></script>

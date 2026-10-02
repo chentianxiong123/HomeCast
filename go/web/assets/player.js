@@ -109,9 +109,19 @@
       }
     } catch (e) {}
   }
+  function rememberRecent(d) { // 最近播放（去重保序，最多 30 首）
+    try {
+      let list = JSON.parse(localStorage.getItem('hc:recent') || '[]');
+      list = list.filter((x) => x && x.bvid !== d.bvid);
+      list.unshift({ bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '', duration: d.duration || 0 });
+      if (list.length > 30) list = list.slice(0, 30);
+      localStorage.setItem('hc:recent', JSON.stringify(list));
+    } catch (e) {}
+  }
   function loadSong(d) {
     song = d;
     notify(d);
+    rememberRecent(d);
     hcBus.emit('now', d); // 歌词页/其他孤岛取当前曲
     el.title.textContent = d.title;
     el.artist.textContent = d.artist || '未知作者';
