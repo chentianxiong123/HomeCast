@@ -16,3 +16,16 @@
 /* 歌词面板滚动条隐藏（KTV 纯视觉） */
 #ly-lines::-webkit-scrollbar { display: none; }
 #ly-lines { scrollbar-width: none; }
+
+/* 收藏爱心点击动画（纯 CSS，无 JS） */
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.4) rotate(-8deg); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.hx-fav:active { animation: heart-pop 0.4s ease; color: #ec4899; }
+
+/* 歌词字号（lyric.js 调节 --line-size） */
+.ly-line { font-size: var(--line-size, 18px); line-height: 1.8; }
+#ly-lines { font-size: var(--line-size, 18px); }
