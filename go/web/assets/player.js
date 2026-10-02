@@ -132,7 +132,11 @@
   }
   function toggle() { if (!song) return; audio.paused ? audio.play().catch(() => {}) : audio.pause(); }
   function seek(pct) { if (!song || !audio.duration) return; audio.currentTime = (pct / 100) * audio.duration; }
-  function setVol(v) { audio.volume = v / 100; audio.muted = v === 0; }
+  function setVol(v) {
+    audio.volume = v / 100;
+    audio.muted = v === 0;
+    try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
+  }
   function setState(s) {
     state = s;
     render();
@@ -215,7 +219,7 @@
   if (el.mode) el.mode.addEventListener('click', cycleMode);
   function mute() { audio.muted = !audio.muted; }
   if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
-  audio.volume = 0.8;
+  audio.volume = parseInt(localStorage.getItem('hc:vol') || '80', 10) / 100;
 
   // ---- 总线 ----
   hcBus.on('play', play);
@@ -224,6 +228,24 @@
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
   hcBus.on('play-next', playNext);
+  hcBus.on('play-fav-all', async () => { // 收藏夹播放全部（直连 JSON API，薄封装）
+    try {
+      const j = await (await fetch('/api/v1/fav/list')).json();
+      const items = j.data || [];
+      if (!items.length) { hcBus.emit('toast', { msg: '收藏夹是空的' }); return; }
+      queue = items.map((x) => ({ bvid: x.bvid, title: x.title, artist: x.artist, cover: x.cover }));
+      qidx = 0;
+      loadSong(queue[0]);
+      emitQueue();
+    } catch (e) { hcBus.emit('toast', { msg: '加载失败' }); }
+  });
+  hcBus.on('queue-clear', () => { // 清空队列：保留当前歌继续播，其余移除
+    queue = [];
+    qidx = -1;
+    emitQueue();
+    render();
+    hcBus.emit('toast', { msg: '队列已清空' });
+  });
   hcBus.on('queue-remove', (d) => { // 从队列删除：删当前则自动切下一首，删空则收 dock
     const i = queue.findIndex((q) => q.bvid === d.bvid);
     if (i < 0) return;

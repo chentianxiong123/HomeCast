@@ -23,7 +23,10 @@
     let html =
       '<div class="flex items-center justify-between mb-4">' +
       '<h2 class="text-lg font-semibold text-gray-900 dark:text-white">播放队列</h2>' +
-      '<span class="text-sm text-gray-500 dark:text-gray-400">' + list.length + ' 首</span></div>' +
+      '<div class="flex items-center space-x-3">' +
+      '<span class="text-sm text-gray-500 dark:text-gray-400">' + list.length + ' 首</span>' +
+      '<button class="queue-clear text-sm text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors">清空</button>' +
+      '</div></div>' +
       '<div class="grid gap-3">';
     list.forEach((q, i) => {
       const active = i === idx;
@@ -54,6 +57,8 @@
     view.querySelectorAll('.q-del').forEach((btn) => {
       btn.addEventListener('click', () => hcBus.emit('queue-remove', { bvid: btn.dataset.bvid }));
     });
+    const clearBtn = view.querySelector('.queue-clear');
+    if (clearBtn) clearBtn.addEventListener('click', () => hcBus.emit('queue-clear'));
   }
 
   hcBus.on('queue', (d) => { list = d.list || []; idx = d.idx; render(); });
