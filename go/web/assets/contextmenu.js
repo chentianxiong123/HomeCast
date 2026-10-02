@@ -36,13 +36,20 @@
   }
 
   function toggleFav(item) {
-    const fd = new FormData();
-    fd.set('bvid', item.bvid);
-    fd.set('title', item.title || '');
-    fd.set('artist', item.artist || '');
-    fd.set('cover', item.cover || '');
-    fd.set('duration', String(item.duration || 0));
-    fetch('/hx/fav/toggle', { method: 'POST', body: fd })
+    // 取消收藏需确认：先查当前是否已收藏
+    fetch('/api/v1/fav/list')
+      .then((r) => r.json())
+      .then((j) => {
+        const faved = ((j && j.data) || []).some((f) => f && f.bvid === item.bvid);
+        if (faved && !window.confirm('确定取消收藏？')) return;
+        const fd = new FormData();
+        fd.set('bvid', item.bvid);
+        fd.set('title', item.title || '');
+        fd.set('artist', item.artist || '');
+        fd.set('cover', item.cover || '');
+        fd.set('duration', String(item.duration || 0));
+        return fetch('/hx/fav/toggle', { method: 'POST', body: fd });
+      })
       .then(() => hcBus.emit('toast', { msg: '收藏已切换 ♥' }))
       .catch(() => hcBus.emit('toast', { msg: '收藏失败' }));
   }
