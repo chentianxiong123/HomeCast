@@ -325,18 +325,6 @@
   hcBus.on('mode-cycle', cycleMode);
   hcBus.on('mode', (d) => { if (d && d.m) setPlayMode(d.m); });
 
-  // dock 收缩/展开（封面左下角按钮；持久；播放不中断）
-  const dockEl = document.getElementById('player-dock');
-  const collBtn = document.getElementById('d-collapse');
-  let collapsed = false;
-  try { collapsed = localStorage.getItem('hc:dockcoll') === '1'; } catch (e) {}
-  function applyCollapse() {
-    if (!dockEl) return;
-    dockEl.classList.toggle('dock-collapsed', collapsed);
-    try { localStorage.setItem('hc:dockcoll', collapsed ? '1' : '0'); } catch (e) {}
-  }
-  if (collBtn) collBtn.addEventListener('click', () => { collapsed = !collapsed; applyCollapse(); });
-  applyCollapse();
   hcBus.on('request-now', () => { if (song) hcBus.emit('now', song); }); // 歌词页初始化拉当前曲
   hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
   hcBus.on('speed', (d) => { if (d && d.v) setSpeed(d.v); });
