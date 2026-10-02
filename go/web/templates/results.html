@@ -1,0 +1,42 @@
+{{/* 搜索结果片段：htmx 替换 #results */}}
+{{if not .Items}}
+<div class="card">
+  <div class="card-body items-center py-12 muted">
+    <p class="text-lg">未找到相关音乐</p>
+    <p class="text-sm">换个关键词试试</p>
+  </div>
+</div>
+{{else}}
+<div class="flex items-center justify-between mb-3">
+  <h2 class="text-lg font-semibold">搜索结果</h2>
+  <span class="text-sm muted">共 {{.Total}} 首 · 第 {{.Page}} 页</span>
+</div>
+<div class="space-y-2">
+  {{range .Items}}
+  <div class="song-card card">
+    <div class="card-body p-3 flex-row items-center gap-3">
+      <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy">
+      <div class="flex-1 min-w-0">
+        <div class="font-medium truncate">{{.Title}}</div>
+        <div class="text-sm muted flex items-center gap-2">
+          <span class="truncate max-w-[180px]">{{.Artist}}</span>
+          <span>{{.Duration}}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button class="btn btn-circle btn-sm btn-primary hx-play" data-bvid="{{.BVID}}" title="播放">▶</button>
+        <button class="btn btn-circle btn-sm btn-ghost hx-fav" data-bvid="{{.BVID}}" title="收藏">☆</button>
+        <button class="btn btn-circle btn-sm btn-ghost hx-addpl" data-bvid="{{.BVID}}" title="加入列表">+</button>
+      </div>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{if .HasMore}}
+<div class="flex justify-center mt-4">
+  <button class="btn btn-outline"
+          hx-get="/hx/search?kw={{.Keyword}}&page={{.NextPage}}"
+          hx-target="#results" hx-swap="innerHTML">加载更多</button>
+</div>
+{{end}}
+{{end}}
