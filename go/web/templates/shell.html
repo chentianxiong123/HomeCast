@@ -102,9 +102,27 @@
     </div>
   </div>
 
+  <!-- 歌词面板（KTV，孤岛 lyric.js 管辖；dock 封面点击打开） -->
+  <div id="lyric-panel" class="hidden fixed inset-0 z-[60]">
+    <div id="lyric-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+    <div class="relative h-full flex flex-col items-center justify-center px-6">
+      <div class="mb-8 text-center">
+        <p id="ly-title" class="text-xl font-bold text-white truncate max-w-xl"></p>
+        <p id="ly-artist" class="text-sm text-gray-400 mt-1"></p>
+      </div>
+      <div id="ly-lines" class="w-full max-w-2xl h-[50vh] overflow-y-auto flex flex-col items-center justify-center"></div>
+      <button id="ly-close" title="关闭"
+              class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+  </div>
+
   <script src="/assets/htmx.min.js"></script>
   <script src="/assets/event-bus.js"></script>
   <script src="/assets/nav.js"></script>
+  <script src="/assets/list-highlight.js"></script>
   <script src="/assets/player.js"></script>
+  <script src="/assets/lyric.js"></script>
 </body>
 </html>
