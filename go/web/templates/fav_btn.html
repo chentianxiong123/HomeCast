@@ -1,7 +1,8 @@
 {{/* 收藏按钮片段（FavToggle 返回，outerHTML 替换自身，保持可再点） */}}
 <button class="hx-fav w-9 h-9 rounded-full flex items-center justify-center transition-colors {{if .Faved}}text-pink-500 dark:text-pink-400{{else}}text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700{{end}}"
         hx-post="/hx/fav/toggle" hx-target="this" hx-swap="outerHTML"
-                hx-on::after-request="hcBus.emit('toast', {msg: this.classList.contains('text-pink-500') ? '已收藏 ♥' : '已取消收藏'})"
+        hx-on::after-request="hcBus.emit('toast', {msg: this.classList.contains('text-pink-500') ? '已收藏 ♥' : '已取消收藏'})"
+        {{if .Faved}}hx-confirm="确定取消收藏？"{{end}}
         hx-vals='{"bvid":"{{.BVID}}","title":"{{.Title}}","artist":"{{.Artist}}","cover":"{{.Cover}}","duration":"{{.Duration}}"}'
         title="{{if .Faved}}取消收藏{{else}}收藏{{end}}">
   <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>

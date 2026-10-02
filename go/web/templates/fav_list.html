@@ -46,7 +46,7 @@
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         <span class="hidden sm:inline">播放</span>
       </button>
-      <button hx-post="/hx/fav/remove/{{.BVID}}" hx-target="#fav-list" hx-swap="innerHTML"
+      <button hx-post="/hx/fav/remove/{{.BVID}}" hx-target="#fav-list" hx-swap="innerHTML" hx-confirm="确定取消收藏？"
               class="w-9 h-9 rounded-full flex items-center justify-center text-pink-500 dark:text-pink-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="取消收藏">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
       </button>
