@@ -1,4 +1,8 @@
+// API 基础地址：dev 走 vite proxy（相对路径）；生产（Wails 桌面壳/静态托管）走内嵌后端
+const API_BASE: string = (window as any).__HC_BACKEND__ || (import.meta.env.DEV ? '' : 'http://127.0.0.1:28976')
+
 export interface DLNADevice {
+
   name: string
   udn: string
   ip: string
@@ -54,7 +58,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/speaker/status')
+      const res = await axios.get(API_BASE + '/api/v1/speaker/status')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '请求失败' }
@@ -69,7 +73,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/login', { account, password, cookie })
+      const res = await axios.post(API_BASE + '/api/v1/speaker/login', { account, password, cookie })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '登录失败' }
@@ -84,7 +88,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/qr/generate')
+      const res = await axios.post(API_BASE + '/api/v1/speaker/qr/generate')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '生成二维码失败' }
@@ -98,7 +102,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/speaker/qr/status')
+      const res = await axios.get(API_BASE + '/api/v1/speaker/qr/status')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '检查状态失败' }
@@ -108,7 +112,7 @@ export const speakerApi = {
   async resetQRLogin() {
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/qr/reset')
+      const res = await axios.post(API_BASE + '/api/v1/speaker/qr/reset')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '重置失败' }
@@ -122,7 +126,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/logout')
+      const res = await axios.post(API_BASE + '/api/v1/speaker/logout')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '退出失败' }
@@ -136,7 +140,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/speaker/devices')
+      const res = await axios.get(API_BASE + '/api/v1/speaker/devices')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '请求失败' }
@@ -150,7 +154,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/play', { bvid, did: deviceDid, quality: 30280 })
+      const res = await axios.post(API_BASE + '/api/v1/speaker/play', { bvid, did: deviceDid, quality: 30280 })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '推送失败' }
@@ -164,7 +168,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/control', { did: deviceDid, action, volume })
+      const res = await axios.post(API_BASE + '/api/v1/speaker/control', { did: deviceDid, action, volume })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '控制失败' }
@@ -206,7 +210,7 @@ export const speakerApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/speaker/volume', { did, volume })
+      const res = await axios.post(API_BASE + '/api/v1/speaker/volume', { did, volume })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '设置音量失败' }
@@ -223,7 +227,7 @@ export const castApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/cast/sniff', { url }, { timeout: 120000 })
+      const res = await axios.post(API_BASE + '/api/v1/cast/sniff', { url }, { timeout: 120000 })
       return res.data
     } catch (e: any) {
       if (e.code === 'ECONNABORTED') {
@@ -236,7 +240,7 @@ export const castApi = {
   async playUrl(url: string, title = 'Video') {
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/cast/play_url', { url, title })
+      const res = await axios.post(API_BASE + '/api/v1/cast/play_url', { url, title })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '获取播放链接失败' }
@@ -250,7 +254,7 @@ export const castApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/cast/devices', { timeout: 15000 })
+      const res = await axios.get(API_BASE + '/api/v1/cast/devices', { timeout: 15000 })
       return res.data
     } catch (e: any) {
       return { code: -1, data: [], message: e.message || '获取设备失败' }
@@ -264,7 +268,7 @@ export const castApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/cast/start', { episode_url: episodeUrl, device_udn: deviceUdn, title })
+      const res = await axios.post(API_BASE + '/api/v1/cast/start', { episode_url: episodeUrl, device_udn: deviceUdn, title })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '投屏失败' }
@@ -278,7 +282,7 @@ export const castApi = {
     }
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/cast/control', { device_udn: deviceUdn, action, target, volume })
+      const res = await axios.post(API_BASE + '/api/v1/cast/control', { device_udn: deviceUdn, action, target, volume })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '控制失败' }
@@ -311,7 +315,7 @@ export const sitesApi = {
   async getList() {
     try {
       const axios = (await import('axios')).default
-      const res = await axios.get('/api/v1/sites/list')
+      const res = await axios.get(API_BASE + '/api/v1/sites/list')
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '获取网站列表失败' }
@@ -321,7 +325,7 @@ export const sitesApi = {
   async add(site: { name: string; url: string; site_type?: string }) {
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/sites/add', site)
+      const res = await axios.post(API_BASE + '/api/v1/sites/add', site)
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '添加网站失败' }
@@ -331,7 +335,7 @@ export const sitesApi = {
   async remove(url: string) {
     try {
       const axios = (await import('axios')).default
-      const res = await axios.post('/api/v1/sites/remove', null, { params: { url } })
+      const res = await axios.post(API_BASE + '/api/v1/sites/remove', null, { params: { url } })
       return res.data
     } catch (e: any) {
       return { code: -1, message: e.message || '删除网站失败' }
