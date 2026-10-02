@@ -299,21 +299,25 @@ func goOnDraw(w *C.GtkWidget, cr *C.cairo_t, user unsafe.Pointer) C.gboolean {
 	var pw, ph C.gint
 	C.pango_layout_get_size(layout, &pw, &ph)
 	pxW := int(pw) / 1024
-	descC := desc
-	_ = descC
 	x := (winW - pxW) / 2
 	if x < 0 {
 		x = 0
 	}
-	phPx := int(ph) / 1024
-	baseline := C.gdouble(WinH/2 + phPx/2)
+	// 垂直居中：用 ink extents（文字实际墨水框，不含行距），
+	// 之前用基线公式会把字画到窗口底部被裁剪
+	var ink C.PangoRectangle
+	C.pango_layout_get_pixel_extents(layout, &ink, nil)
+	y0 := (WinH - int(ink.height)) / 2
+	if y0 < 0 {
+		y0 = 0
+	}
 	// 阴影
 	C.cairo_set_source_rgba(cr, 0, 0, 0, 0.78)
-	C.cairo_move_to(cr, C.gdouble(x+2), baseline+2)
+	C.cairo_move_to(cr, C.gdouble(x+2), C.gdouble(y0+2))
 	C.pango_cairo_show_layout(cr, layout)
 	// 主字
 	C.cairo_set_source_rgba(cr, 1, 1, 1, 1)
-	C.cairo_move_to(cr, C.gdouble(x), baseline)
+	C.cairo_move_to(cr, C.gdouble(x), C.gdouble(y0))
 	C.pango_cairo_show_layout(cr, layout)
 	C.g_object_unref(C.gpointer(unsafe.Pointer(layout)))
 	C.pango_font_description_free(desc)
