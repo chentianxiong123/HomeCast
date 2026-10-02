@@ -1,0 +1,8 @@
+{{/* 音箱区 · 二维码：显示后挂起等待扫码，成功后整个音箱区被面板替换 */}}
+<div class="text-center">
+  <img src="{{.QRImage}}" alt="登录二维码" class="w-48 h-48 mx-auto rounded-xl bg-white p-2 shadow-lg">
+  <p class="text-gray-400 text-sm mt-3">用米家 App 扫描二维码登录</p>
+  <div hx-get="/hx/speaker/qr-status" hx-trigger="load" hx-target="#speaker-section" hx-swap="innerHTML" class="mt-2">
+    <span class="htmx-indicator text-pink-400 text-sm">正在等待扫码…</span>
+  </div>
+</div>

@@ -52,7 +52,8 @@ func New() http.Handler {
 	castHandler := &api.CastHandler{Cast: castSvc}
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
 	speakerSvc := service.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
-	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speaker.NewQRLogin()}
+	speakerQR := speaker.NewQRLogin()
+	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speakerQR}
 	sitesHandler := &api.SitesHandler{Sites: service.NewSitesService("")}
 	widgetState := service.NewWidgetState()
 	widgetStateGlobal = widgetState
@@ -64,7 +65,7 @@ func New() http.Handler {
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
-	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), PL: service.NewPlaylistService(client, db), Cast: castSvc, Tpl: web.MustTemplates()}
+	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), PL: service.NewPlaylistService(client, db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates()}
 	outer := http.NewServeMux()
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)
