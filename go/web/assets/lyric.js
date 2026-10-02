@@ -11,12 +11,18 @@
 
   let lines = []; // [[sec, text], ...]
   let lastIdx = -1;
-  let lySize = parseInt(localStorage.getItem('hc:lysize') || '18', 10); // 歌词行字号
+  // 字号标准化 5 档（14/16/18/22/26px），档位数字展示（无黑盒）
+  const LY_SIZES = [14, 16, 18, 22, 26];
+  let lyIdx = LY_SIZES.indexOf(parseInt(localStorage.getItem('hc:lysize') || '18', 10));
+  if (lyIdx < 0) lyIdx = 2;
 
-  function setLySize(delta) {
-    if (delta) lySize = Math.min(28, Math.max(13, lySize + delta));
-    try { localStorage.setItem('hc:lysize', String(lySize)); } catch (e) {}
-    linesEl.style.setProperty('--line-size', lySize + 'px');
+  function setLyIdx(delta) {
+    lyIdx = Math.min(LY_SIZES.length - 1, Math.max(0, lyIdx + (delta || 0)));
+    const v = LY_SIZES[lyIdx];
+    try { localStorage.setItem('hc:lysize', String(v)); } catch (e) {}
+    linesEl.style.setProperty('--line-size', v + 'px');
+    const badge = document.getElementById('ly-size');
+    if (badge) badge.textContent = (lyIdx + 1) + '/' + LY_SIZES.length;
   }
 
   function show() { panel.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
@@ -104,8 +110,8 @@
     });
   }
 
-  // 字号按钮
-  document.getElementById('ly-small').addEventListener('click', () => setLySize(-2));
-  document.getElementById('ly-big').addEventListener('click', () => setLySize(2));
-  setLySize(0); // 应用已存字号
+  // 字号按钮（标准化档位切换）
+  document.getElementById('ly-small').addEventListener('click', () => setLyIdx(-1));
+  document.getElementById('ly-big').addEventListener('click', () => setLyIdx(1));
+  setLyIdx(0); // 应用已存档位并显示
 })();
