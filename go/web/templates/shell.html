@@ -6,6 +6,7 @@
   <title>哔哩音乐</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="icon" href="/assets/favicon.svg">
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -21,9 +22,9 @@
           <h1 class="text-xl font-bold bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent hidden sm:block">哔哩音乐</h1>
         </a>
         <nav class="hidden md:flex space-x-2">
-          <a href="/hx/music"  hx-get="/hx/music"  hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
+          <a href="/hx/queue"  hx-get="/hx/queue"  hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
              class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>音乐</span>
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>队列</span>
           </a>
           <a href="/hx/search" hx-get="/hx/search" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
              class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
@@ -124,6 +125,7 @@
   <script src="/assets/list-highlight.js"></script>
   <script src="/assets/player.js"></script>
   <script src="/assets/lyric.js"></script>
+  <script src="/assets/queue.js"></script>
   <script src="/assets/cast-ui.js"></script>
 </body>
 </html>
