@@ -246,10 +246,7 @@
   el.cover.addEventListener('click', () => {
     if (song) hcBus.emit('lyric-open', song); // 封面点击 → 歌词面板（Vue 版同款，实底）
   });
-  // 标题点击 → 新标签打开 B 站原视频页（只广播事件，打开动作在页面层）
-  el.title.addEventListener('click', () => {
-    if (song) hcBus.emit('open-bili', { bvid: song.bvid });
-  });
+
   if (el.mode) el.mode.addEventListener('click', cycleMode);
   if (el.qualityBtn) el.qualityBtn.addEventListener('click', () => {
     setQuality(quality === 64 ? 128 : quality === 128 ? 192 : 64);

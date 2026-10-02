@@ -37,3 +37,8 @@
 .eq-bar:nth-child(3) { animation-delay: 0.3s; animation-duration: 1.1s; }
 .eq-bar:nth-child(4) { animation-delay: 0.45s; animation-duration: 0.8s; }
 .eq-bar:nth-child(5) { animation-delay: 0.6s; animation-duration: 1.3s; }
+
+/* 歌词面板：dock 上方抽屉，滑入/淡入过渡（不遮挡 dock） */
+.ly-panel { transform: translateY(32px); opacity: 0; transition: transform 0.3s cubic-bezier(0.32, 0.72, 0.28, 1), opacity 0.3s; }
+.ly-panel.ly-show { transform: translateY(0); opacity: 1; }
+.ly-panel.ly-hidden { display: none; }

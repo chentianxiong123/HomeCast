@@ -34,10 +34,14 @@
     return m + ':' + String(r).padStart(2, '0');
   }
 
-  function show() { panel.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
-  function hide() {
-    panel.classList.add('hidden');
-    document.body.style.overflow = '';
+  function show() { // 滑入动画：先显示再加 .ly-show（双 rAF 保证过渡生效）
+    panel.classList.remove('ly-hidden');
+    void panel.offsetWidth; // 强制 reflow
+    panel.classList.add('ly-show');
+  }
+  function hide() { // 先过渡收起，300ms 后再隐藏（不遮挡 dock）
+    panel.classList.remove('ly-show');
+    setTimeout(() => { if (!panel.classList.contains('ly-show')) panel.classList.add('ly-hidden'); }, 300);
     lines = []; lastIdx = -1; linesEl.innerHTML = '';
   }
 
@@ -114,13 +118,13 @@
 
   // 关闭：X 按钮 / ESC
   document.getElementById('ly-close').addEventListener('click', hide);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.classList.contains('hidden')) hide(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.classList.contains('ly-hidden')) hide(); });
 
   // KTV 跟随 + 时间显示（直接听 audio，孤岛内；面板关闭时不更新）
   const curEl = document.getElementById('ly-cur');
   const durEl = document.getElementById('ly-dur');
   audio.addEventListener('timeupdate', () => {
-    if (panel.classList.contains('hidden')) return;
+    if (panel.classList.contains('ly-hidden')) return;
     sync(audio.currentTime);
     if (curEl) curEl.textContent = fmt(audio.currentTime);
     if (durEl && audio.duration) durEl.textContent = fmt(audio.duration);
