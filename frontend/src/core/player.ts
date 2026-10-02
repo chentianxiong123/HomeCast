@@ -41,6 +41,20 @@ let storage: Storage = {
 // 音频/视频元素
 let mediaElement: HTMLAudioElement | HTMLVideoElement | null = null
 
+// ── 桌面歌词挂件状态上报 ──
+function widgetSnapshot() {
+  const s = state.value
+  const song = s.currentSong
+  return {
+    bvid: song?.bvid || '',
+    title: song?.title || '',
+    artist: song?.artist || '',
+    current_time: s.currentTime || 0,
+    duration: s.duration || 0,
+    playing: s.isPlaying || false,
+  }
+}
+
 // 播放器状态
 const state = ref<PlayerState>({
   isPlaying: false,
@@ -180,22 +194,7 @@ function initMediaElement(useVideo: boolean = false) {
     mediaElement = audio
   }
 
-  
-// ── 桌面歌词挂件状态上报 ──
-function widgetSnapshot() {
-  const s = state.value
-  const song = s.currentSong
-  return {
-    bvid: song?.bvid || '',
-    title: song?.title || '',
-    artist: song?.artist || '',
-    current_time: s.currentTime || 0,
-    duration: s.duration || 0,
-    playing: s.isPlaying || false,
-  }
-}
-
-// 绑定事件（只绑定一次）
+  // 绑定事件（只绑定一次）
   mediaElement.addEventListener('loadedmetadata', () => {
     console.log('Media metadata loaded, duration:', mediaElement?.duration)
     state.value.duration = mediaElement?.duration || 0
