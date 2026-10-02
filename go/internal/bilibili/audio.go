@@ -30,7 +30,21 @@ type DashAudioItem struct {
 // DashInfo DASH 信息
 type DashInfo struct {
 	Duration int             `json:"duration"`
+	Video    []DashVideoItem `json:"video"`
 	Audio    []DashAudioItem `json:"audio"`
+}
+
+// DashVideoItem DASH 视频条目（投屏用）
+type DashVideoItem struct {
+	ID        int      `json:"id"`
+	BaseURL   string   `json:"baseUrl"`
+	BackupURL []string `json:"backupUrl"`
+	Width     int      `json:"width"`
+	Height    int      `json:"height"`
+	Bandwidth int      `json:"bandwidth"`
+	MimeType  string   `json:"mimeType"`
+	Codecs    string   `json:"codecs"`
+	Size      int      `json:"size"`
 }
 
 // AudioStreamInfo playurl 返回
@@ -112,6 +126,28 @@ func (c *Client) GetBestAudioURL(bvid string, cid int, preferQuality int) (*Audi
 		return &AudioStreamResult{URL: stream.Durl[0].URL, Quality: preferQuality, Size: stream.Durl[0].Size}, nil
 	}
 	return nil, &BilibiliAPIError{Code: -1, Message: "no audio stream available"}
+}
+
+// GetBestVideoURL 取 DASH 视频流 URL（投屏用；带 referer 代理给电视）
+func (c *Client) GetBestVideoURL(bvid string, cid int) (*DashVideoItem, error) {
+	stream, err := c.GetAudioStream(bvid, cid, AudioFLAC)
+	if err != nil {
+		return nil, err
+	}
+	if stream.Dash != nil && len(stream.Dash.Video) > 0 {
+		// 按码率降序取最高（一般第一个即最高，这里稳妥排序）
+		best := stream.Dash.Video[0]
+		for _, v := range stream.Dash.Video[1:] {
+			if v.Bandwidth > best.Bandwidth {
+				best = v
+			}
+		}
+		if best.BaseURL == "" && len(best.BackupURL) > 0 {
+			best.BaseURL = best.BackupURL[0]
+		}
+		return &best, nil
+	}
+	return nil, &BilibiliAPIError{Code: -1, Message: "no video stream available"}
 }
 
 // VideoInfo 视频信息（拿 cid 用）
