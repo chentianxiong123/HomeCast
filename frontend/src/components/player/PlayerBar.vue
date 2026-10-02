@@ -199,13 +199,17 @@
       </div>
     </div>
   </transition>
+
+  <!-- 歌词面板（KTV，封面点击打开；独立于 slide-up transition） -->
+  <LyricPanel v-model:open="lyricOpen" />
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { usePlayerStore } from '@/stores/player'
 import { speakerState, stopPush, speakerTogglePlay, speakerSetVolume } from '@/stores/player'
-import SpeakerPush from '@/components/Player/SpeakerPush.vue'
+import SpeakerPush from '@/components/player/SpeakerPush.vue'
+import LyricPanel from '@/components/player/LyricPanel.vue'
 import {
   PlayOutline,
   PauseOutline,

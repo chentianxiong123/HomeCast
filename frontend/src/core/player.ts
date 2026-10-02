@@ -57,6 +57,31 @@ const playlist = ref<MusicItem[]>([])
 const currentIndex = ref(0)
 let isInitialized = false
 
+// 歌词（对齐桌面播放器：网易云源，随播放自动加载）
+const lyrics = ref<Array<[number, string]>>([])
+const lyricMeta = ref<{ name: string; artist: string } | null>(null)
+const lyricLoading = ref(false)
+
+export async function loadLyric(title: string) {
+  lyrics.value = []
+  lyricMeta.value = null
+  lyricLoading.value = true
+  try {
+    const res = await getLyric(title)
+    const data = res?.data
+    if (data?.lines?.length) {
+      lyrics.value = data.lines
+      lyricMeta.value = { name: data.name || '', artist: data.artist || '' }
+    }
+  } catch (e) {
+    console.warn('歌词加载失败:', e)
+  } finally {
+    lyricLoading.value = false
+  }
+}
+
+export { lyrics, lyricMeta, lyricLoading }
+
 // 从后端加载播放列表
 export async function loadPlaylistFromBackend() {
   try {
@@ -220,6 +245,9 @@ export async function play(song: MusicItem) {
 
   state.value.isLoading = true
   state.value.currentSong = song
+
+  // 自动加载歌词（对齐桌面：播放即取第一源）
+  loadLyric(song.title)
 
   // 确保歌曲在播放列表中，并设置为当前播放
   const existingIndex = playlist.value.findIndex(s => s.bvid === song.bvid)
