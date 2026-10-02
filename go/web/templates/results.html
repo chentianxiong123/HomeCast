@@ -1,49 +1,49 @@
 {{/* 搜索结果片段：htmx 替换 #results */}}
 {{if not .Items}}
-<div class="card shadow-sm">
-  <div class="card-body items-center py-12 muted">
-    <div class="text-5xl mb-3">🎵</div>
+<sl-card class="empty-card">
+  <div class="empty-body items-center py-12 muted">
+    <sl-icon name="music-note" class="empty-icon"></sl-icon>
     <p class="text-lg">未找到相关音乐</p>
     <p class="text-sm">换个关键词试试</p>
   </div>
-</div>
+</sl-card>
 {{else}}
-<div class="flex items-center justify-between mb-3 px-1">
-  <h2 class="text-lg font-bold">搜索结果</h2>
-  <span class="badge badge-outline">共 {{.Total}} 首 · 第 {{.Page}} 页</span>
+<div class="result-head flex items-center justify-between mb-3 px-1">
+  <h2 class="result-title text-lg font-bold">搜索结果</h2>
+  <sl-badge variant="neutral" pill>共 {{.Total}} 首 · 第 {{.Page}} 页</sl-badge>
 </div>
 <div class="space-y-2">
   {{range .Items}}
-  <div class="song-card card shadow-sm hover:shadow-md">
-    <div class="card-body p-3 flex-row items-center gap-3">
-      <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" class="w-20 h-14" referrerpolicy="no-referrer">
+  <sl-card class="song-card">
+    <div class="song-row flex items-center gap-3">
+      <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" class="song-cover" referrerpolicy="no-referrer">
       <div class="flex-1 min-w-0">
-        <div class="font-medium truncate">{{.Title}}</div>
-        <div class="text-sm muted flex items-center gap-2 mt-0.5">
+        <div class="song-title font-medium truncate">{{.Title}}</div>
+        <div class="song-meta text-sm muted flex items-center gap-2 mt-0.5">
           <span class="truncate max-w-[180px]">{{.Artist}}</span>
-          <span class="badge">{{.Duration}}</span>
+          <sl-badge size="small" pill>{{.Duration}}</sl-badge>
         </div>
       </div>
-      <div class="flex items-center gap-1">
-        <button class="btn btn-circle btn-sm btn-primary hx-play" data-bvid="{{.BVID}}" title="播放">
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        </button>
-        <button class="btn btn-circle btn-sm btn-ghost hx-fav" data-bvid="{{.BVID}}" title="收藏">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
-        </button>
-        <button class="btn btn-circle btn-sm btn-ghost hx-addpl" data-bvid="{{.BVID}}" title="加入列表">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
+      <div class="song-actions flex items-center gap-1">
+        <sl-button variant="primary" circle class="hx-play" data-bvid="{{.BVID}}" title="播放">
+          <sl-icon name="play-fill"></sl-icon>
+        </sl-button>
+        <sl-button circle fill="clear" class="hx-fav" data-bvid="{{.BVID}}" title="收藏">
+          <sl-icon name="star"></sl-icon>
+        </sl-button>
+        <sl-button circle fill="clear" class="hx-addpl" data-bvid="{{.BVID}}" title="加入列表">
+          <sl-icon name="plus-lg"></sl-icon>
+        </sl-button>
       </div>
     </div>
-  </div>
+  </sl-card>
   {{end}}
 </div>
 {{if .HasMore}}
 <div class="flex justify-center mt-4">
-  <button class="btn btn-outline btn-sm"
-          hx-get="/hx/search?kw={{.Keyword}}&page={{.NextPage}}"
-          hx-target="#results" hx-swap="innerHTML">加载更多</button>
+  <sl-button outline size="small"
+             hx-get="/hx/search?kw={{.Keyword}}&page={{.NextPage}}"
+             hx-target="#results" hx-swap="innerHTML">加载更多</sl-button>
 </div>
 {{end}}
 {{end}}

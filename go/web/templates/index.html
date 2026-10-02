@@ -1,51 +1,49 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" class="sl-theme-dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>哔哩音乐</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19.1/cdn/themes/dark.css">
   <link rel="stylesheet" href="/assets/style.css">
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19.1/cdn/shoelace.js"></script>
+  <script src="/assets/htmx.min.js"></script>
 </head>
-<body class="min-h-screen">
+<body>
   <!-- 顶部导航 -->
-  <header class="navbar shadow-sm">
+  <header class="navbar">
     <div class="navbar-start">
-      <a href="/" class="flex items-center gap-2">
-        <div class="w-9 h-9 logo">♪</div>
-        <span class="text-lg font-bold tracking-wide">哔哩音乐</span>
+      <a href="/" class="brand-link">
+        <div class="logo w-9 h-9">♪</div>
+        <span class="brand-name">哔哩音乐</span>
       </a>
     </div>
-    <div class="navbar-center flex-1 max-w-xl">
+    <div class="navbar-center max-w-xl">
       <form hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
-            class="flex items-center gap-2 w-full">
-        <input type="text" name="kw" placeholder="搜索你喜欢的音乐..." autofocus
-               class="input input-bordered flex-1"
-               hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
-               hx-trigger="keyup[!event.isComposing] changed delay:600ms" hx-params="kw">
-        <button type="submit" class="btn btn-primary gap-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-          搜索
-        </button>
+            class="search-form w-full">
+        <sl-input name="kw" placeholder="搜索你喜欢的音乐..." clearable class="sl-input-wide"
+                  hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
+                  hx-trigger="sl-input changed delay:600ms" hx-params="kw"></sl-input>
+        <sl-button type="submit" variant="primary" class="search-btn">
+          <sl-icon slot="prefix" name="search"></sl-icon>搜索
+        </sl-button>
       </form>
     </div>
-    <div class="navbar-end gap-1">
-      <a href="/hx/favs" class="btn btn-ghost btn-sm" hx-boost="true" title="M2 上线">收藏</a>
-      <a href="/hx/playlist" class="btn btn-ghost btn-sm" hx-boost="true" title="M2 上线">列表</a>
-      <a href="/hx/cast" class="btn btn-ghost btn-sm" hx-boost="true" title="M4 上线">投屏</a>
+    <div class="navbar-end">
+      <a href="/hx/favs" hx-boost="true"><sl-button size="small" fill="clear">收藏</sl-button></a>
+      <a href="/hx/playlist" hx-boost="true"><sl-button size="small" fill="clear">列表</sl-button></a>
+      <a href="/hx/cast" hx-boost="true"><sl-button size="small" fill="clear">投屏</sl-button></a>
     </div>
   </header>
 
   <!-- 内容 -->
-  <main class="max-w-5xl mx-auto p-4 pb-40">
+  <main class="page max-w-5xl mx-auto p-4 pb-40">
     <div id="results">
-      <!-- 空态：引导搜索 -->
-      <div class="hero mt-16">
-        <div class="hero-content text-center flex-col">
-          <div class="w-20 h-20 logo mb-4">♪</div>
-          <h1 class="text-3xl font-bold mb-2">哔哩音乐</h1>
-          <p class="muted max-w-md">搜索、收藏、播放你的音乐<br>局域网一键投屏到电视与音箱</p>
-          <div class="badge badge-outline badge-lg mt-6">Go 全内嵌 · htmx · 单二进制</div>
-        </div>
+      <!-- 空态（htmx 搜索结果替换这里） -->
+      <div class="hero">
+        <div class="w-20 h-20 logo">♪</div>
+        <h1 class="hero-title">哔哩音乐</h1>
+        <p class="muted hero-sub">搜索、收藏、播放你的音乐<br>局域网一键投屏到电视与音箱</p>
       </div>
     </div>
   </main>
@@ -54,8 +52,5 @@
   <div id="player-dock">
     <audio id="audio" preload="auto"></audio>
   </div>
-
-  <script src="/assets/htmx.min.js"></script>
-  <script src="/assets/alpine.min.js" defer></script>
 </body>
 </html>
