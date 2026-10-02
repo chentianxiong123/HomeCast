@@ -1,6 +1,8 @@
+import { API_BASE } from '@/api/base'
 import { ref, computed, watch } from 'vue'
 import type { MusicItem, PlayerState, PlayMode } from '@/types'
 import { getAudioStream } from '@/api/music'
+import { reportWidgetThrottled, reportWidgetNow } from '@/api/widget'
 import { getLyric } from '@/api/music'
 import { getPlaylist, addToPlaylist as apiAddToPlaylist, removeFromPlaylist as apiRemoveFromPlaylist, clearPlaylist as apiClearPlaylist } from '@/api/playlist'
 
@@ -178,7 +180,22 @@ function initMediaElement(useVideo: boolean = false) {
     mediaElement = audio
   }
 
-  // 绑定事件（只绑定一次）
+  
+// ── 桌面歌词挂件状态上报 ──
+function widgetSnapshot() {
+  const s = state.value
+  const song = s.currentSong
+  return {
+    bvid: song?.bvid || '',
+    title: song?.title || '',
+    artist: song?.artist || '',
+    current_time: s.currentTime || 0,
+    duration: s.duration || 0,
+    playing: s.isPlaying || false,
+  }
+}
+
+// 绑定事件（只绑定一次）
   mediaElement.addEventListener('loadedmetadata', () => {
     console.log('Media metadata loaded, duration:', mediaElement?.duration)
     state.value.duration = mediaElement?.duration || 0
@@ -230,6 +247,7 @@ function initMediaElement(useVideo: boolean = false) {
           storage.set(`${PROGRESS_KEY}-${state.value.currentSong.bvid}`, mediaElement.currentTime.toString())
         }
       }, 5000)
+      reportWidgetThrottled(widgetSnapshot)
     }
   })
 
@@ -260,7 +278,7 @@ export async function play(song: MusicItem) {
 
   try {
     // 后端 /stream/{bvid} 直接返回音频流（代理B站音频），音质由全局设置决定
-    const audioUrl = `/api/v1/music/stream/${song.bvid}?quality=${state.value.quality}`
+    const audioUrl = `${API_BASE}/api/v1/music/stream/${song.bvid}?quality=${state.value.quality}`
     console.log('Playing stream URL:', audioUrl)
 
     // 后端返回MP3格式，使用audio元素播放
@@ -338,6 +356,7 @@ export function pause() {
   if (mediaElement) {
     mediaElement.pause()
     state.value.isPlaying = false
+    reportWidgetNow(widgetSnapshot)
   }
 }
 
