@@ -1,11 +1,13 @@
-// homecast 桌面壳（Wails v2）：内嵌全部 Go 后端 + 加载 Vue 前端构建产物
+// homecast 桌面壳（Wails v2）：内嵌全部 Go 后端 + 窗口直载 htmx 页面
+// （AssetServer 代理 wails:// → 内嵌后端，Vue 前端已废弃停用）
 // + 桌面歌词挂件窗口（同进程，GTK3）
 package main
 
 import (
 	"context"
-	"embed"
 	"log"
+	"net/http/httputil"
+	"net/url"
 	"os"
 
 	"homecast-desktop/widget"
@@ -16,9 +18,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
-
-//go:embed all:dist
-var assets embed.FS
 
 // wailEvents EventsEmit 包装（挂件 → 前端）
 type wailEvents struct{}
@@ -45,6 +44,10 @@ func main() {
 		}
 	}()
 
+	// 壳窗口直载 htmx 页：wails:// 所有请求代理到内嵌后端（同源，无跨域）
+	backend, _ := url.Parse("http://127.0.0.1:" + port)
+	proxy := httputil.NewSingleHostReverseProxy(backend)
+
 	app := NewApp(port)
 	err := wails.Run(&options.App{
 		Title:     "HomeCast 家庭投屏播放器",
@@ -53,7 +56,7 @@ func main() {
 		MinWidth:  920,
 		MinHeight: 620,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Handler: proxy, // 直载 htmx 页（不再用 Vue dist）
 		},
 		OnStartup: func(ctx context.Context) {
 			runtimeApp = ctx
