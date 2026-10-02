@@ -92,6 +92,18 @@
   // KTV 跟随（直接听 audio，孤岛内）
   audio.addEventListener('timeupdate', () => { if (!panel.classList.contains('hidden')) sync(audio.currentTime); });
 
+  // 底部进度条：跟随播放 + 可拖跳转
+  const lyProg = document.getElementById('ly-progress');
+  if (lyProg) {
+    audio.addEventListener('timeupdate', () => {
+      if (panel.classList.contains('hidden')) return;
+      lyProg.value = audio.duration ? Math.round((audio.currentTime / audio.duration) * 1000) : 0;
+    });
+    lyProg.addEventListener('change', () => {
+      if (audio.duration) audio.currentTime = (lyProg.value / 1000) * audio.duration;
+    });
+  }
+
   // 字号按钮
   document.getElementById('ly-small').addEventListener('click', () => setLySize(-2));
   document.getElementById('ly-big').addEventListener('click', () => setLySize(2));
