@@ -27,10 +27,13 @@ func main() {
 
 	musicSvc := &service.MusicService{Client: client}
 	musicHandler := api.NewMusicHandler(musicSvc)
+	favHandler := &api.FavHandler{Fav: service.NewFavService("")}
+	lyricHandler := &api.LyricHandler{}
+	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, "")}
 
 	addr := "0.0.0.0:" + port
-	log.Printf("homecast-go listening on http://%s (search + dash stream)", addr)
-	if err := http.ListenAndServe(addr, api.NewMux(musicHandler)); err != nil {
+	log.Printf("homecast-go listening on http://%s (search + stream + fav + lyric + playlist)", addr)
+	if err := http.ListenAndServe(addr, api.NewMux(musicHandler, favHandler, lyricHandler, playlistHandler)); err != nil {
 		log.Fatal(err)
 	}
 }
