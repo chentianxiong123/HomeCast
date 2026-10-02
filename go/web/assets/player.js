@@ -10,6 +10,7 @@
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
     cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
+    qualityBtn: $('d-quality'), speedBtn: $('d-speed'),
   };
   if (!el.dock || !el.toggle) return;
 
@@ -19,6 +20,8 @@
   let qidx = -1;
   let lastSaveAt = 0;
   let playMode = localStorage.getItem('hc:mode') || 'order'; // order/loop/single/random
+  let quality = parseInt(localStorage.getItem('hc:quality') || '192', 10); // 64/128/192
+  let speed = parseFloat(localStorage.getItem('hc:speed') || '1'); // 0.75~2.0
 
   const fmt = (s) => {
     if (!isFinite(s) || !s) return '0:00';
@@ -101,7 +104,7 @@
     el.artist.textContent = d.artist || '未知作者';
     el.cover.src = d.cover || '';
     el.cover.alt = d.title;
-    audio.src = '/api/v1/music/stream/' + d.bvid + '?quality=192';
+    audio.src = '/api/v1/music/stream/' + d.bvid + '?quality=' + quality;
     audio.play().catch(() => {});
     setState('loading');
     hcBus.emit('nowplaying', { bvid: d.bvid });
@@ -132,6 +135,20 @@
   }
   function toggle() { if (!song) return; audio.paused ? audio.play().catch(() => {}) : audio.pause(); }
   function seek(pct) { if (!song || !audio.duration) return; audio.currentTime = (pct / 100) * audio.duration; }
+  function setQuality(q) { // 切换后若在播则按新音质重载（Vue 版同逻辑）
+    quality = q;
+    try { localStorage.setItem('hc:quality', String(q)); } catch (e) {}
+    if (el.qualityBtn) el.qualityBtn.textContent = q + 'k';
+    if (song) loadSong(song);
+    hcBus.emit('toast', { msg: '音质 ' + q + 'k' });
+  }
+  function setSpeed(v) {
+    speed = v;
+    audio.playbackRate = v;
+    try { localStorage.setItem('hc:speed', String(v)); } catch (e) {}
+    if (el.speedBtn) el.speedBtn.textContent = v + 'x';
+    hcBus.emit('toast', { msg: '速度 ' + v + 'x' });
+  }
   function setVol(v) {
     audio.volume = v / 100;
     audio.muted = v === 0;
@@ -217,6 +234,14 @@
     if (song) hcBus.emit('lyric-open', song); // 封面点击 → 歌词面板（Vue 版同款）
   });
   if (el.mode) el.mode.addEventListener('click', cycleMode);
+  if (el.qualityBtn) el.qualityBtn.addEventListener('click', () => {
+    setQuality(quality === 64 ? 128 : quality === 128 ? 192 : 64);
+  });
+  if (el.speedBtn) el.speedBtn.addEventListener('click', () => {
+    const speeds = [0.75, 1, 1.25, 1.5, 2];
+    setSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length]);
+  });
+  audio.playbackRate = speed;
   function mute() { audio.muted = !audio.muted; }
   if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
   audio.volume = parseInt(localStorage.getItem('hc:vol') || '80', 10) / 100;
@@ -266,6 +291,8 @@
   });
   hcBus.on('mute', mute);
   hcBus.on('mode-cycle', cycleMode);
+  hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
+  hcBus.on('speed', (d) => { if (d && d.v) setSpeed(d.v); });
 
   // ---- 投送桥接：cast 页按钮只广播 hc:cast-play，这里持当前歌调后端投送 ----
   hcBus.on('cast-play', (d) => {
