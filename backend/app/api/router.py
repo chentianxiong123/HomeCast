@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from loguru import logger
 from app.api.music import router as music_router, set_music_service
-from app.api.favlist import router as favlist_router, set_favlist_service
+from app.api.fav import router as fav_router
 from app.api.playlist import router as playlist_router, set_playlist_service
 from app.api.speaker import router as speaker_router, set_speaker_service
 from app.api.cast import router as cast_router, set_cast_service
@@ -9,7 +9,6 @@ from app.api.proxy import router as proxy_router
 from app.api.cache import router as cache_router
 from app.api.sites import router as sites_router
 from app.service.music_service import MusicService
-from app.service.favlist_service import FavListService
 from app.service.playlist_service import PlaylistService
 from app.service.speaker_service import SpeakerService
 from app.service.cast_service import CastService
@@ -25,14 +24,12 @@ def init_routes() -> APIRouter:
     client = BilibiliClient(config.bilibili)
 
     music_service = MusicService(client)
-    favlist_service = FavListService(client)
     playlist_service = PlaylistService(client, data_dir="data")
     set_music_service(music_service)
-    set_favlist_service(favlist_service)
     set_playlist_service(playlist_service)
 
     router.include_router(music_router, prefix="/api/v1")
-    router.include_router(favlist_router, prefix="/api/v1")
+    router.include_router(fav_router, prefix="/api/v1")
     router.include_router(playlist_router, prefix="/api/v1")
     router.include_router(proxy_router)
 
