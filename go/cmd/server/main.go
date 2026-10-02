@@ -4,7 +4,7 @@ package main
 import (
 	"log"
 
-	"homecast/internal/server"
+	"homecast/server"
 )
 
 func main() {
