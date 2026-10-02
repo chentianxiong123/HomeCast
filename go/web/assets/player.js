@@ -60,7 +60,7 @@
     el.toggle.innerHTML = playing
       ? '<svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
       : '<svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-    if (el.eq) el.eq.hidden = !playing || !song;
+    if (el.eq) el.eq.hidden = state !== 'playing'; // 频谱只在真正播放时出现
     el.prev.disabled = el.next.disabled = !song || queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);
@@ -220,7 +220,9 @@
 
   // ---- audio 事件 → 状态机 ----
   audio.addEventListener('play', () => setState('playing'));
-  audio.addEventListener('pause', () => setState(audio.ended ? 'ended' : 'paused'));
+  audio.addEventListener('pause', () => { setState(audio.ended ? 'ended' : 'paused'); if (el.eq) el.eq.hidden = true; });
+  audio.addEventListener('ended', () => { if (el.eq) el.eq.hidden = true; });
+  audio.addEventListener('error', () => { if (el.eq) el.eq.hidden = true; });
   audio.addEventListener('ended', () => {
     setState('ended');
     if (playMode === 'single' && song) { audio.currentTime = 0; audio.play().catch(() => {}); return; } // 单曲循环
@@ -254,7 +256,14 @@
   el.prev.addEventListener('click', () => step('prev'));
   el.next.addEventListener('click', () => step('next'));
   el.cover.addEventListener('click', () => {
-    if (song) hcBus.emit('lyric-open', song); // 封面点击 → 歌词面板（Vue 版同款，实底）
+    if (!song) return;
+    // 封面点击 toggle：展开歌词面板 / 已展开则缩回（可展开可缩回去）
+    const lyp = document.getElementById('lyric-panel');
+    if (lyp && !lyp.classList.contains('ly-hidden')) {
+      hcBus.emit('lyric-close');
+    } else {
+      hcBus.emit('lyric-open', song);
+    }
   });
 
   if (el.mode) el.mode.addEventListener('click', cycleMode);
