@@ -127,6 +127,20 @@
               <n-icon><CloseOutline /></n-icon>
             </template>
           </n-button>
+          <n-button
+            size="small"
+            round
+            quaternary
+            :type="favStore.isFav(item.bvid) ? 'warning' : 'default'"
+            @click="toggleFav(item)"
+          >
+            <template #icon>
+              <n-icon>
+                <Star v-if="favStore.isFav(item.bvid)" />
+                <StarOutline v-else />
+              </n-icon>
+            </template>
+          </n-button>
         </div>
       </div>
     </div>
@@ -158,6 +172,8 @@
 <script setup lang="ts">
 import { useMessage } from 'naive-ui'
 import { usePlayerStore } from '@/stores/player'
+import { useFavStore } from '@/stores/favs'
+import type { MusicItem } from '@/types'
 import { storeToRefs } from 'pinia'
 import { setCurrentIndex, play, loadPlaylistFromBackend } from '@/core/player'
 import {
@@ -167,16 +183,20 @@ import {
   PauseOutline,
   CloseOutline,
   SearchOutline,
-  MusicalNotesOutline
+  MusicalNotesOutline,
+  Star,
+  StarOutline
 } from '@vicons/ionicons5'
 import { onMounted } from 'vue'
 
 const message = useMessage()
 const { playlist, currentIndex, isPlaying, togglePlay, clearPlaylist: clearPlayerPlaylist, removeFromPlaylist } = usePlayerStore()
+const favStore = useFavStore()
 
 // 页面加载时从后端刷新播放列表
 onMounted(async () => {
   await loadPlaylistFromBackend()
+  favStore.loadFavs()
 })
 
 async function playAtIndex(index: number) {
@@ -195,6 +215,12 @@ async function remove(index: number) {
 async function clearPlaylist() {
   await clearPlayerPlaylist()
   message.success('播放列表已清空')
+}
+
+// 收藏 toggle（对齐桌面 ☆/★）
+async function toggleFav(item: MusicItem) {
+  await favStore.toggleFav(item)
+  message.success(favStore.isFav(item.bvid) ? `已收藏: ${item.title}` : `已取消收藏: ${item.title}`)
 }
 
 function getCoverUrl(cover: string) {

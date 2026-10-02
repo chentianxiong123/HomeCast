@@ -73,45 +73,6 @@ export const MOCK_SONGS = [
   },
 ]
 
-export const MOCK_FAVLISTS = [
-  { mid: 2320857281, name: '我喜欢的音乐', count: 128 },
-  { mid: 1983427561, name: '华语经典', count: 86 },
-  { mid: 1765432109, name: '深夜电台', count: 45 },
-  { mid: 2098765432, name: '运动歌单', count: 32 },
-]
-
-export const MOCK_FAV_MEDIA = [
-  {
-    id: 1, bvid: 'BV1uT4y1P7CX', title: '晴天', cover: '//i0.hdslb.com/bfs/archive/8d9a7c6f5e3b2a1c0d4e5f6g7h8i9j0.jpg',
-    duration: 269, artist: '周杰伦',
-  },
-  {
-    id: 2, bvid: 'BV1GJ411x7h7', title: '稻香', cover: '//i0.hdslb.com/bfs/archive/a1b2c3d4e5f6g7h8i9j0k1l2m3n4.jpg',
-    duration: 222, artist: '周杰伦',
-  },
-  {
-    id: 3, bvid: 'BV1xx411c7mu', title: '七里香', cover: '//i0.hdslb.com/bfs/archive/z1y2x3w4v5u6t7r8s9q0w1e2r3t4.jpg',
-    duration: 301, artist: '周杰伦',
-  },
-  {
-    id: 4, bvid: 'BV1yW411v7xD', title: '青花瓷', cover: '//i0.hdslb.com/bfs/archive/b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.jpg',
-    duration: 239, artist: '周杰伦',
-  },
-  {
-    id: 5, bvid: 'BV1aE411o7qP', title: '夜曲', cover: '//i0.hdslb.com/bfs/archive/c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9.jpg',
-    duration: 255, artist: '周杰伦',
-  },
-]
-
-export const MOCK_FAV_INFO = {
-  id: 2320857281,
-  title: '我喜欢的音乐',
-  cover: '//i0.hdslb.com/bfs/archive/x1y2z3w4v5u6t7r8s9q0w1e2r3t4u5v6.jpg',
-  media_count: 128,
-  intro: '收藏的喜欢的歌曲',
-  upper: { mid: 12345678, name: 'B站用户', face: '//i0.hdslb.com/bfs/face/abc123def456.jpg' },
-}
-
 export const MOCK_DLNA_DEVICES = [
   { name: 'Samsung TV 55"', udn: 'uuid:samsung-tv-001', ip: '192.168.1.100', port: 8080, device_type: 'MediaRenderer' },
   { name: 'Xiaomi TV 65"', udn: 'uuid:xiaomi-tv-002', ip: '192.168.1.101', port: 49152, device_type: 'MediaRenderer' },

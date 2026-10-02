@@ -98,6 +98,20 @@
               size="small"
               round
               quaternary
+              :type="favStore.isFav(item.bvid) ? 'warning' : 'default'"
+              @click="toggleFav(item)"
+            >
+              <template #icon>
+                <n-icon>
+                  <Star v-if="favStore.isFav(item.bvid)" />
+                  <StarOutline v-else />
+                </n-icon>
+              </template>
+            </n-button>
+            <n-button
+              size="small"
+              round
+              quaternary
               class="hidden sm:flex"
               @click="addToPlaylist(item)"
             >
@@ -153,10 +167,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { searchMusic } from '@/api/music'
 import { usePlayerStore } from '@/stores/player'
+import { useFavStore } from '@/stores/favs'
 import type { MusicItem } from '@/types'
 import {
   SearchOutline,
@@ -164,10 +179,13 @@ import {
   AddOutline,
   PersonOutline,
   TimeOutline,
-  MusicalNotesOutline
+  MusicalNotesOutline,
+  Star,
+  StarOutline
 } from '@vicons/ionicons5'
 
 const message = useMessage()
+const favStore = useFavStore()
 const { play: playSong, addToPlaylist: addSongToPlaylist } = usePlayerStore()
 
 const keyword = ref('')
@@ -233,6 +251,16 @@ async function addToPlaylist(item: MusicItem) {
   await addSongToPlaylist(item)
   message.success(`已添加到播放列表: ${item.title}`)
 }
+
+// 收藏 toggle（对齐桌面 ☆/★）
+async function toggleFav(item: MusicItem) {
+  await favStore.toggleFav(item)
+  message.success(favStore.isFav(item.bvid) ? `已收藏: ${item.title}` : `已取消收藏: ${item.title}`)
+}
+
+onMounted(() => {
+  favStore.loadFavs()
+})
 
 function getCoverUrl(cover: string) {
   if (!cover) return ''
