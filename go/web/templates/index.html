@@ -4,30 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>哔哩音乐</title>
+  <link rel="stylesheet" href="/assets/daisyui.min.css">
   <link rel="stylesheet" href="/assets/style.css">
-  <style>
-    body { min-height: 100vh; }
-    .song-card:hover { transform: translateY(-1px); }
-    .song-card img { width: 72px; height: 48px; object-fit: cover; border-radius: 8px; }
-  </style>
 </head>
-<body>
+<body class="min-h-screen bg-base-300">
   <!-- 顶部导航 -->
-  <header class="navbar bg-base-100 shadow-sm sticky top-0 z-40">
+  <header class="navbar bg-base-100/80 backdrop-blur shadow-sm sticky top-0 z-40 px-4">
     <div class="navbar-start">
       <a href="/" class="flex items-center gap-2">
-        <div class="logo">♪</div>
-        <span class="text-lg font-bold hidden sm:block">哔哩音乐</span>
+        <div class="w-9 h-9 logo">♪</div>
+        <span class="text-lg font-bold tracking-wide">哔哩音乐</span>
       </a>
     </div>
     <div class="navbar-center flex-1 max-w-xl">
       <form hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
             class="flex items-center gap-2 w-full">
-        <input type="text" name="kw" placeholder="搜索喜欢的音乐..." autofocus
-               class="input flex-1"
+        <input type="text" name="kw" placeholder="搜索你喜欢的音乐..." autofocus
+               class="input input-bordered flex-1"
                hx-get="/hx/search" hx-target="#results" hx-swap="innerHTML" hx-push-url="true"
                hx-trigger="keyup[!event.isComposing] changed delay:600ms" hx-params="kw">
-        <button type="submit" class="btn btn-primary">搜索</button>
+        <button type="submit" class="btn btn-primary gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          搜索
+        </button>
       </form>
     </div>
     <div class="navbar-end gap-1">
@@ -40,18 +39,20 @@
   <!-- 内容 -->
   <main class="max-w-5xl mx-auto p-4 pb-40">
     <div id="results">
-      <!-- htmx 搜索片段替换这里 -->
-      <div class="card">
-        <div class="card-body items-center py-16 muted">
-          <div class="text-5xl mb-4">🎵</div>
-          <p class="text-lg">输入关键词开始搜索</p>
+      <!-- 空态：引导搜索 -->
+      <div class="hero mt-16">
+        <div class="hero-content text-center flex-col">
+          <div class="w-20 h-20 logo mb-4">♪</div>
+          <h1 class="text-3xl font-bold mb-2">哔哩音乐</h1>
+          <p class="text-base-content/60 max-w-md">搜索、收藏、播放你的音乐<br>局域网一键投屏到电视与音箱</p>
+          <div class="badge badge-outline mt-6 badge-lg">Go 全内嵌 · htmx · 单二进制</div>
         </div>
       </div>
     </div>
   </main>
 
-  <!-- 播放器孤岛（M1 接管：进度/控制/歌词） -->
-  <div id="player-dock" class="fixed bottom-0 inset-x-0 z-50">
+  <!-- 播放器孤岛（M1 接管） -->
+  <div id="player-dock">
     <audio id="audio" preload="auto"></audio>
   </div>
 
