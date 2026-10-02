@@ -14,4 +14,9 @@
   <div id="cast-list">
     {{template "cast_devices.html" .}}
   </div>
+
+  <!-- 音箱区（M4b：扫码登录/设备/控制；登录态由服务端判定） -->
+  <div class="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8">
+    <div id="speaker-section" hx-get="/hx/speaker" hx-trigger="load" hx-swap="innerHTML"></div>
+  </div>
 </div>

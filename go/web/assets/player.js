@@ -158,6 +158,19 @@
       .catch(() => hcBus.emit('cast-result', { ok: false, udn: d.udn, msg: '网络错误' }));
   });
 
+  // ---- 音箱投送桥接：同 cast 模式，player 持当前歌调后端 ----
+  hcBus.on('speaker-play', (d) => {
+    if (!song) {
+      hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '请先播放一首歌' });
+      return;
+    }
+    const body = new URLSearchParams({ bvid: song.bvid, did: d.did });
+    fetch('/hx/speaker/play', { method: 'POST', body })
+      .then((r) => r.text())
+      .then((t) => hcBus.emit('speaker-result', { ok: t.includes('音箱播放'), did: d.did, msg: '投送失败' }))
+      .catch(() => hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '网络错误' }));
+  });
+
   restoreP();
   render();
 })();

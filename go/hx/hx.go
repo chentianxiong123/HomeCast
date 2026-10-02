@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"homecast/internal/service"
+	"homecast/internal/speaker"
 	"homecast/web"
 )
 
@@ -18,8 +19,10 @@ type H struct {
 	Music *service.MusicService
 	Fav   *service.FavService
 	PL    *service.PlaylistService
-	Cast  *service.CastService
-	Tpl   *template.Template
+	Cast    *service.CastService
+	Speaker *service.SpeakerService
+	QR      *speaker.QRLogin
+	Tpl     *template.Template
 }
 
 // page 页面渲染数据：激活 tab + 预渲染的 content HTML
@@ -59,6 +62,13 @@ func (h *H) Router() http.Handler {
 	mux.HandleFunc("POST /hx/cast/rescan", h.Rescan)
 	mux.HandleFunc("POST /hx/cast/play", h.CastPlay)
 	mux.HandleFunc("GET /hx/cast/status/{udn}", h.CastStatus)
+	// 音箱切面（M4b）
+	mux.HandleFunc("GET /hx/speaker", h.SpeakerSection)
+	mux.HandleFunc("POST /hx/speaker/qr-start", h.SpeakerQRStart)
+	mux.HandleFunc("GET /hx/speaker/qr-status", h.SpeakerQRStatus)
+	mux.HandleFunc("POST /hx/speaker/play", h.SpeakerPlay)
+	mux.HandleFunc("POST /hx/speaker/control", h.SpeakerControl)
+	mux.HandleFunc("POST /hx/speaker/refresh", h.SpeakerRefresh)
 	// 播放列表切面
 	mux.HandleFunc("POST /hx/playlist/add", h.AddPL)
 	mux.HandleFunc("POST /hx/playlist/remove/{bvid}", h.RemovePL)

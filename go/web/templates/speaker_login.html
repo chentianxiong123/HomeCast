@@ -1,0 +1,14 @@
+{{/* 音箱区 · 未登录：扫码入口（登录成功 → #speaker-section 被面板替换） */}}
+<div class="text-center py-12">
+  <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center shadow-lg mb-4">
+    <svg class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M5 5.5A9 9 0 0 1 19 5.5M8 9a5 5 0 0 1 8 0"/><path d="M3 14a12 12 0 0 1 18 0"/></svg>
+  </div>
+  <p class="text-lg font-semibold text-gray-900 dark:text-white">小爱音箱</p>
+  <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">扫码登录米家账号，投送到音箱播放</p>
+  <div id="sp-qr-box" class="mt-5">
+    <button hx-post="/hx/speaker/qr-start" hx-target="#sp-qr-box" hx-swap="innerHTML"
+            class="px-8 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-medium rounded-full shadow-md hover:brightness-105 transition-all">
+      扫码登录
+    </button>
+  </div>
+</div>

@@ -1,0 +1,20 @@
+{{/* 音箱区 · 已登录面板：设备列表 + 控制 + 投送当前歌（按钮广播，player 桥接） */}}
+<div>
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center">
+        <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M5 5.5A9 9 0 0 1 19 5.5M8 9a5 5 0 0 1 8 0"/><path d="M3 14a12 12 0 0 1 18 0"/></svg>
+      </div>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">小爱音箱</h3>
+      <span class="text-xs text-gray-500 dark:text-gray-400">{{.UserID}}</span>
+    </div>
+    <button hx-post="/hx/speaker/refresh" hx-target="#sp-devices" hx-swap="innerHTML"
+            class="text-xs text-gray-500 dark:text-gray-400 hover:text-pink-400 transition-colors flex items-center space-x-1">
+      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      <span>刷新设备</span>
+    </button>
+  </div>
+  <div id="sp-devices">
+    {{template "speaker_devices.html" .}}
+  </div>
+</div>
