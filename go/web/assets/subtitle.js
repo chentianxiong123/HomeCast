@@ -56,5 +56,6 @@
   audio.addEventListener('timeupdate', () => sync(audio.currentTime));
 
   if (tickBtn) tickBtn.addEventListener('click', () => setEnabled(!enabled));
+  hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });
   if (enabled) showBar();
 })();
