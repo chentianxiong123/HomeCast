@@ -1,10 +1,8 @@
 package service
 
 import (
-	"encoding/json"
+	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 
 	"homecast/internal/bilibili"
@@ -25,42 +23,51 @@ type PlaylistResult struct {
 	List []PlaylistItem `json:"list"`
 }
 
-// PlaylistService 播放列表（本地 JSON 持久化，对齐 Python playlist_service）
+// PlaylistService 播放列表（SQLite 持久化；首启迁移自旧 JSON，见 internal/store）
 type PlaylistService struct {
 	mu     sync.Mutex
 	client *bilibili.Client
-	path   string
+	db     *sql.DB
 	list   []PlaylistItem
 }
 
-func NewPlaylistService(client *bilibili.Client, path string) *PlaylistService {
-	if path == "" {
-		home, _ := os.UserHomeDir()
-		path = filepath.Join(home, ".config", "homecast", "playlist.json")
-	}
-	p := &PlaylistService{client: client, path: path}
+func NewPlaylistService(client *bilibili.Client, db *sql.DB) *PlaylistService {
+	p := &PlaylistService{client: client, db: db}
 	p.load()
 	return p
 }
 
 func (p *PlaylistService) load() {
-	data, err := os.ReadFile(p.path)
+	rows, err := p.db.Query(`SELECT bvid,title,artist,cover,duration,duration_sec FROM playlist ORDER BY rowid DESC`)
 	if err != nil {
 		return
 	}
-	var list []PlaylistItem
-	if json.Unmarshal(data, &list) == nil {
-		p.list = list
+	defer rows.Close()
+	p.list = p.list[:0]
+	for rows.Next() {
+		var it PlaylistItem
+		if rows.Scan(&it.BVID, &it.Title, &it.Artist, &it.Cover, &it.Duration, &it.DurationSec) == nil {
+			p.list = append(p.list, it)
+		}
 	}
 }
 
 func (p *PlaylistService) save() {
-	if err := os.MkdirAll(filepath.Dir(p.path), 0o755); err != nil {
+	tx, err := p.db.Begin()
+	if err != nil {
 		return
 	}
-	if data, err := json.Marshal(p.list); err == nil {
-		_ = os.WriteFile(p.path, data, 0o644)
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM playlist`); err != nil {
+		return
 	}
+	for _, it := range p.list {
+		if _, err := tx.Exec(`INSERT INTO playlist (bvid,title,artist,cover,duration,duration_sec) VALUES (?,?,?,?,?,?)`,
+			it.BVID, it.Title, it.Artist, it.Cover, it.Duration, it.DurationSec); err != nil {
+			return
+		}
+	}
+	_ = tx.Commit()
 }
 
 // Get 当前列表
