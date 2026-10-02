@@ -29,10 +29,17 @@
 
   function renderLines() {
     linesEl.innerHTML = '';
-    lines.forEach((l) => {
+    lines.forEach((l, i) => {
       const d = document.createElement('div');
-      d.className = 'ly-line text-gray-500 my-1 transition-all duration-300 px-4 py-1 text-center';
+      d.className = 'ly-line text-gray-500 my-1 transition-all duration-300 px-4 py-1 text-center cursor-pointer hover:text-white/70';
       d.textContent = l[1];
+      // 点击行 → 跳转到该句时间（YesPlayMusic 同款）
+      d.addEventListener('click', () => {
+        const t = lines[i][0];
+        if (audio) { audio.currentTime = t + 0.1; }
+        lastIdx = -1;
+        sync(t);
+      });
       linesEl.appendChild(d);
     });
   }
