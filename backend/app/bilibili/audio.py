@@ -114,26 +114,6 @@ async def get_best_audio_url(
             size=audio.size,
         )
 
-    # fallback 到 dash
-    if stream.dash and stream.dash.audio:
-        audio_map = {a.id: a for a in stream.dash.audio}
-        if prefer_quality in audio_map:
-            best = audio_map[prefer_quality]
-        else:
-            for q in QUALITY_PRIORITY:
-                if q in audio_map:
-                    best = audio_map[q]
-                    break
-            else:
-                best = stream.dash.audio[0]
-        return AudioStreamResult(
-            url=best.base_url,
-            quality=best.id,
-            size=best.size,
-            mime_type=best.mime_type,
-            codecs=best.codecs,
-        )
-
     raise ValueError("no audio stream available")
 
 

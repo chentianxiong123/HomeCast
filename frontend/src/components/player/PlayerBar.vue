@@ -34,8 +34,9 @@
               <img
                 :src="getCoverUrl(store.currentSong.value?.cover)"
                 :alt="store.currentSong.value?.title"
-                class="w-14 h-14 rounded-xl object-cover shadow-md group-hover:shadow-lg transition-shadow"
+                class="w-14 h-14 flex-shrink-0 aspect-square object-cover rounded-xl shadow-md group-hover:shadow-lg transition-shadow cursor-pointer"
                 referrerpolicy="no-referrer"
+                @click="lyricOpen = true"
               />
               <div v-if="speakerState.isPushing" class="absolute inset-0 bg-blue-500/20 rounded-xl flex items-center justify-center">
                 <n-icon size="20" class="text-blue-600">
