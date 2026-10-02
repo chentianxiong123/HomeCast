@@ -36,10 +36,11 @@ func main() {
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
 	speakerSvc := service.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speaker.NewQRLogin()}
+	sitesHandler := &api.SitesHandler{Sites: service.NewSitesService("")}
 
 	addr := "0.0.0.0:" + port
 	log.Printf("homecast-go listening on http://%s (music + fav + lyric + playlist + cast + speaker)", addr)
-	if err := http.ListenAndServe(addr, api.NewMux(musicHandler, favHandler, lyricHandler, playlistHandler, castHandler, proxyHandler, speakerHandler)); err != nil {
+	if err := http.ListenAndServe(addr, api.NewMux(musicHandler, favHandler, lyricHandler, playlistHandler, castHandler, proxyHandler, speakerHandler, sitesHandler)); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -12,7 +12,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // NewMux 组装全部路由（对齐 Python /api/v1 前缀）
-func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist *PlaylistHandler, cast *CastHandler, proxy *ProxyHandler, speaker *SpeakerHandler) http.Handler {
+func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist *PlaylistHandler, cast *CastHandler, proxy *ProxyHandler, speaker *SpeakerHandler, sites *SitesHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/music/search", music.Search)
 	mux.HandleFunc("GET /api/v1/music/stream/{bvid}", music.Stream)
@@ -47,5 +47,10 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("POST /api/v1/speaker/qr/generate", speaker.QRGenerate)
 	mux.HandleFunc("GET /api/v1/speaker/qr/status", speaker.QRStatus)
 	mux.HandleFunc("POST /api/v1/speaker/qr/reset", speaker.QRReset)
+	mux.HandleFunc("GET /api/v1/sites/list", sites.List)
+	mux.HandleFunc("POST /api/v1/sites/add", sites.Add)
+	mux.HandleFunc("POST /api/v1/sites/remove", sites.Remove)
+	mux.HandleFunc("GET /api/v1/sites/episodes/{detail_url...}", sites.Episodes)
+	mux.HandleFunc("POST /api/v1/sites/cache_episodes", sites.CacheEpisodes)
 	return mux
 }
