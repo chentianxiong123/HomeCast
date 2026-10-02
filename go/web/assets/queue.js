@@ -41,6 +41,8 @@
         '<p class="text-base font-semibold text-gray-900 dark:text-white truncate">' + esc(q.title) + '</p>' +
         '<p class="text-sm text-gray-500 dark:text-gray-400 truncate">' + esc(q.artist) + '</p></div>' +
         (active ? '<span class="flex-shrink-0 text-pink-400 text-sm">正在播放</span>' : '') +
+        '<button class="q-next w-9 h-9 rounded-full flex-shrink-0 items-center justify-center hidden sm:flex text-gray-500 dark:text-gray-400 hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="下一首播放（插队）">' +
+        '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6v12l8-6z"/><path d="M12 6v12l8-6z" opacity="0.4"/></svg></button>' +
         '<button class="q-del w-9 h-9 rounded-full flex-shrink-0 items-center justify-center hidden sm:flex text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="从队列移除">' +
         '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M4 6h16"/></svg></button>' +
         '</div>';
@@ -56,6 +58,12 @@
     });
     view.querySelectorAll('.q-del').forEach((btn) => {
       btn.addEventListener('click', () => hcBus.emit('queue-remove', { bvid: btn.dataset.bvid }));
+    });
+    view.querySelectorAll('.q-next').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const s = list.find((x) => x.bvid === btn.dataset.bvid);
+        if (s) hcBus.emit('play-next', s);
+      });
     });
     const clearBtn = view.querySelector('.queue-clear');
     if (clearBtn) clearBtn.addEventListener('click', () => hcBus.emit('queue-clear'));
