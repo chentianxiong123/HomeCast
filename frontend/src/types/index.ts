@@ -52,6 +52,7 @@ export interface PlayerState {
   isMuted: boolean
   playMode: PlayMode
   currentSong: MusicItem | null
+  quality: number   // 音质全局统一（64/128/192），不按歌记忆
 }
 
 // API 响应

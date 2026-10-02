@@ -41,7 +41,7 @@ export async function getVideoInfo(bvid: string): Promise<VideoInfo> {
   return res.data.data
 }
 
-export async function getAudioStream(bvid: string, quality = 64): Promise<AudioStream> {
+export async function getAudioStream(bvid: string, quality = 192): Promise<AudioStream> {
   if (USE_MOCK) {
     await delay(200)
     return {
@@ -62,6 +62,11 @@ export async function getAudioStream(bvid: string, quality = 64): Promise<AudioS
 export function getAudioProxyUrl(bvid: string, quality = 192): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
   return `${baseUrl}/proxy/audio/${bvid}?quality=${quality}`
+}
+
+export async function getLyric(keyword: string) {
+  const res = await import('./request').then(m => m.default.get('/music/lyric', { params: { keyword } }))
+  return res.data
 }
 
 function delay(ms: number): Promise<void> {

@@ -1,11 +1,13 @@
 import { ref, computed, watch } from 'vue'
 import type { MusicItem, PlayerState, PlayMode } from '@/types'
 import { getAudioStream } from '@/api/music'
+import { getLyric } from '@/api/music'
 import { getPlaylist, addToPlaylist as apiAddToPlaylist, removeFromPlaylist as apiRemoveFromPlaylist, clearPlaylist as apiClearPlaylist } from '@/api/playlist'
 
 const VOLUME_KEY = 'bilibili-music-volume'
 const MODE_KEY = 'bilibili-music-mode'
 const PROGRESS_KEY = 'bilibili-music-progress'
+const QUALITY_KEY = 'bilibili-music-quality'   // 音质全局统一：不按歌记忆，由切换决定
 
 // 存储接口
 interface Storage {
@@ -46,7 +48,8 @@ const state = ref<PlayerState>({
   volume: 80,
   isMuted: false,
   playMode: 'loop' as PlayMode,
-  currentSong: null
+  currentSong: null,
+  quality: 192
 })
 
 // 播放列表
@@ -63,7 +66,7 @@ export async function loadPlaylistFromBackend() {
 
     // 如果有播放列表但没有当前歌曲，设置第一首为当前歌曲
     if (playlist.value.length > 0 && !state.value.currentSong) {
-      state.value.currentSong = playlist.value[0]
+      state.value.currentSong = playlist.value[0] ?? null
       console.log('Set current song:', state.value.currentSong?.title)
     }
   } catch (e) {
@@ -89,6 +92,15 @@ export async function initPlayer() {
 
   if (modeData) {
     state.value.playMode = modeData as PlayMode
+  }
+
+  // 音质全局统一（对齐桌面项目 qn_var 语义）
+  const qualityData = await storage.get(QUALITY_KEY)
+  if (qualityData) {
+    const q = parseInt(qualityData, 10)
+    if ([64, 128, 192].includes(q)) {
+      state.value.quality = q
+    }
   }
 
   // 从后端加载播放列表
@@ -219,8 +231,8 @@ export async function play(song: MusicItem) {
   }
 
   try {
-    // 后端 /stream/{bvid} 直接返回音频流（代理B站音频）
-    const audioUrl = `/api/v1/music/stream/${song.bvid}?quality=64`
+    // 后端 /stream/{bvid} 直接返回音频流（代理B站音频），音质由全局设置决定
+    const audioUrl = `/api/v1/music/stream/${song.bvid}?quality=${state.value.quality}`
     console.log('Playing stream URL:', audioUrl)
 
     // 后端返回MP3格式，使用audio元素播放
@@ -516,3 +528,10 @@ export const progress = computed(() => {
 
 // 导出状态
 export { state, playlist, currentIndex }
+
+// 音质切换（全局统一，对齐桌面项目 qn_var：由切换按钮决定，不按歌记忆）
+export async function setQuality(q: number) {
+  state.value.quality = q
+  await storage.set(QUALITY_KEY, String(q))
+}
+export const quality = computed(() => state.value.quality)
