@@ -60,7 +60,7 @@
     el.toggle.innerHTML = playing
       ? '<svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
       : '<svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-    if (el.eq) el.eq.hidden = state !== 'playing'; // 频谱只在真正播放时出现
+    if (el.eq) el.eq.style.display = state === 'playing' ? 'flex' : 'none'; // 频谱只在真正播放时出现（inline 优先，防 flex 覆盖）
     el.prev.disabled = el.next.disabled = !song || queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);
@@ -220,9 +220,9 @@
 
   // ---- audio 事件 → 状态机 ----
   audio.addEventListener('play', () => setState('playing'));
-  audio.addEventListener('pause', () => { setState(audio.ended ? 'ended' : 'paused'); if (el.eq) el.eq.hidden = true; });
-  audio.addEventListener('ended', () => { if (el.eq) el.eq.hidden = true; });
-  audio.addEventListener('error', () => { if (el.eq) el.eq.hidden = true; });
+  audio.addEventListener('pause', () => { setState(audio.ended ? 'ended' : 'paused'); if (el.eq) el.eq.style.display = 'none'; });
+  audio.addEventListener('ended', () => { if (el.eq) el.eq.style.display = 'none'; });
+  audio.addEventListener('error', () => { if (el.eq) el.eq.style.display = 'none'; });
   audio.addEventListener('ended', () => {
     setState('ended');
     if (playMode === 'single' && song) { audio.currentTime = 0; audio.play().catch(() => {}); return; } // 单曲循环
