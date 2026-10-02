@@ -99,8 +99,19 @@
       idx: qidx,
     });
   }
+  function notify(d) { // 切歌系统通知（一次性请求权限，失败静默）
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'granted') {
+        new Notification(d.title || '', { body: d.artist || '', icon: d.cover || undefined, silent: true });
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    } catch (e) {}
+  }
   function loadSong(d) {
     song = d;
+    notify(d);
     el.title.textContent = d.title;
     el.artist.textContent = d.artist || '未知作者';
     el.cover.src = d.cover || '';

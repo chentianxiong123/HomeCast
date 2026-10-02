@@ -38,7 +38,7 @@
         '<button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" data-bvid="' + esc(q.bvid) + '">' +
         '<svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div>' +
         '<div class="flex-1 min-w-0">' +
-        '<p class="text-base font-semibold text-gray-900 dark:text-white truncate">' + esc(q.title) + '</p>' +
+        '<p class="q-title text-base font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="打开 B 站原视频">' + esc(q.title) + '</p>' +
         '<p class="text-sm text-gray-500 dark:text-gray-400 truncate">' + esc(q.artist) + '</p></div>' +
         (active ? '<span class="flex-shrink-0 text-pink-400 text-sm">正在播放</span>' : '') +
         '<button class="q-next w-9 h-9 rounded-full flex-shrink-0 items-center justify-center hidden sm:flex text-gray-500 dark:text-gray-400 hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="下一首播放（插队）">' +
@@ -58,6 +58,9 @@
     });
     view.querySelectorAll('.q-del').forEach((btn) => {
       btn.addEventListener('click', () => hcBus.emit('queue-remove', { bvid: btn.dataset.bvid }));
+    });
+    view.querySelectorAll('.q-title').forEach((t) => {
+      t.addEventListener('click', () => hcBus.emit('open-bili', { bvid: t.dataset.bvid }));
     });
     view.querySelectorAll('.q-next').forEach((btn) => {
       btn.addEventListener('click', () => {
