@@ -5,6 +5,7 @@ package server
 import (
 	"log"
 	"net/http"
+	"strings"
 	"os"
 	"time"
 
@@ -53,6 +54,9 @@ func withCORS(h http.Handler) http.Handler {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			log.Printf("[api] %s %s", r.Method, r.URL.Path)
 		}
 		h.ServeHTTP(w, r)
 	})
