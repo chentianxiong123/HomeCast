@@ -65,7 +65,7 @@ func New() http.Handler {
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
-	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), PL: service.NewPlaylistService(client, db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates()}
+	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates()}
 	outer := http.NewServeMux()
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)

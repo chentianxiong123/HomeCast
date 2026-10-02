@@ -1,7 +1,7 @@
 // Package hx 功能切片层：一个功能一个文件（面向过程，直上直下）
 //
 // 壳（本文件）：页面渲染（shell 注入 content）+ 路由分发
-// 页面结构对照 Vue 版：/hx/music 音乐 /hx/search 搜索 /hx/favs 收藏夹 /hx/cast 投屏
+// 页面结构（对齐 YesPlayMusic 精简模型）：/hx/queue 队列 /hx/search 搜索 /hx/favs 收藏夹 /hx/cast 投屏
 package hx
 
 import (
@@ -16,9 +16,8 @@ import (
 
 // H 功能上下文：只有各功能要用的数据句柄，无接口无抽象
 type H struct {
-	Music *service.MusicService
-	Fav   *service.FavService
-	PL    *service.PlaylistService
+	Music   *service.MusicService
+	Fav     *service.FavService
 	Cast    *service.CastService
 	Speaker *service.SpeakerService
 	QR      *speaker.QRLogin
@@ -49,7 +48,7 @@ func (h *H) Router() http.Handler {
 	mux.Handle("GET /assets/", http.FileServerFS(web.Assets()))
 	// 页面（对照 Vue 版 nav：音乐/搜索/收藏夹/投屏）
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { h.searchPage(w, r) })
-	mux.HandleFunc("GET /hx/music", h.MusicPage)
+	mux.HandleFunc("GET /hx/queue", h.QueuePage)
 	mux.HandleFunc("GET /hx/search", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.URL.Query()["kw"]; ok {
 			h.Search(w, r) // 带 kw = 结果片段或完整页（按 HX-Request 区分）
@@ -70,14 +69,16 @@ func (h *H) Router() http.Handler {
 	mux.HandleFunc("POST /hx/speaker/control", h.SpeakerControl)
 	mux.HandleFunc("POST /hx/speaker/refresh", h.SpeakerRefresh)
 	// 播放列表切面
-	mux.HandleFunc("POST /hx/playlist/add", h.AddPL)
-	mux.HandleFunc("POST /hx/playlist/remove/{bvid}", h.RemovePL)
-	mux.HandleFunc("POST /hx/playlist/clear", h.ClearPL)
 	// 收藏切面
 	mux.HandleFunc("POST /hx/fav/toggle", h.FavToggle)
 	mux.HandleFunc("POST /hx/fav/remove/{bvid}", h.FavRemove)
 	mux.HandleFunc("POST /hx/fav/clear", h.FavClear)
 	return mux
+}
+
+// QueuePage GET /hx/queue → 播放队列（自动上下文，前端收 hc:queue 渲染）
+func (h *H) QueuePage(w http.ResponseWriter, r *http.Request) {
+	h.renderPage(w, "queue", "content_queue.html", nil)
 }
 
 // searchPage 搜索页（含搜索框 + 空态）
