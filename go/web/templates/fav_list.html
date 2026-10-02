@@ -15,10 +15,10 @@
 </div>
 <div class="grid gap-3">
   {{range .Items}}
-  <div class="group flex items-center space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700">
+  <div class="group flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-2xl min-w-0 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700">
     <div class="relative flex-shrink-0">
       <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"
-           class="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-xl shadow-sm">
+           class="w-16 h-12 sm:w-20 sm:h-14 object-cover rounded-xl shadow-sm">
       <button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
               data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
               onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})" title="播放">
@@ -33,11 +33,11 @@
       </div>
     </div>
     <div class="flex items-center space-x-2 flex-shrink-0">
-      <button class="hx-play flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
+      <button class="hx-play flex items-center space-x-1 px-3 sm:px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
               data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
               onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        <span>播放</span>
+        <span class="hidden sm:inline">播放</span>
       </button>
       <button hx-post="/hx/fav/remove/{{.BVID}}" hx-target="#fav-list" hx-swap="innerHTML"
               class="w-9 h-9 rounded-full flex items-center justify-center text-pink-500 dark:text-pink-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="取消收藏">
