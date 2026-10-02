@@ -26,6 +26,7 @@
     const lyIdx = Math.max(0, LY_SIZES.indexOf(parseInt(S('hc:lysize', '18'), 10)));
     const subIdx = Math.max(0, SUB_SIZES.indexOf(parseInt(S('hc:subsize', '24'), 10)));
     const lybg = S('hc:lybg', 'cover');
+    const lytime = S('hc:lytime', '0') === '1';
     const hisCount = (JSON.parse(S('hc:searches', '[]')) || []).length;
 
     view.innerHTML =
@@ -96,6 +97,17 @@
       '" data-v="solid">纯色</button>' +
       '</div></div>' +
 
+      // 歌词时间显示
+      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
+      '<div class="flex items-center justify-between">' +
+      '<div><p class="font-medium text-gray-900 dark:text-white">歌词时间显示</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">歌词行旁显示时间戳</p></div>' +
+      '<label class="relative inline-flex items-center cursor-pointer">' +
+      '<input type="checkbox" class="sr-only peer" id="set-lytime" ' + (lytime ? 'checked' : '') + '>' +
+      '<div class="w-11 h-6 bg-gray-600 peer-checked:bg-pink-500 rounded-full transition-colors"></div>' +
+      '<div class="dot absolute w-4 h-4 bg-white rounded-full left-1 transition-transform peer-checked:translate-x-5 pointer-events-none"></div>' +
+      '</label></div></div>' +
+
       // 字幕字号（横向字幕条）
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-1">字幕字号（横向字幕条）</p>' +
@@ -143,6 +155,10 @@
     view.querySelectorAll('.set-lybg').forEach((b) => b.addEventListener('click', () => {
       W('hc:lybg', b.dataset.v); hcBus.emit('lybg', { v: b.dataset.v }); render();
     }));
+    const lytimeCtl = document.getElementById('set-lytime');
+    if (lytimeCtl) lytimeCtl.addEventListener('change', () => {
+      W('hc:lytime', lytimeCtl.checked ? '1' : '0'); hcBus.emit('lytime', { on: lytimeCtl.checked }); render();
+    });
     const clr = view.querySelector('.set-clrhis');
     if (clr) clr.addEventListener('click', () => {
       try { localStorage.removeItem('hc:searches'); } catch (e) {}
