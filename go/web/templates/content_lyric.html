@@ -1,0 +1,41 @@
+{{/* 歌词页（竖向 KTV，独立页面、实底不透明；lyric.js 管辖） */}}
+<div id="lyric-view" class="max-w-3xl mx-auto">
+  <!-- 顶栏：返回 + 字号调节 -->
+  <div class="flex items-center justify-between mb-4">
+    <button id="ly-back" title="返回上一页"
+            class="flex items-center space-x-1 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+      <span>返回</span>
+    </button>
+    <div class="flex items-center space-x-1">
+      <button id="ly-small" title="字号减小" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+      </button>
+      <span id="ly-size" class="w-12 text-center text-xs text-gray-500 dark:text-gray-400 font-mono">3/5</span>
+      <button id="ly-big" title="字号增大" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 歌曲信息（实底卡片） -->
+  <div class="flex items-center space-x-4 mb-4 p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+    <img id="ly-cover" src="" alt="" class="w-16 h-16 rounded-xl object-cover shadow-md flex-shrink-0" referrerpolicy="no-referrer">
+    <div class="min-w-0 flex-1">
+      <p id="ly-title" class="text-lg font-bold text-gray-900 dark:text-white truncate">尚未播放</p>
+      <p id="ly-artist" class="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5"></p>
+    </div>
+  </div>
+
+  <!-- 竖向 KTV 歌词列表（实底容器，不透明） -->
+  <div id="ly-lines"
+       class="h-[46vh] sm:h-[50vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm"></div>
+
+  <!-- 底部进度条（可拖跳转，无黑盒：当前时间/总时长可见） -->
+  <div class="mt-4 flex items-center space-x-3 px-1">
+    <span class="text-xs text-gray-500 dark:text-gray-400 font-mono tabular-nums flex-shrink-0" id="ly-cur">0:00</span>
+    <input id="ly-progress" type="range" min="0" max="1000" step="1" value="0"
+           class="flex-1 w-full h-1.5 accent-pink-500 cursor-pointer">
+    <span class="text-xs text-gray-500 dark:text-gray-400 font-mono tabular-nums flex-shrink-0" id="ly-dur">0:00</span>
+  </div>
+</div>
