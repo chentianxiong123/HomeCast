@@ -30,7 +30,7 @@
         <div class="flex items-center justify-between gap-4">
           <!-- 歌曲信息 -->
           <div class="flex items-center space-x-4 flex-1 min-w-0">
-            <div class="relative group">
+            <div class="relative group shrink-0 min-w-[56px]">
               <img
                 :src="getCoverUrl(store.currentSong.value?.cover)"
                 :alt="store.currentSong.value?.title"
