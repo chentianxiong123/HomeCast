@@ -143,8 +143,9 @@
     load(song);
   });
 
-  // 关闭：X 按钮 / ESC
+  // 关闭：X 按钮 / ESC / 封面再点（hc:lyric-close）
   document.getElementById('ly-close').addEventListener('click', hide);
+  hcBus.on('lyric-close', hide);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.classList.contains('ly-hidden')) hide(); });
 
   // KTV 跟随 + 时间显示（直接听 audio，孤岛内；面板关闭时不更新）
