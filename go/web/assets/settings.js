@@ -13,6 +13,7 @@
   const W = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
   const LY_SIZES = [14, 16, 18, 22, 26];
+  const SUB_SIZES = [16, 20, 24, 28, 32];
   const MODES = ['order', 'loop', 'single', 'random'];
   const MODE_NAMES = { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' };
   const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -23,6 +24,7 @@
     const speed = S('hc:speed', '1');
     const mode = S('hc:mode', 'order');
     const lyIdx = Math.max(0, LY_SIZES.indexOf(parseInt(S('hc:lysize', '18'), 10)));
+    const subIdx = Math.max(0, SUB_SIZES.indexOf(parseInt(S('hc:subsize', '24'), 10)));
     const hisCount = (JSON.parse(S('hc:searches', '[]')) || []).length;
 
     view.innerHTML =
@@ -81,6 +83,17 @@
         '" data-i="' + i + '">' + v + 'px</button>').join('') +
       '</div></div>' +
 
+      // 字幕字号（横向字幕条）
+      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
+      '<p class="font-medium text-gray-900 dark:text-white mb-1">字幕字号（横向字幕条）</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">当前字号：' + SUB_SIZES[subIdx] + 'px · 拖动字幕条可移动位置</p>' +
+      '<div class="flex space-x-2">' +
+      SUB_SIZES.map((v, i) =>
+        '<button class="set-sub px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+        (subIdx === i ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
+        '" data-i="' + i + '">' + v + 'px</button>').join('') +
+      '</div></div>' +
+
       // 数据
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">数据</p>' +
@@ -110,6 +123,9 @@
     }));
     view.querySelectorAll('.set-ly').forEach((b) => b.addEventListener('click', () => {
       const i = parseInt(b.dataset.i, 10); W('hc:lysize', String(LY_SIZES[i])); hcBus.emit('lysize', { idx: i }); render();
+    }));
+    view.querySelectorAll('.set-sub').forEach((b) => b.addEventListener('click', () => {
+      const i = parseInt(b.dataset.i, 10); W('hc:subsize', String(SUB_SIZES[i])); hcBus.emit('subsize', { idx: i }); render();
     }));
     const clr = view.querySelector('.set-clrhis');
     if (clr) clr.addEventListener('click', () => {

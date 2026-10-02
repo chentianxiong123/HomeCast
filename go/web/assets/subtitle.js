@@ -16,7 +16,49 @@
   let lastBvid = '';
   let songTitle = '';
 
-  function showBar() { bar.hidden = false; if (tickBtn) tickBtn.classList.add('text-pink-400'); }
+  // ---- 拖动定位（对齐桌面挂件可移动；坐标持久化 hc:subpos） ----
+  let subPos = null;
+  try { subPos = JSON.parse(localStorage.getItem('hc:subpos') || 'null'); } catch (e) {}
+  function place() {
+    const w = bar.offsetWidth || 200, h = bar.offsetHeight || 36;
+    let x = subPos ? subPos.x : Math.round((window.innerWidth - w) / 2);
+    let y = subPos ? subPos.y : Math.round(window.innerHeight - h - 130); // 默认 dock 上方
+    x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
+    y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+    bar.style.left = x + 'px';
+    bar.style.top = y + 'px';
+  }
+  let drag = null;
+  bar.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#subtitle-x')) return; // X 按钮不触发拖动
+    drag = { dx: e.clientX - bar.offsetLeft, dy: e.clientY - bar.offsetTop };
+    try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  bar.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const x = Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, e.clientX - drag.dx));
+    const y = Math.max(8, Math.min(window.innerHeight - bar.offsetHeight - 8, e.clientY - drag.dy));
+    bar.style.left = x + 'px';
+    bar.style.top = y + 'px';
+  });
+  function endDrag() {
+    if (!drag) return;
+    drag = null;
+    subPos = { x: bar.offsetLeft, y: bar.offsetTop };
+    try { localStorage.setItem('hc:subpos', JSON.stringify(subPos)); } catch (e) {}
+  }
+  bar.addEventListener('pointerup', endDrag);
+  bar.addEventListener('pointercancel', endDrag);
+
+  // ---- 字幕字号（统一档位 [16,20,24,28,32]，持久 hc:subsize） ----
+  const SUB_SIZES = [16, 20, 24, 28, 32];
+  let subIdx = SUB_SIZES.indexOf(parseInt(localStorage.getItem('hc:subsize') || '24', 10));
+  if (subIdx < 0) subIdx = 2;
+  function applySubSize() { textEl.style.fontSize = SUB_SIZES[subIdx] + 'px'; }
+  hcBus.on('subsize', (d) => { if (d && typeof d.idx === 'number') subIdx = Math.min(SUB_SIZES.length - 1, Math.max(0, d.idx)); applySubSize(); });
+  applySubSize();
+
+  function showBar() { bar.hidden = false; place(); if (tickBtn) tickBtn.classList.add('text-pink-400'); }
   function hideBar() { bar.hidden = true; if (tickBtn) tickBtn.classList.remove('text-pink-400'); }
   if (xBtn) xBtn.addEventListener('click', () => setEnabled(false)); // 字幕条自带 X 关闭
   // 悬停浮现控制（行为对齐桌面挂件）：JS mouseenter 显式控制，不依赖 CSS 变体环境差异
