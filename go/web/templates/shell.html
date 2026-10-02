@@ -126,6 +126,63 @@
     </div>
   </div>
 
+  <!-- 横向歌词字幕：桌面挂件网页版——透明、可拖动（deco 拖动）、可调字号（JS）、悬停浮现控制 -->
+  <div id="subtitle-bar" hidden
+       class="fixed z-40 group w-max max-w-[85vw] flex items-center gap-2 cursor-grab active:cursor-grabbing select-none">
+    <span id="subtitle-text"
+          class="text-white/95 font-medium text-center whitespace-nowrap overflow-hidden text-ellipsis"></span>
+    <span class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1">
+      <span class="w-7 h-7 rounded-full bg-black/40 text-white/70 flex items-center justify-center cursor-grab" title="拖动字幕条">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 7h2v2H8zM14 7h2v2h-2zM8 11h2v2H8zM14 11h2v2h-2zM8 15h2v2H8zM14 15h2v2h-2z"/></svg>
+      </span>
+      <button id="subtitle-x" title="关闭字幕"
+              class="w-7 h-7 rounded-full bg-black/40 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </span>
+    <!-- 卡拉OK横向进度：极淡细线 -->
+    <div class="absolute left-1/2 -translate-x-1/2 -bottom-[7px] w-3/4 h-[2px] bg-white/10 rounded-full overflow-hidden group-hover:bg-white/25 transition-colors">
+      <div id="subtitle-prog" class="h-full w-0 rounded-full bg-pink-400/80 transition-[width] duration-200 ease-linear"></div>
+    </div>
+  </div>
+
+  <!-- 竖向歌词面板：覆盖除 player-dock 外的整个画面（dock z-50 保持可见） -->
+  <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40 bg-gray-950">
+    <div class="h-full max-w-3xl mx-auto px-5 sm:px-8 py-6 sm:py-8 flex flex-col">
+      <!-- 顶部：歌曲信息（水平居中）+ 控制按钮（右上角） -->
+      <div class="relative mb-6">
+        <div class="flex items-center justify-center space-x-4 text-center">
+          <img id="ly-cover" src="" alt="" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-lg flex-shrink-0" referrerpolicy="no-referrer">
+          <div class="text-left min-w-0">
+            <p id="ly-title" class="text-lg font-bold text-white truncate"></p>
+            <p id="ly-artist" class="text-sm text-gray-400 truncate mt-0.5"></p>
+          </div>
+        </div>
+        <div class="absolute top-0 right-0 flex items-center space-x-1">
+          <button id="ly-small" title="字号减小" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+          </button>
+          <span id="ly-size" class="w-11 text-center text-xs text-gray-400 font-mono">3/5</span>
+          <button id="ly-big" title="字号增大" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
+          </button>
+          <button id="ly-close" title="关闭" class="w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </div>
+      <!-- 竖向 KTV 歌词列表（实底、撑满中部） -->
+      <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900/80 border border-gray-800 px-2"></div>
+      <!-- 底部进度条（可拖 + 当前/总时长） -->
+      <div class="mt-4 flex items-center space-x-3">
+        <span id="ly-cur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
+        <input id="ly-progress" type="range" min="0" max="1000" step="1" value="0"
+               class="flex-1 w-full h-1.5 accent-pink-500 cursor-pointer">
+        <span id="ly-dur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
+      </div>
+    </div>
+  </div>
+
   <!-- 横向歌词字幕：桌面挂件网页版——透明无背景、纯文字+阴影、悬停才浮现 X；
        卡拉OK进度=文字下方极淡细线（不破坏透明感） -->
   <div id="subtitle-bar" hidden
@@ -146,7 +203,7 @@
     <audio id="audio" preload="auto"></audio>
 
     <!-- 进度条 -->
-    <div class="w-full px-3 sm:px-4 pt-2">
+    <div class="dock-hide-collapsed w-full px-3 sm:px-4 pt-2">
       <div class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400 mb-1">
         <span id="d-cur" class="w-12 text-right font-mono">0:00</span>
         <input id="d-progress" type="range" min="0" max="1000" step="1" value="0"
@@ -174,8 +231,13 @@
             <div class="absolute inset-0 rounded-xl bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
               <span class="text-[10px] text-white font-medium bg-black/60 rounded-full px-2 py-0.5">歌词</span>
             </div>
+            <!-- 封面左下角：收缩/展开 dock -->
+            <button id="d-collapse" title="收缩播放器"
+                    class="dock-collapse-btn absolute bottom-0.5 left-0.5 w-5 h-5 rounded-full bg-black/50 text-white/90 hover:bg-black/70 flex items-center justify-center transition-all">
+              <svg class="w-3 h-3 dock-collapse-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
           </div>
-          <div class="min-w-0">
+          <div class="dock-hide-collapsed min-w-0">
             <p id="d-title" class="text-base font-semibold text-gray-900 dark:text-white truncate"></p>
             <p id="d-artist" class="text-sm text-gray-500 dark:text-gray-400 truncate"></p>
           </div>
@@ -183,11 +245,11 @@
 
         <!-- 控制按钮 -->
         <div class="flex items-center space-x-2 sm:space-x-4">
-          <button id="d-tick" title="字幕开关" class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hidden sm:flex">
+          <button id="d-tick" title="字幕开关" class="dock-hide-collapsed w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hidden sm:flex">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v10H8l-4 4z"/><path d="M9 13h6"/></svg>
           </button>
           <button id="d-prev" title="上一首" disabled
-                  class="hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  class="dock-hide-collapsed hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
           </button>
           <button id="d-toggle" title="播放/暂停"
@@ -195,20 +257,17 @@
             <svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </button>
           <button id="d-next" title="下一首" disabled
-                  class="hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  class="dock-hide-collapsed hidden sm:flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
           </button>
         </div>
 
         <!-- 音量（<640px 收起） -->
-        <div class="hidden sm:flex items-center space-x-2 flex-1 justify-end">
+        <div class="dock-hide-collapsed hidden sm:flex items-center space-x-2 flex-1 justify-end">
           <button id="d-quality" title="音质（点击切换 64/128/192k）"
                   class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">192k</button>
           <button id="d-speed" title="播放速度（点击切换）"
                   class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">1.0x</button>
-          <button id="d-tick" title="网页字幕开关" class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v10H8l-4 4z"/><path d="M9 13h6"/></svg>
-          </button>
           <button id="d-mode" title="播放模式"
                   class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>

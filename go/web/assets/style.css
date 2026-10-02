@@ -45,3 +45,9 @@
 
 /* 透明字幕条：白字投影兜底（Tailwind CDN 任意值 drop-shadow 可能不编译） */
 #subtitle-text { text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.8); }
+
+/* dock 收缩态：隐藏进度条/标题/次要控制/音量（封面+播放键保留），封面按钮常态显 */
+.dock-collapsed .dock-hide-collapsed { display: none !important; }
+.dock-collapse-btn { opacity: 0; transition: opacity 0.2s; }
+.group:hover .dock-collapse-btn { opacity: 1; }
+.dock-collapsed .dock-collapse-chev { transform: rotate(180deg); }
