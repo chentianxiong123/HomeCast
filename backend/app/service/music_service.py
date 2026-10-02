@@ -3,7 +3,17 @@ from app.bilibili.client import BilibiliClient
 from app.bilibili import search as bilibili_search
 from app.bilibili import video as bilibili_video
 from app.bilibili import audio as bilibili_audio
-from app.bilibili.audio import AUDIO_64K
+from app.bilibili.audio import AUDIO_192K
+
+
+def _parse_duration_sec(s: str) -> int:
+    """B站搜索 duration "3:43" / "1:02:33" → 秒"""
+    parts = [int(x) for x in s.split(":") if x]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    return int(s) if s.isdigit() else 0
 
 
 class MusicItem(BaseModel):
@@ -58,6 +68,7 @@ class MusicService:
                     artist=item.author,
                     cover=item.pic,
                     duration=item.duration,
+                    duration_sec=_parse_duration_sec(item.duration),
                     play_count=item.play,
                 )
             )
