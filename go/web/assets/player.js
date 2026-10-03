@@ -38,7 +38,7 @@
       localStorage.setItem('hc:song', JSON.stringify({ song, at: audio.currentTime }));
       // 完整队列持久化（刷新生效：player 与 queue 孤岛都从这里恢复，避免事件时序丢队列）
       localStorage.setItem('hc:queue', JSON.stringify({
-        list: queue.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover })),
+        list: queue.map((q) => ({ bvid: q.bvid, title: q.title, fullTitle: q.fullTitle, artist: q.artist, cover: q.cover })),
         idx: qidx,
       }));
       // 「上次在听」同曲则同步进度（展示'上次听到 mm:ss'）
@@ -65,7 +65,7 @@
         if (qraw) {
           const qd = JSON.parse(qraw);
           if (qd && Array.isArray(qd.list) && qd.list.length) {
-            queue = qd.list.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover }));
+            queue = qd.list.map((q) => ({ bvid: q.bvid, title: q.title, fullTitle: q.fullTitle, artist: q.artist, cover: q.cover }));
             qidx = typeof qd.idx === 'number' && qd.idx >= 0 && qd.idx < queue.length ? qd.idx : 0;
             had = true;
           }
@@ -128,7 +128,7 @@
   // ---- 播放队列（C 态，进程内）：自动上下文 + 插队（参照 YesPlayMusic next 页） ----
   function emitQueue() {
     hcBus.emit('queue', {
-      list: queue.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover })),
+      list: queue.map((q) => ({ bvid: q.bvid, title: q.title, fullTitle: q.fullTitle, artist: q.artist, cover: q.cover })),
       idx: qidx,
     });
   }
@@ -146,7 +146,7 @@
     try {
       let list = JSON.parse(localStorage.getItem('hc:recent') || '[]');
       list = list.filter((x) => x && x.bvid !== d.bvid);
-      list.unshift({ bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '', duration: d.duration || 0 });
+      list.unshift({ bvid: d.bvid, title: d.title || '', fullTitle: d.fullTitle || '', artist: d.artist || '', cover: d.cover || '', duration: d.duration || 0 });
       if (list.length > 30) list = list.slice(0, 30);
       localStorage.setItem('hc:recent', JSON.stringify(list));
     } catch (e) {}
@@ -160,6 +160,7 @@
     rememberRecent(d);
     hcBus.emit('now', d); // 歌词页/其他孤岛取当前曲
     el.title.textContent = d.title;
+    el.title.title = d.fullTitle || d.title; // dock 标题 hover 显示完整名
     el.artist.textContent = d.artist || '未知作者';
     el.cover.src = d.cover || '';
     el.cover.alt = d.title;
@@ -187,7 +188,7 @@
     try {
       const prev = JSON.parse(localStorage.getItem('hc:last') || 'null');
       localStorage.setItem('hc:last', JSON.stringify({
-        bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '',
+        bvid: d.bvid, title: d.title || '', fullTitle: d.fullTitle || '', artist: d.artist || '', cover: d.cover || '',
         duration: d.duration || 0,
         at: (prev && prev.bvid === d.bvid && typeof prev.at === 'number') ? prev.at : 0,
         ts: Date.now(),
@@ -198,7 +199,7 @@
     rememberLast(data);
     const i = queue.findIndex((q) => q.bvid === data.bvid);
     if (i >= 0) queue.splice(i, 1);
-    queue.push({ bvid: data.bvid, title: data.title, artist: data.artist, cover: data.cover });
+    queue.push({ bvid: data.bvid, title: data.title, fullTitle: data.fullTitle, artist: data.artist, cover: data.cover });
     qidx = queue.length - 1;
     loadSong(data);
     emitQueue();
@@ -207,7 +208,7 @@
     if (!song) { play(data); return; }
     const i = queue.findIndex((q) => q.bvid === data.bvid);
     if (i >= 0) queue.splice(i, 1);
-    queue.splice(qidx + 1, 0, { bvid: data.bvid, title: data.title, artist: data.artist, cover: data.cover });
+    queue.splice(qidx + 1, 0, { bvid: data.bvid, title: data.title, fullTitle: data.fullTitle, artist: data.artist, cover: data.cover });
     emitQueue();
   }
   function step(dir) { // 队列走位：next 向后 / prev 向前（循环；prev 播放中先回秒）
@@ -365,7 +366,7 @@
       const j = await (await fetch('/api/v1/fav/list')).json();
       const items = j.data || [];
       if (!items.length) { hcBus.emit('toast', { msg: '收藏夹是空的' }); return; }
-      queue = items.map((x) => ({ bvid: x.bvid, title: x.title, artist: x.artist, cover: x.cover }));
+      queue = items.map((x) => ({ bvid: x.bvid, title: x.title, fullTitle: x.fullTitle, artist: x.artist, cover: x.cover }));
       qidx = 0;
       loadSong(queue[0]);
       emitQueue();

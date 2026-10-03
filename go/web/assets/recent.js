@@ -11,7 +11,7 @@
   function bindGrid(container, items) {
     container.querySelectorAll('.recent-item').forEach((el) => {
       el.addEventListener('click', () => hcBus.emit('play', {
-        bvid: el.dataset.bvid, title: el.dataset.title, artist: el.dataset.artist, cover: el.dataset.cover,
+        bvid: el.dataset.bvid, title: el.dataset.title, fullTitle: el.dataset.fullTitle, artist: el.dataset.artist, cover: el.dataset.cover,
       }));
       el.addEventListener('contextmenu', (e) => { e.stopPropagation(); }); // 右键交给全局菜单（自带 data-ctx 冒泡）
     });
@@ -52,10 +52,10 @@
       '</div></div>' +
       '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">' +
       recent.map((r) =>
-        '<div class="recent-item group cursor-pointer min-w-0" data-bvid="' + esc(r.bvid) + '" data-title="' + esc(r.title) + '" data-artist="' + esc(r.artist) + '" data-cover="' + esc(r.cover) + '">' +
+        '<div class="recent-item group cursor-pointer min-w-0" data-bvid="' + esc(r.bvid) + '" data-title="' + esc(r.title) + '" data-full-title="' + esc(r.fullTitle || r.title) + '" data-artist="' + esc(r.artist) + '" data-cover="' + esc(r.cover) + '" title="' + esc(r.fullTitle || r.title) + '">' +
         '<img src="' + esc(r.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
         'class="w-full aspect-square object-cover rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-[1.02] transition-all duration-200">' +
-        '<p class="text-xs text-gray-700 dark:text-gray-300 truncate mt-1.5 group-hover:text-pink-400 transition-colors">' + esc(r.title) + '</p>' +
+        '<p class="text-xs text-gray-700 dark:text-gray-300 truncate mt-1.5 group-hover:text-pink-400 transition-colors">' + esc(window.hcTitle ? window.hcTitle(r.title) : r.title) + '</p>' +
         '<p class="text-[10px] text-gray-500 dark:text-gray-400 truncate">' + esc(r.artist) + '</p>' +
         '</div>').join('') +
       '</div>';
@@ -90,10 +90,10 @@
       '</div></div>' +
       '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">' +
       recent.slice(0, 10).map((r) =>
-        '<div class="recent-item group cursor-pointer min-w-0" data-bvid="' + esc(r.bvid) + '" data-title="' + esc(r.title) + '" data-artist="' + esc(r.artist) + '" data-cover="' + esc(r.cover) + '">' +
+        '<div class="recent-item group cursor-pointer min-w-0" data-bvid="' + esc(r.bvid) + '" data-title="' + esc(r.title) + '" data-full-title="' + esc(r.fullTitle || r.title) + '" data-artist="' + esc(r.artist) + '" data-cover="' + esc(r.cover) + '" title="' + esc(r.fullTitle || r.title) + '">' +
         '<img src="' + esc(r.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
         'class="w-full aspect-square object-cover rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-[1.02] transition-all duration-200">' +
-        '<p class="text-xs text-gray-700 dark:text-gray-300 truncate mt-1.5 group-hover:text-pink-400 transition-colors">' + esc(r.title) + '</p>' +
+        '<p class="text-xs text-gray-700 dark:text-gray-300 truncate mt-1.5 group-hover:text-pink-400 transition-colors">' + esc(window.hcTitle ? window.hcTitle(r.title) : r.title) + '</p>' +
         '<p class="text-[10px] text-gray-500 dark:text-gray-400 truncate">' + esc(r.artist) + '</p>' +
         '</div>').join('') +
       '</div>';
