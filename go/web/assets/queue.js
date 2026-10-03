@@ -2,11 +2,47 @@
 // 数据在 player 进程内，页面只画（能重绘就别同步）
 (function () {
   let list = [], idx = -1;
+  let favedSet = new Set();
+
+  // 初始恢复：读持久化队列（hc:queue），再靠广播覆盖——避免 player restoreP 广播早于本监听注册而丢队列
+  try {
+    const qraw = localStorage.getItem('hc:queue');
+    if (qraw) {
+      const qd = JSON.parse(qraw);
+      if (qd && Array.isArray(qd.list) && qd.list.length) {
+        list = qd.list.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover }));
+        idx = typeof qd.idx === 'number' && qd.idx >= 0 && qd.idx < list.length ? qd.idx : 0;
+        render();
+      }
+    }
+  } catch (e) {}
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // 收藏状态集合（本地 SQLite 接口，稳定）；失败静默（按钮保持未收藏灰）
+  fetch('/api/v1/fav/list').then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.data && Array.isArray(j.data)) {
+      favedSet = new Set(j.data.map(function (f) { return f && f.bvid; }).filter(Boolean));
+      render();
+    }
+  }).catch(function () {});
+
+  // 收藏按钮（初始未收藏灰心；已收藏粉心 + 取消确认，对齐右键菜单语义）
+  function favBtnHTML(q) {
+    return '<button class="q-fav w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-bvid="' + esc(q.bvid) + '" title="收藏">' +
+      '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg></button>';
+  }
+
+  function updateFavBtn(btn, faved) {
+    btn.classList.toggle('text-pink-500', faved);
+    btn.classList.toggle('dark:text-pink-400', faved);
+    btn.classList.toggle('text-gray-500', !faved);
+    btn.classList.toggle('dark:text-gray-400', !faved);
+    btn.title = faved ? '取消收藏' : '收藏';
   }
 
   function render() {
@@ -31,19 +67,24 @@
     list.forEach((q, i) => {
       const active = i === idx;
       html +=
-        '<div class="group flex items-center space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 ' +
+        '<div class="group flex items-start space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 ' +
         (active ? 'is-playing border border-pink-500/50' : 'border border-gray-100 dark:border-gray-700') + '" data-ctx-bvid="' + esc(q.bvid) + '" data-ctx-title="' + esc(q.title) + '" data-ctx-artist="' + esc(q.artist) + '" data-ctx-cover="' + esc(q.cover) + '">' +
         '<div class="relative flex-shrink-0">' +
         '<img src="' + esc(q.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-20 h-14 object-cover rounded-xl shadow-sm">' +
         '<button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" data-bvid="' + esc(q.bvid) + '">' +
         '<svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div>' +
         '<div class="flex-1 min-w-0">' +
-        '<p class="q-title text-base font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="打开 B 站原视频">' + esc(q.title) + '</p>' +
+        '<div class="flex items-center gap-1">' +
+        '<p class="q-title flex-1 min-w-0 text-base font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="点击展开/收起完整歌名">' + esc(q.title) + '</p>' +
+        '<button class="q-bili w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="打开 B 站原视频">' +
+        '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></button>' +
+        '</div>' +
         '<p class="text-sm text-gray-500 dark:text-gray-400 truncate">' + esc(q.artist) + '</p></div>' +
-        (active ? '<span class="flex-shrink-0 text-pink-400 text-sm">正在播放</span>' : '') +
-        '<button class="q-next w-9 h-9 rounded-full flex-shrink-0 items-center justify-center hidden sm:flex text-gray-500 dark:text-gray-400 hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="下一首播放（插队）">' +
+        (active ? '<span class="flex-shrink-0 text-pink-400 text-sm py-2">正在播放</span>' : '') +
+        favBtnHTML(q) +
+        '<button class="q-next w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="下一首播放（插队）">' +
         '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6v12l8-6z"/><path d="M12 6v12l8-6z" opacity="0.4"/></svg></button>' +
-        '<button class="q-del w-9 h-9 rounded-full flex-shrink-0 items-center justify-center hidden sm:flex text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="从队列移除">' +
+        '<button class="q-del w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="从队列移除">' +
         '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M4 6h16"/></svg></button>' +
         '</div>';
     });
@@ -59,13 +100,44 @@
     view.querySelectorAll('.q-del').forEach((btn) => {
       btn.addEventListener('click', () => hcBus.emit('queue-remove', { bvid: btn.dataset.bvid }));
     });
+    // 单击标题展开/收起完整歌名（长名不再截断看不到）
     view.querySelectorAll('.q-title').forEach((t) => {
-      t.addEventListener('click', () => hcBus.emit('open-bili', { bvid: t.dataset.bvid }));
+      t.addEventListener('click', () => {
+        t.classList.toggle('truncate');
+        t.classList.toggle('whitespace-normal');
+        t.classList.toggle('break-words');
+      });
+    });
+    // 打开 B 站原视频：移到行尾外链小图标（标题点击改展开歌名了）
+    view.querySelectorAll('.q-bili').forEach((btn) => {
+      btn.addEventListener('click', () => hcBus.emit('open-bili', { bvid: btn.dataset.bvid }));
     });
     view.querySelectorAll('.q-next').forEach((btn) => {
       btn.addEventListener('click', () => {
         const s = list.find((x) => x.bvid === btn.dataset.bvid);
         if (s) hcBus.emit('play-next', s);
+      });
+    });
+    // 收藏/取消收藏：先查状态（favedSet）→ 已收藏要确认（对齐右键菜单语义）
+    view.querySelectorAll('.q-fav').forEach((btn) => {
+      updateFavBtn(btn, favedSet.has(btn.dataset.bvid));
+      btn.addEventListener('click', async () => {
+        const q = list.find((x) => x.bvid === btn.dataset.bvid);
+        if (!q) return;
+        const faved = favedSet.has(q.bvid);
+        if (faved && !window.confirm('确定取消收藏？')) return;
+        const fd = new FormData();
+        fd.append('bvid', q.bvid);
+        fd.append('title', q.title || '');
+        fd.append('artist', q.artist || '');
+        fd.append('cover', q.cover || '');
+        try {
+          const r = await fetch('/hx/fav/toggle', { method: 'POST', body: fd });
+          if (!r.ok) return;
+          if (faved) favedSet.delete(q.bvid); else favedSet.add(q.bvid);
+          updateFavBtn(btn, !faved);
+          hcBus.emit('toast', { msg: !faved ? '已收藏 ♥' : '已取消收藏' });
+        } catch (e) { /* 网络失败静默 */ }
       });
     });
     const clearBtn = view.querySelector('.queue-clear');
