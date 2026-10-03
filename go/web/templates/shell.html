@@ -1,16 +1,32 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>myMusic</title>
+  <script>
+    // 主题初始化（hc:theme = auto|light|dark；auto 跟随系统）。早于渲染执行避免闪烁；
+    // auto 模式监听系统变化实时切换。设置页可改（无黑盒：三态可见）
+    (function () {
+      try {
+        var t = localStorage.getItem('hc:theme') || 'auto';
+        var dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+          if ((localStorage.getItem('hc:theme') || 'auto') === 'auto') {
+            document.documentElement.classList.toggle('dark', e.matches);
+          }
+        });
+      } catch (e) {}
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
   <link rel="icon" href="/assets/favicon.svg">
   <link rel="stylesheet" href="/assets/style.css">
   <script defer src="/assets/alpine.min.js"></script>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+<body class="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800">
   <!-- 顶部导航（对照 Vue 版 navItems：音乐/搜索/收藏夹/投屏；高亮由 nav.js 按 URL 推导） -->
     <header class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">

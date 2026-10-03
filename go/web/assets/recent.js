@@ -15,6 +15,15 @@
       }));
       el.addEventListener('contextmenu', (e) => { e.stopPropagation(); }); // 右键交给全局菜单（自带 data-ctx 冒泡）
     });
+    // 清空最近播放（确认后移除 hc:recent 并重绘当前容器为空态/隐藏）
+    const clr = container.querySelector('.recent-clear-all');
+    if (clr) clr.addEventListener('click', () => {
+      if (!window.confirm('确定清空全部最近播放？')) return;
+      try { localStorage.removeItem('hc:recent'); } catch (e) {}
+      hcBus.emit('toast', { msg: '最近播放已清空' });
+      if (container.id === 'recent-all') renderAll();
+      else { container.innerHTML = ''; }
+    });
     // hx 属性（如「查看全部」链接）是 JS 渲染出来的，需 htmx.process 才生效
     if (window.htmx && container.querySelector('[hx-get]')) htmx.process(container);
   }
@@ -37,8 +46,10 @@
     view.innerHTML =
       '<div class="flex items-center justify-between mb-4">' +
       '<h1 class="text-xl font-bold text-gray-900 dark:text-white">最近播放</h1>' +
+      '<div class="flex items-center gap-3">' +
       '<span class="text-sm text-gray-500 dark:text-gray-400">共 ' + recent.length + ' 首</span>' +
-      '</div>' +
+      '<button class="recent-clear-all text-sm text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors">清空</button>' +
+      '</div></div>' +
       '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">' +
       recent.map((r) =>
         '<div class="recent-item group cursor-pointer min-w-0" data-bvid="' + esc(r.bvid) + '" data-title="' + esc(r.title) + '" data-artist="' + esc(r.artist) + '" data-cover="' + esc(r.cover) + '">' +
@@ -72,9 +83,11 @@
       '<h2 class="text-lg font-semibold text-gray-900 dark:text-white">最近播放</h2>' +
       '<span class="text-xs text-gray-500 dark:text-gray-400">共 ' + recent.length + ' 首</span>' +
       '</div>' +
+      '<div class="flex items-center gap-3">' +
+      '<button class="recent-clear-all text-xs text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors">清空</button>' +
       '<a href="/hx/recent" hx-get="/hx/recent" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"' +
       ' class="text-xs font-medium text-pink-500 hover:text-pink-600 transition-colors">查看全部 →</a>' +
-      '</div>' +
+      '</div></div>' +
       '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">' +
       recent.slice(0, 10).map((r) =>
         '<div class="recent-item group cursor-pointer min-w-0" data-bvid="' + esc(r.bvid) + '" data-title="' + esc(r.title) + '" data-artist="' + esc(r.artist) + '" data-cover="' + esc(r.cover) + '">' +
