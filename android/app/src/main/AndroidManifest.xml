@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- homecast 安卓壳（极简 WebView）：无 res/无依赖库，纯 aapt2 链路可构建 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.homecast.app">
+
+    <!-- targetSdk 34：≥waydroid 的 API 33（不触发“老版本”警告）且覆盖爸妈真机（Android 14+）
+         minSdk 26：服务端二进制 /system/bin/linker64 动态链接需要 Android 8+ -->
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+
+    <!-- 服务端要访问 B 站/网易云外网 + 网页同源请求 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="HomeCast"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:usesCleartextTraffic="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
