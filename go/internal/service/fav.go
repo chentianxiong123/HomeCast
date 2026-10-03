@@ -42,6 +42,9 @@ func (f *FavService) load() []FavSong {
 	return favs
 }
 
+// 保存：全表重写。favs 列表逻辑序是「新的在前」，SQLite 无 AUTOINCREMENT 时
+// 空表 INSERT 复用最小 rowid（先插的 rowid 小）→ 必须倒序插入，rowid 递增才能
+// 与 ORDER BY rowid DESC（新的在前）一致（sorted bug 曾出现：旧的在前）
 func (f *FavService) save(favs []FavSong) error {
 	tx, err := f.db.Begin()
 	if err != nil {
@@ -51,7 +54,8 @@ func (f *FavService) save(favs []FavSong) error {
 	if _, err := tx.Exec(`DELETE FROM favs`); err != nil {
 		return err
 	}
-	for _, s := range favs {
+	for i := len(favs) - 1; i >= 0; i-- {
+		s := favs[i]
 		if _, err := tx.Exec(`INSERT INTO favs (bvid,title,artist,cover,duration,duration_sec,play_count) VALUES (?,?,?,?,?,?,?)`,
 			s.BVID, s.Title, s.Artist, s.Cover, s.Duration, s.DurationSec, s.PlayCount); err != nil {
 			return err
