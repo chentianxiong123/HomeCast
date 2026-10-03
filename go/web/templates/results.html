@@ -57,6 +57,10 @@
                 title="收藏">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
         </button>
+        <button class="ctx-more w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                onclick="this.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, clientX:event.clientX, clientY:event.clientY}))" title="更多操作">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+        </button>
         <button class="hx-next w-9 h-9 rounded-full hidden sm:flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
                 onclick="hcBus.emit('play-next', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})" title="下一首播放（插队）">

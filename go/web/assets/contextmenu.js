@@ -34,6 +34,47 @@
     menu = m;
   }
 
+  function getItem(el) {
+    return {
+      bvid: el.dataset.ctxBvid,
+      title: el.dataset.ctxTitle || '',
+      artist: el.dataset.ctxArtist || '',
+      cover: el.dataset.ctxCover || '',
+      duration: parseInt(el.dataset.ctxDuration || '0', 10),
+    };
+  }
+
+  // 触屏长按 = 右键（手机没有右键）：按下 500ms 不动 → 出菜单；移动/松开/取消则作废；
+  // 长按后 400ms 内吞 click（防长按结束误触播放）
+  let pressTimer = null, pressXY = null, pressTarget = null, suppressClickUntil = 0;
+  document.addEventListener('pointerdown', (e) => {
+    if (menu && !menu.contains(e.target)) closeMenu();
+    const el = e.target.closest('[data-ctx-bvid]');
+    if (!el) return;
+    pressTarget = el;
+    pressXY = { x: e.clientX, y: e.clientY };
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      if (!pressTarget || !pressXY) return;
+      suppressClickUntil = Date.now() + 400;
+      const pos = pressXY;
+      pressTarget = null;
+      openMenu(pos.x, pos.y, getItem(el));
+    }, 500);
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!pressTarget || !pressXY) return;
+    if (Math.abs(e.clientX - pressXY.x) > 10 || Math.abs(e.clientY - pressXY.y) > 10) {
+      clearTimeout(pressTimer);
+      pressTarget = null;
+    }
+  });
+  document.addEventListener('pointerup', () => { clearTimeout(pressTimer); pressTarget = null; });
+  document.addEventListener('pointercancel', () => { clearTimeout(pressTimer); pressTarget = null; });
+  document.addEventListener('click', (e) => {
+    if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
   function toggleFav(item) {
     // 取消收藏需确认：先查当前是否已收藏
     fetch('/api/v1/fav/list')
@@ -66,16 +107,7 @@
     const el = e.target.closest('[data-ctx-bvid]');
     if (!el) { closeMenu(); return; }
     e.preventDefault();
-    openMenu(e.clientX, e.clientY, {
-      bvid: el.dataset.ctxBvid,
-      title: el.dataset.ctxTitle || '',
-      artist: el.dataset.ctxArtist || '',
-      cover: el.dataset.ctxCover || '',
-      duration: parseInt(el.dataset.ctxDuration || '0', 10),
-    });
-  });
-  document.addEventListener('pointerdown', (e) => {
-    if (menu && !menu.contains(e.target)) closeMenu();
+    openMenu(e.clientX, e.clientY, getItem(el));
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   window.addEventListener('blur', closeMenu);
