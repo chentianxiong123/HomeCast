@@ -36,16 +36,33 @@
   function saveP() {
     try {
       localStorage.setItem('hc:song', JSON.stringify({ song, at: audio.currentTime }));
+      // 完整队列持久化（刷新生效：player 与 queue 孤岛都从这里恢复，避免事件时序丢队列）
+      localStorage.setItem('hc:queue', JSON.stringify({
+        list: queue.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover })),
+        idx: qidx,
+      }));
     } catch (e) {}
   }
   function restoreP() {
     try {
       const raw = localStorage.getItem('hc:song');
       if (!raw) return;
-      const d = JSON.parse(raw);
-      if (!d || !d.song || !d.song.bvid) return;
-      song = d.song;
-      queue = [song]; qidx = 0;
+      let had = false;
+      // 先恢复完整队列（hc:queue：list+idx），再定位当前曲
+      try {
+        const qraw = localStorage.getItem('hc:queue');
+        if (qraw) {
+          const qd = JSON.parse(qraw);
+          if (qd && Array.isArray(qd.list) && qd.list.length) {
+            queue = qd.list.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover }));
+            qidx = typeof qd.idx === 'number' && qd.idx >= 0 && qd.idx < queue.length ? qd.idx : 0;
+            had = true;
+          }
+        }
+      } catch (e2) {}
+      if (!had) { song = d.song; queue = [song]; qidx = 0; }
+      const cur = queue[qidx] || d.song || queue[0];
+      if (cur) song = cur;
       el.title.textContent = song.title;
       el.artist.textContent = song.artist || '未知作者';
       el.cover.src = song.cover || '';
@@ -54,6 +71,7 @@
       if (d.at > 5) audio.currentTime = d.at;
       setState('paused');
       hcBus.emit('nowplaying', { bvid: song.bvid });
+      emitQueue(); // 恢复后广播完整队列（迟到监听者可在 afterSwap 重渲染）
     } catch (e) {}
   }
 
