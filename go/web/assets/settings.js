@@ -19,6 +19,10 @@
   const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
   const THEMES = [['auto', '自动'], ['light', '明亮'], ['dark', '暗黑']];
 
+  function lycCount() {
+    try { return Object.keys(JSON.parse(localStorage.getItem('hc:lyc:cache') || '{}')).length; } catch (e) { return 0; }
+  }
+
   function applyTheme() {
     const t = S('hc:theme', 'auto');
     const dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -158,6 +162,15 @@
       '<option value="2000"' + (cachelimit === 2000 ? ' selected' : '') + '>2GB</option>' +
       '</select></div></div>' +
 
+      // 歌词缓存（字幕条与歌词面板共用：记忆你选的歌词源，LRU 50 首）
+      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
+      '<p class="font-medium text-gray-900 dark:text-white mb-1">歌词缓存</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">字幕条与歌词面板共用：自动记忆你选的歌词源，最多 50 首</p>' +
+      '<div class="flex items-center justify-between">' +
+      '<span class="text-sm text-gray-500 dark:text-gray-400">已缓存：<span id="lyc-count" class="text-gray-700 dark:text-gray-200 font-medium">' + (lycCount()) + ' 首</span></span>' +
+      '<button id="lyc-clear" class="px-3 py-1.5 rounded-full text-sm text-gray-400 hover:text-red-400 border border-gray-700 transition-colors">清空歌词缓存</button>' +
+      '</div></div>' +
+
       // 数据
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">数据</p>' +
@@ -226,6 +239,14 @@
     if (cacheClear) cacheClear.addEventListener('click', () => {
       if (!window.confirm('确定清空全部歌曲缓存？')) return;
       window.hcCache.clear().then(() => { hcBus.emit('toast', { msg: '缓存已清空' }); refreshCacheUI(); });
+    });
+    // 歌词缓存：计数 + 清空（与歌词面板/字幕条共用 hc:lyc:cache）
+    const lycClear = document.getElementById('lyc-clear');
+    if (lycClear) lycClear.addEventListener('click', () => {
+      if (!window.confirm('确定清空全部歌词缓存？')) return;
+      try { localStorage.removeItem('hc:lyc:cache'); } catch (e) {}
+      hcBus.emit('toast', { msg: '歌词缓存已清空' });
+      render();
     });
     const clr = view.querySelector('.set-clrhis');
     if (clr) clr.addEventListener('click', () => {

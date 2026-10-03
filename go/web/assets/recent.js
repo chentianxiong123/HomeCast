@@ -100,6 +100,11 @@
 
     bindGrid(view, recent);
   }
+  // 播放/切歌后重渲染（最近播放顺序变了）：不依赖 inited，强制重绘当前容器
+  hcBus.on('nowplaying', () => {
+    if (document.getElementById('recent-all')) renderAll();
+    else if (document.getElementById('recent-view')) { inited = false; init(); }
+  });
   document.addEventListener('htmx:afterSwap', init);
   init();
 })();
