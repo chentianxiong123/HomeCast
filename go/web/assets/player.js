@@ -50,6 +50,7 @@
       el.artist.textContent = song.artist || '未知作者';
       el.cover.src = song.cover || '';
       audio.src = '/api/v1/music/stream/' + song.bvid + '?quality=' + quality; // P 态恢复也跟随持久化音质
+      audio.playbackRate = speed; // 恢复切 src 后速率被重置，重应用（调音/速度保持）
       if (d.at > 5) audio.currentTime = d.at;
       setState('paused');
       hcBus.emit('nowplaying', { bvid: song.bvid });
@@ -135,18 +136,20 @@
     el.cover.alt = d.title;
     // 播放源：缓存命中 → blob URL（秒开）；未命中 → 网络流（播过 60s 后台缓存）
     const streamURL = '/api/v1/music/stream/' + d.bvid + '?quality=' + quality;
+    const applyRate = () => { audio.playbackRate = speed; }; // 换 src 后 Chromium 重置速率，需重应用
     const useCached = () => {
       window.hcCache.get(d.bvid, quality).then((blob) => {
-        if (!blob) { audio.src = streamURL; audio.play().catch(() => {}); }
+        if (!blob) { audio.src = streamURL; applyRate(); audio.play().catch(() => {}); }
         else {
           curBlobURL = URL.createObjectURL(blob);
           audio.src = curBlobURL;
+          applyRate();
           audio.play().catch(() => {});
           setState('playing'); // 缓存命中视为可播
         }
       });
     };
-    if (window.hcCache) useCached(); else { audio.src = streamURL; audio.play().catch(() => {}); }
+    if (window.hcCache) useCached(); else { audio.src = streamURL; applyRate(); audio.play().catch(() => {}); }
     setState('loading');
     hcBus.emit('nowplaying', { bvid: d.bvid });
     saveP();
@@ -188,7 +191,13 @@
     audio.playbackRate = v;
     try { localStorage.setItem('hc:speed', String(v)); } catch (e) {}
     if (el.speedBtn) el.speedBtn.textContent = v + 'x';
+    hcBus.emit('speed', { v });
     hcBus.emit('toast', { msg: '速度 ' + v + 'x' });
+  }
+  function pitch(d) { // 调音：±0.5 细微变速（浏览器自动音调校正，传出音高不变）
+    let v = Math.round((parseFloat(speed) + d) * 100) / 100;
+    v = Math.min(2, Math.max(0.25, v));
+    setSpeed(v);
   }
   function setVol(v) {
     audio.volume = v / 100;
@@ -298,6 +307,7 @@
     setSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length]);
   });
   audio.playbackRate = speed;
+  if (el.speedBtn) el.speedBtn.textContent = speed + 'x'; // 按钮初始值跟随持久化速率
   function mute() { audio.muted = !audio.muted; }
   if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
   audio.volume = parseInt(localStorage.getItem('hc:vol') || '80', 10) / 100;
@@ -360,6 +370,7 @@
   hcBus.on('request-now', () => { if (song) hcBus.emit('now', song); }); // 歌词页初始化拉当前曲
   hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
   hcBus.on('speed', (d) => { if (d && d.v) setSpeed(d.v); });
+  hcBus.on('pitch', (d) => { if (d && d.d) pitch(parseFloat(d.d)); });
 
   // ---- 投送桥接：cast 页按钮只广播 hc:cast-play，这里持当前歌调后端投送 ----
   hcBus.on('cast-play', (d) => {
