@@ -104,6 +104,7 @@
             <div class="text-left min-w-0">
               <p id="ly-title" class="text-lg font-bold text-white truncate"></p>
               <p id="ly-artist" class="text-sm text-gray-400 truncate mt-0.5"></p>
+              <p id="ly-source" class="text-xs text-gray-500 truncate mt-0.5"></p>
             </div>
           </div>
           <button id="ly-close" title="关闭" class="absolute top-0 right-0 w-9 h-9 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
@@ -147,11 +148,24 @@
           <button id="ly-bili" title="打开 B 站原视频" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM10.3 8.5l1.7 2.5 1.7-2.5 1.1.8-2.1 3.1v2.6h-1.4v-2.6l-2.1-3.1 1.1-.8z"/></svg>
           </button>
+          <button id="ly-src" title="歌词来源搜索" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          </button>
           <button id="ly-copy" title="复制链接" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h12v12H8zM16 8V4H4v12h4"/></svg>
           </button>
         </div>
       </div>
+    </div>
+    <!-- 歌词来源搜索浮层（🔍：候选列表 + 手动搜索） -->
+    <div id="ly-src-pop" class="hidden absolute right-5 sm:right-8 top-24 w-72 max-w-[calc(100vw-3rem)] p-3 rounded-2xl bg-gray-900/95 backdrop-blur-md border border-gray-700 shadow-2xl z-50">
+      <p class="text-xs text-gray-400 mb-2">搜索歌词来源（网易云）</p>
+      <div class="flex items-center space-x-2 mb-2">
+        <input id="ly-src-kw" type="text" placeholder="歌名 + 歌手"
+               class="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-pink-500">
+        <button id="ly-src-go" class="px-3 py-1.5 rounded-lg bg-pink-500 text-white text-sm font-medium hover:brightness-110 transition-all">搜索</button>
+      </div>
+      <div id="ly-src-list" class="max-h-64 overflow-y-auto space-y-1"></div>
     </div>
   </div>
 
