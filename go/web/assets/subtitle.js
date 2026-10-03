@@ -47,6 +47,7 @@
     subPos = { x: bar.offsetLeft, y: bar.offsetTop };
     try { localStorage.setItem('hc:subpos', JSON.stringify(subPos)); } catch (e) {}
   }
+  window.addEventListener('resize', () => { if (!bar.hidden) place(); }); // 窗口/分辨率变化重定位（clamp 回视口，防旧位置悬在屏幕外）
   bar.addEventListener('pointerup', endDrag);
   bar.addEventListener('pointercancel', endDrag);
 
@@ -83,6 +84,7 @@
     } catch (e) { lines = []; }
     lastIdx = -1;
     if (textEl) textEl.textContent = lines.length ? lines[0][1] : '';
+    if (enabled) place(); // 歌词写入后条宽变化，重定位（clamp 回视口）
   }
 
   function sync(sec) {
