@@ -83,13 +83,22 @@
   <!-- 播放器控制栏（孤岛 player.js 管辖；照抄 Vue 版 PlayerBar 结构） -->
   <!-- 网页字幕条（多态：网页版显示；桌面版由 GTK 挂件承担，壳注入 hcEnv 默认关） -->
   <!-- 竖向歌词面板：覆盖除 player-dock 外的整个画面（dock z-50 保持可见） -->
-    <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40">
+      <div id="lyric-panel" class="ly-panel ly-hidden fixed inset-0 z-40">
     <!-- 歌词背景模式：封面模糊（默认）/ 纯色（设置页切换） -->
     <div id="ly-bg-cover" class="absolute inset-0 bg-cover bg-center blur-2xl scale-110 opacity-45"></div>
     <div id="ly-bg-solid" class="absolute inset-0 bg-gray-950"></div>
     <div class="absolute inset-0 bg-gray-950/55"></div>
-    <div class="h-full max-w-5xl mx-auto px-5 sm:px-8 py-6 sm:py-8 flex gap-3 sm:gap-4">
-      <!-- 左：歌曲信息 + 歌词列表 + 进度条 -->
+    <div class="h-full max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex gap-3 sm:gap-4">
+      <!-- 左：歌词候选栏（music.py 候选窗同款：自动搜当前歌名，点选即换源） -->
+      <div class="w-48 sm:w-64 flex-shrink-0 flex flex-col rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800 overflow-hidden">
+        <p class="text-xs text-gray-400 px-3 py-2 border-b border-gray-800 flex-shrink-0 truncate">
+          <span class="text-pink-400 font-medium">歌词候选</span> <span id="ly-cand-title" class="text-gray-300"></span>
+        </p>
+        <div id="ly-cand-list" class="flex-1 overflow-y-auto p-1.5 space-y-1">
+          <div class="flex items-center justify-center h-full"><p class="text-xs text-gray-500">搜索中…</p></div>
+        </div>
+      </div>
+      <!-- 中：歌曲信息 + 歌词列表 + 进度条 -->
       <div class="flex-1 min-w-0 flex flex-col">
         <div class="relative mb-6">
           <div class="flex items-center justify-center space-x-4 text-center">
@@ -114,7 +123,7 @@
           <span id="ly-dur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
         </div>
       </div>
-      <!-- 右侧工具列（网易云歌词页同款）：字号 +- / 调音 +-0.5 / 歌曲操作 -->
+      <!-- 右：工具列（字号 +- / 调音 +-0.5 / 歌曲操作） -->
       <div class="w-12 sm:w-14 flex-shrink-0 flex flex-col items-center gap-2 pt-1">
         <div class="flex flex-col items-center gap-2 p-1.5 rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800">
           <button id="ly-big" title="字号增大" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
@@ -141,24 +150,11 @@
           <button id="ly-bili" title="打开 B 站原视频" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM10.3 8.5l1.7 2.5 1.7-2.5 1.1.8-2.1 3.1v2.6h-1.4v-2.6l-2.1-3.1 1.1-.8z"/></svg>
           </button>
-          <button id="ly-src" title="歌词来源搜索" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-          </button>
           <button id="ly-copy" title="复制链接" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h12v12H8zM16 8V4H4v12h4"/></svg>
           </button>
         </div>
       </div>
-    </div>
-    <!-- 歌词来源搜索浮层（🔍：候选列表 + 手动搜索） -->
-    <div id="ly-src-pop" class="hidden absolute right-5 sm:right-8 top-24 w-72 max-w-[calc(100vw-3rem)] p-3 rounded-2xl bg-gray-900/95 backdrop-blur-md border border-gray-700 shadow-2xl z-50">
-      <p class="text-xs text-gray-400 mb-2">搜索歌词来源（网易云）</p>
-      <div class="flex items-center space-x-2 mb-2">
-        <input id="ly-src-kw" type="text" placeholder="歌名 + 歌手"
-               class="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-pink-500">
-        <button id="ly-src-go" class="px-3 py-1.5 rounded-lg bg-pink-500 text-white text-sm font-medium hover:brightness-110 transition-all">搜索</button>
-      </div>
-      <div id="ly-src-list" class="max-h-64 overflow-y-auto space-y-1"></div>
     </div>
   </div>
 
