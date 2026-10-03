@@ -67,3 +67,6 @@
 
 /* 触屏长按菜单：列表项禁止 iOS 长按 callout（否则系统弹窗盖住我们的菜单） */
 [data-ctx-bvid] { -webkit-touch-callout: none; }
+
+/* 字幕条置顶：z 最高（不被 dock z-50 / 歌词面板 / 其他层覆盖） */
+#subtitle-bar { z-index: 100 !important; }
