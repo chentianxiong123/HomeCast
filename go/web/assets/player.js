@@ -159,7 +159,8 @@
     notify(d);
     rememberRecent(d);
     hcBus.emit('now', d); // 歌词页/其他孤岛取当前曲
-    el.title.textContent = d.title;
+    // dock 主标题：新数据已是短名，旧数据（完整标题）也清洗兜底（与 queue/recent 一致）
+    el.title.textContent = window.hcTitle ? window.hcTitle(d.title) : d.title;
     el.title.title = d.fullTitle || d.title; // dock 标题 hover 显示完整名
     el.artist.textContent = d.artist || '未知作者';
     el.cover.src = d.cover || '';
