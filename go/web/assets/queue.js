@@ -60,14 +60,14 @@
       '<img src="' + esc(last.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-14 h-14 object-cover rounded-xl shadow-sm flex-shrink-0">' +
       '<div class="flex-1 min-w-0">' +
       '<p class="text-xs font-medium text-pink-400 mb-0.5">上次在听</p>' +
-      '<p class="text-sm font-semibold text-gray-900 dark:text-white truncate">' + esc(last.title) + '</p>' +
+      '<p class="text-sm font-semibold text-gray-900 dark:text-white truncate" title="' + esc(last.fullTitle || last.title) + '">' + esc(window.hcTitle ? window.hcTitle(last.title) : last.title) + '</p>' +
       '<p class="text-xs text-gray-500 dark:text-gray-400 truncate">' + esc(last.artist || '未知作者') + (typeof last.at === 'number' && last.at > 1 ? ' · 上次听到 ' + fmtTime(last.at) : '') + '</p>' +
       '</div>' +
       '<button class="q-last-play w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md hover:brightness-105 transition-all" title="继续播放上次在听的歌">' +
       '<svg class="w-5 h-5 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>' +
       '</div>';
     v.querySelector('.q-last-play').addEventListener('click', () => {
-      hcBus.emit('play', { bvid: last.bvid, title: last.title, artist: last.artist, cover: last.cover, duration: last.duration });
+      hcBus.emit('play', { bvid: last.bvid, title: last.title, fullTitle: last.fullTitle, artist: last.artist, cover: last.cover, duration: last.duration });
     });
   }
 
@@ -101,14 +101,14 @@
       const active = i === idx;
       html +=
         '<div class="group flex items-start space-x-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 min-w-0 ' +
-        (active ? 'is-playing border border-pink-500/50' : 'border border-gray-100 dark:border-gray-700') + '" data-ctx-bvid="' + esc(q.bvid) + '" data-ctx-title="' + esc(q.title) + '" data-ctx-artist="' + esc(q.artist) + '" data-ctx-cover="' + esc(q.cover) + '">' +
+        (active ? 'is-playing border border-pink-500/50' : 'border border-gray-100 dark:border-gray-700') + '" data-ctx-bvid="' + esc(q.bvid) + '" data-ctx-title="' + esc(q.title) + '" data-ctx-full-title="' + esc(q.fullTitle || q.title) + '" data-ctx-artist="' + esc(q.artist) + '" data-ctx-cover="' + esc(q.cover) + '">' +
         '<div class="relative flex-shrink-0">' +
         '<img src="' + esc(q.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-20 h-14 object-cover rounded-xl shadow-sm">' +
         '<button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" data-bvid="' + esc(q.bvid) + '">' +
         '<svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div>' +
         '<div class="flex-1 min-w-0">' +
         '<div class="flex items-center gap-1 min-w-0">' +
-        '<p class="q-title flex-1 min-w-0 text-base font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="点击展开/收起完整歌名">' + esc(q.title) + '</p>' +
+        '<p class="q-title flex-1 min-w-0 text-base font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" data-short="' + esc(window.hcTitle ? window.hcTitle(q.title) : q.title) + '" data-full="' + esc(q.fullTitle || q.title) + '" title="点击展开/收起完整标题">' + esc(window.hcTitle ? window.hcTitle(q.title) : q.title) + '</p>' +
         '</div>' +
         '<p class="text-sm text-gray-500 dark:text-gray-400 truncate">' + esc(q.artist) + '</p></div>' +
         (active ? '<span class="flex-shrink-0 text-pink-400 text-sm py-2">正在播放</span>' : '') +
@@ -131,12 +131,23 @@
     view.querySelectorAll('.q-del').forEach((btn) => {
       btn.addEventListener('click', () => hcBus.emit('queue-remove', { bvid: btn.dataset.bvid }));
     });
-    // 单击标题展开/收起完整歌名（长名不再截断看不到）
+    // 单击标题展开/收起完整名（短名 ↔ 全名）
     view.querySelectorAll('.q-title').forEach((t) => {
       t.addEventListener('click', () => {
-        t.classList.toggle('truncate');
-        t.classList.toggle('whitespace-normal');
-        t.classList.toggle('break-words');
+        const full = t.dataset.full || '';
+        if (full && t.textContent === full) {
+          t.textContent = t.dataset.short || '';
+          t.classList.add('truncate');
+          t.classList.remove('whitespace-normal', 'break-words');
+        } else if (full) {
+          t.textContent = full;
+          t.classList.remove('truncate');
+          t.classList.add('whitespace-normal', 'break-words');
+        } else {
+          t.classList.toggle('truncate');
+          t.classList.toggle('whitespace-normal');
+          t.classList.toggle('break-words');
+        }
       });
     });
     // 打开 B 站原视频入口已移除（用户不要跳转）

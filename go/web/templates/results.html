@@ -10,7 +10,7 @@
   <div class="flex items-center justify-between">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-white">搜索结果</h2>
     <div class="flex items-center space-x-3">
-      <button onclick="hcBus.emit('play-all-list', {items: (function(){var a=[];document.querySelectorAll('#results .hx-play[data-bvid]').forEach(function(b){a.push({bvid:b.dataset.bvid,title:b.dataset.title,artist:b.dataset.artist,cover:b.dataset.cover});});return a;})()})"
+      <button onclick="hcBus.emit('play-all-list', {items: (function(){var a=[];document.querySelectorAll('#results .hx-play[data-bvid]').forEach(function(b){a.push({bvid:b.dataset.bvid,title:b.dataset.title,fullTitle:b.dataset.fullTitle,artist:b.dataset.artist,cover:b.dataset.cover});});return a;})()})"
               class="flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         <span class="hidden sm:inline">播放全部</span>
@@ -21,21 +21,22 @@
 
   <div class="grid gap-3">
     {{range .Items}}
-    <div class="group flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-2xl min-w-0 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700" data-ctx-bvid="{{.BVID}}" data-ctx-title="{{.Title}}" data-ctx-artist="{{.Artist}}" data-ctx-cover="{{coverURL .Cover}}" data-ctx-duration="{{.DurationSec}}">
+    <div class="group flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-2xl min-w-0 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700" data-ctx-bvid="{{.BVID}}" data-ctx-title="{{shortTitle .Title}}" data-ctx-full-title="{{.Title}}" data-ctx-artist="{{.Artist}}" data-ctx-cover="{{coverURL .Cover}}" data-ctx-duration="{{.DurationSec}}">
       <!-- 封面 + hover 播放 -->
       <div class="relative flex-shrink-0">
         <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"
              class="w-16 h-12 sm:w-20 sm:h-14 object-cover rounded-xl shadow-sm">
         <button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
-                onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})" title="播放">
+                data-bvid="{{.BVID}}" data-title="{{shortTitle .Title}}" data-full-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
+                onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, fullTitle:this.dataset.fullTitle, artist:this.dataset.artist, cover:this.dataset.cover})" title="播放">
           <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
       </div>
 
       <!-- 信息 -->
       <div class="flex-1 min-w-0">
-        <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">{{.Title}}</h3>
+        <h3 class="hx-title text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors"
+            data-short="{{shortTitle .Title}}" data-full="{{.Title}}" title="点击展开/收起完整标题">{{shortTitle .Title}}</h3>
         <div class="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
           <span class="truncate max-w-[120px]">{{.Artist}}</span>
           <span>{{.Duration}}</span>
@@ -45,8 +46,8 @@
       <!-- 操作按钮（照抄 Vue 版） -->
       <div class="flex items-center space-x-2 flex-shrink-0">
         <button class="hx-play flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
-                data-bvid="{{.BVID}}" data-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
-                onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, artist:this.dataset.artist, cover:this.dataset.cover})">
+                data-bvid="{{.BVID}}" data-title="{{shortTitle .Title}}" data-full-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
+                onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, fullTitle:this.dataset.fullTitle, artist:this.dataset.artist, cover:this.dataset.cover})">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           <span>播放</span>
         </button>

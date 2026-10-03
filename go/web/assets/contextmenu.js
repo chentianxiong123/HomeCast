@@ -38,6 +38,7 @@
     return {
       bvid: el.dataset.ctxBvid,
       title: el.dataset.ctxTitle || '',
+      fullTitle: el.dataset.ctxFullTitle || el.dataset.ctxTitle || '',
       artist: el.dataset.ctxArtist || '',
       cover: el.dataset.ctxCover || '',
       duration: parseInt(el.dataset.ctxDuration || '0', 10),
