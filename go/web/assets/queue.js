@@ -45,9 +45,42 @@
     btn.title = faved ? '取消收藏' : '收藏';
   }
 
+  // 「上次在听」卡片（hc:last：手动点播时记录，刷新/播完永久保留；点卡片直接播）
+  function renderLast() {
+    const v = document.getElementById('last-view');
+    if (!v) return;
+    let last = null;
+    try {
+      const raw = localStorage.getItem('hc:last');
+      if (raw) last = JSON.parse(raw);
+    } catch (e) {}
+    if (!last || !last.bvid) { v.innerHTML = ''; return; }
+    v.innerHTML =
+      '<div class="flex items-center gap-4 p-4 bg-gradient-to-r from-pink-500/5 to-violet-500/5 border border-pink-500/20 rounded-2xl">' +
+      '<img src="' + esc(last.cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-14 h-14 object-cover rounded-xl shadow-sm flex-shrink-0">' +
+      '<div class="flex-1 min-w-0">' +
+      '<p class="text-xs font-medium text-pink-400 mb-0.5">上次在听</p>' +
+      '<p class="text-sm font-semibold text-gray-900 dark:text-white truncate">' + esc(last.title) + '</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 truncate">' + esc(last.artist || '未知作者') + (typeof last.at === 'number' && last.at > 1 ? ' · 上次听到 ' + fmtTime(last.at) : '') + '</p>' +
+      '</div>' +
+      '<button class="q-last-play w-11 h-11 rounded-full flex-shrink-0 flex items-center justify-center bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md hover:brightness-105 transition-all" title="继续播放上次在听的歌">' +
+      '<svg class="w-5 h-5 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>' +
+      '</div>';
+    v.querySelector('.q-last-play').addEventListener('click', () => {
+      hcBus.emit('play', { bvid: last.bvid, title: last.title, artist: last.artist, cover: last.cover, duration: last.duration });
+    });
+  }
+
+  function fmtTime(sec) {
+    sec = Math.floor(sec || 0);
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
   function render() {
     const view = document.getElementById('queue-view');
     if (!view) return;
+    renderLast();
     if (!list.length) {
       view.innerHTML =
         '<div class="text-center py-24 text-gray-500 dark:text-gray-400">' +
