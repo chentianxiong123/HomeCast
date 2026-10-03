@@ -196,6 +196,25 @@
     <audio id="audio" preload="auto"></audio>
 
     <!-- 进度条 -->
+    <!-- 工具行（音质/速度/模式/静音/音量）：dock 顶部独立一行 -->
+    <div class="w-full px-3 sm:px-4 pt-2">
+    <div class="dock-tools flex items-center space-x-2">
+      <button id="d-quality" title="音质（点击切换 64/128/192k）"
+              class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">192k</button>
+      <button id="d-speed" title="播放速度（点击切换）"
+              class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">1.0x</button>
+      <button id="d-mode" title="播放模式"
+              class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <button id="d-mute" title="静音"
+              class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>
+      </button>
+      <input id="d-vol" type="range" min="0" max="100" value="80"
+             class="w-24 h-1.5 accent-pink-500 cursor-pointer" title="音量">
+
+    </div>
     <div class="w-full px-3 sm:px-4 pt-2">
       <div class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400 mb-1">
         <span id="d-cur" class="w-12 text-right font-mono">0:00</span>
@@ -206,7 +225,7 @@
     </div>
 
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3">
-      <div class="flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
+      <div class="flex items-center justify-between gap-2 sm:gap-4">
         <!-- 歌曲信息 -->
         <div class="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
           <div class="relative flex-shrink-0 group">
@@ -251,21 +270,6 @@
         </div>
 
         <!-- 音量（<640px 收起） -->
-        <div class="dock-tools flex items-center space-x-2">
-          <button id="d-quality" title="音质（点击切换 64/128/192k）"
-                  class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">192k</button>
-          <button id="d-speed" title="播放速度（点击切换）"
-                  class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">1.0x</button>
-          <button id="d-mode" title="播放模式"
-                  class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          </button>
-          <button id="d-mute" title="静音"
-                  class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>
-          </button>
-          <input id="d-vol" type="range" min="0" max="100" value="80"
-                 class="w-24 h-1.5 accent-pink-500 cursor-pointer" title="音量">
         </div>
       </div>
     </div>
