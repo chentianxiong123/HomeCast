@@ -41,6 +41,17 @@
         list: queue.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover })),
         idx: qidx,
       }));
+      // 「上次在听」同曲则同步进度（展示'上次听到 mm:ss'）
+      if (song && song.bvid) {
+        const lastRaw = localStorage.getItem('hc:last');
+        if (lastRaw) {
+          const last = JSON.parse(lastRaw);
+          if (last && last.bvid === song.bvid) {
+            last.at = audio.currentTime;
+            localStorage.setItem('hc:last', JSON.stringify(last));
+          }
+        }
+      }
     } catch (e) {}
   }
   function restoreP() {
@@ -172,7 +183,19 @@
     hcBus.emit('nowplaying', { bvid: d.bvid });
     saveP();
   }
+  function rememberLast(d) { // 「上次在听」永久保留（手动点播才写；自动切歌/播完不覆盖；刷新/播完都在）
+    try {
+      const prev = JSON.parse(localStorage.getItem('hc:last') || 'null');
+      localStorage.setItem('hc:last', JSON.stringify({
+        bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '',
+        duration: d.duration || 0,
+        at: (prev && prev.bvid === d.bvid && typeof prev.at === 'number') ? prev.at : 0,
+        ts: Date.now(),
+      }));
+    } catch (e) {}
+  }
   function play(data) { // 外部点播：去重后进队尾并播放
+    rememberLast(data);
     const i = queue.findIndex((q) => q.bvid === data.bvid);
     if (i >= 0) queue.splice(i, 1);
     queue.push({ bvid: data.bvid, title: data.title, artist: data.artist, cover: data.cover });
@@ -353,6 +376,7 @@
     if (!items.length) return;
     queue = items;
     qidx = 0;
+    rememberLast(queue[0]);
     loadSong(queue[0]);
     emitQueue();
   });
