@@ -7,16 +7,17 @@ import (
 
 // SearchItem 搜索结果条目（对齐 Python SearchItem）
 type SearchItem struct {
-	ID        int    `json:"id"`
-	BVID      string `json:"bvid"`
-	Title     string `json:"title"`
-	Desc      string `json:"description"`
-	Duration  string `json:"duration"`
-	Pic       string `json:"pic"`
-	Author    string `json:"author"`
-	MID       int    `json:"mid"`
-	Play      int    `json:"play"`
-	VideoReview int  `json:"video_review"`
+	ID          int    `json:"id"`
+	BVID        string `json:"bvid"`
+	Title       string `json:"title"`
+	Desc        string `json:"description"`
+	Duration    string `json:"duration"`
+	Pic         string `json:"pic"`
+	Author      string `json:"author"`
+	Typename    string `json:"typename"`
+	MID         int    `json:"mid"`
+	Play        int    `json:"play"`
+	VideoReview int    `json:"video_review"`
 }
 
 // SearchResult 搜索返回
@@ -39,6 +40,8 @@ func (c *Client) Search(keyword string, page, pageSize int) (*SearchResult, erro
 	params.Set("search_type", "video")
 	params.Set("page", itoa(page))
 	params.Set("pagesize", itoa(pageSize))
+	params.Set("duration", "1") // 服务器端只搜 10 分钟以下（对齐 python 版）
+	params.Set("tids", "3")     // 音乐区：只搜音乐（对齐 python 版）
 	data, err := c.GetJSON("/x/web-interface/search/type", params)
 	if err != nil {
 		return nil, err
