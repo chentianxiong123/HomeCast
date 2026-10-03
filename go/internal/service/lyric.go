@@ -34,6 +34,7 @@ type LyricResult struct {
 	ID     int         `json:"id"`
 	Name   string      `json:"name"`
 	Artist string      `json:"artist"`
+	Album  string      `json:"album"`
 	Lines  []LyricLine `json:"lines"`
 }
 
@@ -153,10 +154,15 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 				artist, _ = a["name"].(string)
 			}
 		}
+		album := ""
+		if al, ok := song["album"].(map[string]any); ok {
+			album, _ = al["name"].(string)
+		}
 		out = append(out, LyricResult{
 			ID:     sid,
 			Name:   strAny(song["name"]),
 			Artist: artist,
+			Album:  album,
 			Lines:  lines,
 		})
 	}
