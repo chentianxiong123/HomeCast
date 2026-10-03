@@ -276,9 +276,6 @@
       .then(() => hcBus.emit('toast', { msg: '收藏已切换 ♥' }))
       .catch(() => hcBus.emit('toast', { msg: '收藏失败' }));
   });
-  document.getElementById('ly-bili').addEventListener('click', () => {
-    if (currentSong && currentSong.bvid) window.open('https://www.bilibili.com/video/' + currentSong.bvid);
-  });
   document.getElementById('ly-copy').addEventListener('click', () => {
     if (!currentSong || !currentSong.bvid) return;
     navigator.clipboard.writeText('https://www.bilibili.com/video/' + currentSong.bvid)

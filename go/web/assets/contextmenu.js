@@ -23,7 +23,6 @@
     m.appendChild(buildItem('播放', ic + 'M8 5v14l11-7z"/></svg>', () => hcBus.emit('play', item)));
     m.appendChild(buildItem('下一首播放', ic + 'M4 6v12l8-6z"/><path d="M12 6v12l8-6z" opacity="0.4"/></svg>', () => hcBus.emit('play-next', item)));
     m.appendChild(buildItem('收藏 / 取消收藏', ic + 'M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>', () => toggleFav(item)));
-    m.appendChild(buildItem('打开 B 站', ic + 'M14 4h6v6M10 14 20 4"/></svg>', () => hcBus.emit('open-bili', { bvid: item.bvid })));
     m.appendChild(buildItem('复制链接', ic + 'M8 8h10v10H8z"/><path d="M6 14H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></svg>', () => copyLink(item)));
     document.body.appendChild(m);
 

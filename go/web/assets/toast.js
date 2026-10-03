@@ -11,7 +11,3 @@
     setTimeout(() => { t.remove(); t = null; }, 2000);
   });
 })();
-// 打开 B 站原页面（零件）：收 hc:open-bili → 新标签（供 dock 标题等复用）
-hcBus.on('open-bili', (d) => {
-  if (d && d.bvid) window.open('https://www.bilibili.com/video/' + d.bvid, '_blank');
-});
