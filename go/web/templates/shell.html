@@ -59,31 +59,35 @@
     </div>
   </header>
 
-  <!-- 移动端底部导航栏（<768px；python 时代同款：阈值以下导航转到下面） -->
-  <nav class="md:hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.5rem)] max-w-md rounded-2xl bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 shadow-xl">
-    <div class="flex items-stretch h-14 px-1.5">
+  <!-- 移动端侧边折叠导航（<768px）：浮球 + 弹出面板；dock 贴底不占位 -->
+  <div class="md:hidden">
+    <button id="side-nav-btn" title="导航" aria-label="导航"
+            class="fixed right-3 top-1/2 -translate-y-1/2 z-50 w-11 h-11 rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 transition-transform hover:scale-105 active:scale-95">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div id="side-nav-panel" class="hidden fixed right-14 top-1/2 -translate-y-1/2 z-50 w-44 p-2 rounded-2xl bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 shadow-2xl">
       <a href="/hx/queue"  hx-get="/hx/queue"  hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1.5 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span class="text-[10px] leading-none">队列</span>
+         class="nav-tab flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>队列</span>
       </a>
       <a href="/hx/search" hx-get="/hx/search" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1.5 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span class="text-[10px] leading-none">搜索</span>
+         class="nav-tab flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>搜索</span>
       </a>
       <a href="/hx/favs"   hx-get="/hx/favs"   hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1.5 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg><span class="text-[10px] leading-none">收藏夹</span>
+         class="nav-tab flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg><span>收藏夹</span>
       </a>
       <a href="/hx/cast"   hx-get="/hx/cast"   hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1.5 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg><span class="text-[10px] leading-none">投屏</span>
+         class="nav-tab flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg><span>投屏</span>
       </a>
       <a href="/hx/settings" hx-get="/hx/settings" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1.5 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="text-[10px] leading-none">设置</span>
+         class="nav-tab flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span>
       </a>
     </div>
-  </nav>
+  </div>
 
   <!-- 主内容区：页面切换只换 #main（hx-select），保 player-dock 与 audio 不中断 -->
   <main id="main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-60 md:pb-44">
