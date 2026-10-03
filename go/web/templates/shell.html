@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="dark" x-data="{ menuOpen: false }">
+<html lang="zh-CN" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -44,46 +44,39 @@
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span>
           </a>
         </nav>
-        <!-- 汉堡菜单（<768px） -->
-        <button @click="menuOpen = !menuOpen" title="菜单"
-                class="md:hidden w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-          <svg x-show="!menuOpen" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          <svg x-show="menuOpen" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
-        </button>
+
       </div>
     </div>
   </header>
 
-  <!-- 移动端抽屉菜单（<768px；纯视觉由 Alpine 管） -->
-  <div x-show="menuOpen" x-transition.opacity @click="menuOpen = false"
-       class="fixed inset-0 z-50 md:hidden">
-    <div class="absolute inset-0 bg-black/60"></div>
-    <div class="relative mt-16 mx-4 rounded-2xl bg-gray-900/95 backdrop-blur-lg border border-gray-700 shadow-2xl p-3 space-y-1">
+  <!-- 移动端底部导航栏（<768px；python 时代同款：阈值以下导航转到下面） -->
+  <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl">
+    <div class="flex items-stretch h-14">
       <a href="/hx/queue"  hx-get="/hx/queue"  hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium text-gray-300 hover:bg-gray-800 transition-colors">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>队列</span>
+         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span class="text-[10px] leading-none">队列</span>
       </a>
       <a href="/hx/search" hx-get="/hx/search" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium text-gray-300 hover:bg-gray-800 transition-colors">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>搜索</span>
+         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span class="text-[10px] leading-none">搜索</span>
       </a>
       <a href="/hx/favs"   hx-get="/hx/favs"   hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium text-gray-300 hover:bg-gray-800 transition-colors">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg><span>收藏夹</span>
+         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg><span class="text-[10px] leading-none">收藏夹</span>
       </a>
       <a href="/hx/cast"   hx-get="/hx/cast"   hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium text-gray-300 hover:bg-gray-800 transition-colors">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg><span>投屏</span>
+         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg><span class="text-[10px] leading-none">投屏</span>
       </a>
       <a href="/hx/settings" hx-get="/hx/settings" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-         class="nav-tab flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium text-gray-300 hover:bg-gray-800 transition-colors">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span>
+         class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 my-1 rounded-xl transition-colors text-gray-500 dark:text-gray-400">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="text-[10px] leading-none">设置</span>
       </a>
     </div>
-  </div>
+  </nav>
 
   <!-- 主内容区：页面切换只换 #main（hx-select），保 player-dock 与 audio 不中断 -->
-  <main id="main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-56 md:pb-44">
+  <main id="main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-60 md:pb-44">
     {{.Content}}
   </main>
 
@@ -189,7 +182,7 @@
     </div>
   </div>
 
-  <div id="player-dock" class="hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
+  <div id="player-dock" class="hidden fixed left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 shadow-2xl z-50">
     <audio id="audio" preload="auto"></audio>
 
     <!-- 进度条 -->
