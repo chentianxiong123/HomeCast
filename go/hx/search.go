@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"html/template"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"homecast/internal/service"
@@ -13,12 +12,9 @@ import (
 
 // searchView 搜索结果视图数据（页面看到什么，这里就是什么）
 type searchView struct {
-	Keyword  string
-	Total    int
-	Page     int
-	NextPage int
-	HasMore  bool
-	Items    []service.MusicItem
+	Keyword string
+	Total   int
+	Items   []service.MusicItem
 }
 
 // searchPageData 搜索完整页数据：结果 HTML 预渲染注入 #results（直接访问 /hx/search?kw= 用）
@@ -28,18 +24,17 @@ type searchPageData struct {
 }
 
 // searchFragment 渲染结果片段 → HTML（Search 与完整页共用，面向过程组合）
-func (h *H) searchFragment(kw string, page int) (template.HTML, error) {
-	res, err := h.Music.Search(kw, page, 20)
+// 一次拉 50 条（B 站接口上限）整体 rank 排序，一次给完——对齐 X11 python 版，
+// 不做分页（翻页会破坏排序：B 站下一页是原始顺序，跨页 rank 就乱了）
+func (h *H) searchFragment(kw string) (template.HTML, error) {
+	res, err := h.Music.Search(kw, 1, 50)
 	if err != nil {
 		return "", err
 	}
 	v := &searchView{
-		Keyword:  kw,
-		Total:    res.Total,
-		Page:     page,
-		NextPage: page + 1,
-		HasMore:  len(res.List) >= 20,
-		Items:    res.List,
+		Keyword: kw,
+		Total:   len(res.List), // 真实返回条数（过滤后），不是 B 站假总数
+		Items:   res.List,
 	}
 	var buf bytes.Buffer
 	if err := h.Tpl.ExecuteTemplate(&buf, "results.html", v); err != nil {
@@ -48,15 +43,11 @@ func (h *H) searchFragment(kw string, page int) (template.HTML, error) {
 	return template.HTML(buf.String()), nil
 }
 
-// Search GET /hx/search?kw=&page=
+// Search GET /hx/search?kw=
 //   - htmx 请求（带 HX-Request 头）→ 结果片段（替换 #results）
 //   - 直接访问 → 完整页（shell + 搜索框 + 预渲染结果），刷新/直达可用
 func (h *H) Search(w http.ResponseWriter, r *http.Request) {
 	kw := strings.TrimSpace(r.URL.Query().Get("kw"))
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
 	isHX := r.Header.Get("HX-Request") != ""
 
 	if kw == "" {
@@ -68,7 +59,7 @@ func (h *H) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	frag, err := h.searchFragment(kw, page)
+	frag, err := h.searchFragment(kw)
 	if err != nil {
 		http.Error(w, "搜索失败："+err.Error(), http.StatusInternalServerError)
 		return
