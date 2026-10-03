@@ -56,3 +56,19 @@
 @media (min-width: 768px) {
   #player-dock { bottom: 0 !important; }
 }
+
+/* dock 工具组布局：桌面右侧一行；移动端（<640px）整行换行居中（不用 Tailwind 断点类，CDN 变体不可靠） */
+#player-dock .dock-tools {
+  width: 100% !important;
+  order: 99 !important;
+  justify-content: center !important;
+  margin-top: 0.375rem;
+}
+@media (min-width: 640px) {
+  #player-dock .dock-tools {
+    width: auto !important;
+    order: 0 !important;
+    justify-content: flex-end !important;
+    margin-top: 0;
+  }
+}
