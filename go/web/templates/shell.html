@@ -45,10 +45,14 @@
           </a>
         </nav>
       </div>
-      <!-- 移动端（<768px）：顶部搜索框整行（不用先进搜索页） -->
-      <div class="md:hidden flex items-center h-14 justify-center">
+      <!-- 移动端（<768px）：顶部 汉堡按钮 + 搜索框整行 -->
+      <div class="md:hidden flex items-center h-14 px-3 gap-3">
+        <button id="side-nav-btn" title="导航" aria-label="导航"
+                class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
         <form hx-get="/hx/search" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-              class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700/70 rounded-full px-3.5 h-9 w-full max-w-md">
+              class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700/70 rounded-full px-3.5 h-9 w-full">
           <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="search" name="kw" placeholder="搜索音乐" enterkeyhint="search"
                  class="flex-1 min-w-0 bg-transparent text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none"
@@ -59,13 +63,9 @@
     </div>
   </header>
 
-  <!-- 移动端侧边折叠导航（<768px）：浮球 + 弹出面板；dock 贴底不占位 -->
+  <!-- 移动端侧边折叠导航（<768px）：顶部汉堡下拉面板；dock 贴底不占位 -->
   <div class="md:hidden">
-    <button id="side-nav-btn" title="导航" aria-label="导航"
-            class="fixed right-3 top-1/2 -translate-y-1/2 z-50 w-11 h-11 rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 transition-transform hover:scale-105 active:scale-95">
-      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
-    <div id="side-nav-panel" class="hidden fixed right-14 top-1/2 -translate-y-1/2 z-50 w-44 p-2 rounded-2xl bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 shadow-2xl">
+    <div id="side-nav-panel" class="hidden fixed left-3 top-16 z-50 w-48 p-2 rounded-2xl bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-200/60 dark:border-gray-700/60 shadow-2xl">
       <a href="/hx/queue"  hx-get="/hx/queue"  hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
          class="nav-tab flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>队列</span>
