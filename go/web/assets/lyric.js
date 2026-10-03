@@ -121,6 +121,51 @@
     } catch (e) {}
   }
   // 来源行：当前歌词来自哪个网易云候选（无黑盒：可推导、可换）
+  // 歌名解析（对齐 music.py _title_to_song：剥 []【】取《》; 取不到用全标题）
+  function titleToSong(t) {
+    const clean = (t || '').replace(/[\[【][^\]】]*[\]】]/g, '');
+    const m = clean.match(/《([^》]+)》/);
+    return m ? m[1].trim() : (clean.trim() || t || '');
+  }
+  // 时长秒 → mm:ss（候选行展示）
+  const candDur = (c) => {
+    const s = parseInt(c.duration || c.dur || 0, 10) || 0;
+    return s > 0 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '--:--';
+  };
+  // 左侧候选栏渲染
+  const candList = document.getElementById('ly-cand-list');
+  const candTitle = document.getElementById('ly-cand-title');
+  let cands = [];
+  function renderCandBar() {
+    if (candTitle) candTitle.textContent = '《' + titleToSong(currentSong && currentSong.title) + '》';
+    if (!candList) return;
+    if (!cands.length) {
+      candList.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-xs text-gray-500">无歌词版本</p></div>';
+      return;
+    }
+    candList.innerHTML = '';
+    // 当前选中（缓存里存的源 id）高亮；无则第一个
+    const curId = (lycGet(currentSong.bvid) || {}).id;
+    let chosen = null;
+    let first = true;
+    cands.forEach((c) => {
+      const it = document.createElement('button');
+      it.className = 'w-full text-left px-2.5 py-2 rounded-lg transition-colors ' +
+        (first && !curId ? 'bg-pink-500/20 text-pink-300' : 'hover:bg-gray-800 text-gray-300');
+      if (first && !curId && !chosen) { chosen = c; first = false; }
+      if (curId && c.id === curId) it.className = 'bg-pink-500/20 text-pink-300';
+      it.innerHTML = '<span class="block text-sm truncate">' + (c.name || '') + '</span>' +
+        '<span class="block text-xs text-gray-500 truncate mt-0.5">' + (c.artist || '') + ' · ' + candDur(c) + '</span>';
+      it.addEventListener('click', () => {
+        if (currentSong) lycSet(currentSong.bvid, c); // 选定即缓存（music.py lyric_map 同款记忆）
+        renderFromCand(c);
+        renderCandBar();
+      });
+      candList.appendChild(it);
+    });
+    // 无选中来源时用第一个
+    if (chosen) renderFromCand(chosen);
+  }
   const sourceEl = document.getElementById('ly-source');
   function setSource(cand) {
     if (sourceEl) sourceEl.textContent = cand
@@ -142,20 +187,19 @@
     if (coverEl && song.cover) coverEl.src = song.cover;
     if (bgCover && song.cover) bgCover.style.backgroundImage = 'url("' + song.cover + '")'; // 封面模糊背景（网易云同款）
     linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载中…</p></div>';
-    // 先查缓存（同歌秒显，离线可看）；未命中实时拉网易云候选
+    // 先查缓存（同歌秒显，离线可看）；同时后台刷新候选栏（选中项=cached.id）
     const cached = lycGet(song.bvid);
-    if (cached && cached.lines) {
-      renderFromCand(cached);
-      return;
-    }
+    if (cached && cached.lines) renderFromCand(cached);
     try {
-      const kw = encodeURIComponent(((song.title || '') + ' ' + (song.artist || '')).trim());
-      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=3')).json();
-      const cand = j && j.data && j.data[0];
-      if (cand) lycSet(song.bvid, cand); // 存缓存
-      renderFromCand(cand);
+      const kw = encodeURIComponent(titleToSong(song.title) + ' ' + (song.artist || ''));
+      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=8')).json();
+      cands = (j && j.data) || [];
+      renderCandBar(); // 候选栏渲染 + 无选中时用第一源
+      if (!cands.length) { setSource(null); return; }
     } catch (e) {
-      linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载失败</p></div>';
+      if (!lines.length) {
+        linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载失败</p></div>';
+      }
       setSource(null);
     }
   }
@@ -232,49 +276,6 @@
       .then(() => hcBus.emit('toast', { msg: '收藏已切换 ♥' }))
       .catch(() => hcBus.emit('toast', { msg: '收藏失败' }));
   });
-  // ---- 歌词来源搜索（🔍）：浮层输入关键词 → 网易云候选列表 → 点选即换歌词 ----
-  const srcPop = document.getElementById('ly-src-pop');
-  const srcKw = document.getElementById('ly-src-kw');
-  const srcList = document.getElementById('ly-src-list');
-  const srcGo = document.getElementById('ly-src-go');
-  function showSrcPop() {
-    if (!currentSong) return;
-    if (srcKw) srcKw.value = ((currentSong.title || '') + ' ' + (currentSong.artist || '')).trim();
-    if (srcPop) srcPop.classList.remove('hidden');
-    if (srcKw) srcKw.focus();
-    searchSrc(srcKw ? srcKw.value : '');
-  }
-  function hideSrcPop() { if (srcPop) srcPop.classList.add('hidden'); }
-  function searchSrc(kw) {
-    if (srcList) srcList.innerHTML = '<p class="text-xs text-gray-500">搜索中…</p>';
-    fetch('/api/v1/music/lyric/candidates?keyword=' + encodeURIComponent(kw || '') + '&limit=8')
-      .then((r) => r.json())
-      .then((j) => {
-        const list = (j && j.data) || [];
-        if (!list.length) { if (srcList) srcList.innerHTML = '<p class="text-xs text-gray-500">无结果</p>'; return; }
-        if (srcList) {
-          srcList.innerHTML = '';
-          list.forEach((c) => {
-            const item = document.createElement('button');
-            item.className = 'w-full text-left px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors';
-            item.innerHTML = '<span class="block text-sm text-gray-200 truncate">' + (c.name || '') + '</span>' +
-              '<span class="block text-xs text-gray-500 truncate">' + (c.artist || '') + (c.album ? ' · ' + c.album : '') + '</span>';
-            item.addEventListener('click', () => {
-              if (currentSong) lycSet(currentSong.bvid, c); // 选中即缓存
-              renderFromCand(c);
-              hideSrcPop();
-            });
-            srcList.appendChild(item);
-          });
-        }
-      })
-      .catch(() => { if (srcList) srcList.innerHTML = '<p class="text-xs text-gray-500">搜索失败</p>'; });
-  }
-  document.getElementById('ly-src').addEventListener('click', () => {
-    if (srcPop && srcPop.classList.contains('hidden')) showSrcPop(); else hideSrcPop();
-  });
-  if (srcGo) srcGo.addEventListener('click', () => searchSrc(srcKw ? srcKw.value : ''));
-  if (srcKw) srcKw.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchSrc(srcKw.value); });
   document.getElementById('ly-bili').addEventListener('click', () => {
     if (currentSong && currentSong.bvid) window.open('https://www.bilibili.com/video/' + currentSong.bvid);
   });
