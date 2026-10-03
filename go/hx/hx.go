@@ -51,6 +51,7 @@ func (h *H) Router() http.Handler {
 	// 页面（对照 Vue 版 nav：音乐/搜索/收藏夹/投屏）
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { h.searchPage(w, r) })
 	mux.HandleFunc("GET /hx/queue", h.QueuePage)
+	mux.HandleFunc("GET /hx/recent", h.RecentPage)
 	mux.HandleFunc("GET /hx/search", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.URL.Query()["kw"]; ok {
 			h.Search(w, r) // 带 kw = 结果片段或完整页（按 HX-Request 区分）
@@ -96,6 +97,11 @@ func (h *H) SettingsPage(w http.ResponseWriter, r *http.Request) {
 // QueuePage GET /hx/queue → 播放队列（自动上下文，前端收 hc:queue 渲染）
 func (h *H) QueuePage(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, "queue", "content_queue.html", nil)
+}
+
+// RecentPage GET /hx/recent → 最近播放全页面（前端读 hc:recent 渲染全部）
+func (h *H) RecentPage(w http.ResponseWriter, r *http.Request) {
+	h.renderPage(w, "recent", "content_recent.html", nil)
 }
 
 // searchPage 搜索页（含搜索框 + 空态）
