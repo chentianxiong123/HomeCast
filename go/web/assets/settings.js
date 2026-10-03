@@ -17,6 +17,13 @@
   const MODES = ['order', 'loop', 'single', 'random'];
   const MODE_NAMES = { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' };
   const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+  const THEMES = [['auto', '自动'], ['light', '明亮'], ['dark', '暗黑']];
+
+  function applyTheme() {
+    const t = S('hc:theme', 'auto');
+    const dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', dark);
+  }
 
   function render() {
     const subOn = envDesktop ? false : S('hc:subtitle', '1') !== '0';
@@ -33,6 +40,19 @@
     view.innerHTML =
       '<div class="max-w-2xl mx-auto">' +
       '<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">设置</h2>' +
+
+      // 主题模式（三态：自动/明亮/暗黑；修改即生效并持久化）
+      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
+      '<div class="flex items-center justify-between mb-3">' +
+      '<p class="font-medium text-gray-900 dark:text-white">主题模式</p>' +
+      '<span class="text-xs text-gray-500 dark:text-gray-400" id="theme-state"></span>' +
+      '</div>' +
+      '<div class="flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1">' +
+      THEMES.map(([k, name]) =>
+        '<button class="theme-btn flex-1 py-2 rounded-lg text-sm font-medium transition-all ' +
+        (S('hc:theme', 'auto') === k ? 'bg-white dark:bg-gray-800 text-pink-500 shadow' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200') + '" data-theme="' + k + '">' + name + '</button>'
+      ).join('') +
+      '</div></div>' +
 
       // 字幕
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
@@ -156,6 +176,16 @@
     // 绑定
     const sub = document.getElementById('set-sub');
     if (sub) sub.addEventListener('change', () => hcBus.emit('subtitle-toggle', { on: sub.checked }));
+    // 当前主题状态文本（无黑盒：显示生效状态）
+    const ts = document.getElementById('theme-state');
+    if (ts) ts.textContent = { auto: '跟随系统', light: '明亮', dark: '暗黑' }[S('hc:theme', 'auto')] || '';
+    // 主题模式：点击即应用（html.dark）+ 持久化 + 重绘高亮
+    view.querySelectorAll('.theme-btn').forEach((b) => b.addEventListener('click', () => {
+      W('hc:theme', b.dataset.theme);
+      applyTheme();
+      render();
+      hcBus.emit('toast', { msg: '主题：' + (b.textContent || '') });
+    }));
     view.querySelectorAll('.set-q').forEach((b) => b.addEventListener('click', () => {
       const q = parseInt(b.dataset.q, 10); W('hc:quality', String(q)); hcBus.emit('quality', { q }); render();
     }));
