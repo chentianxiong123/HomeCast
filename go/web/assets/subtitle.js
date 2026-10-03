@@ -80,11 +80,37 @@
 
   async function loadLyrics(s) {
     songTitle = s.title || '';
+    // 歌词缓存（与歌词面板共用 hc:lyc:cache，LRU 50 首）：命中直接读，不再请求网易云
+    let cached = null;
+    try {
+      const m = JSON.parse(localStorage.getItem('hc:lyc:cache') || '{}');
+      const row = m[s.bvid];
+      if (row) { row.at = Date.now(); m[s.bvid] = row; localStorage.setItem('hc:lyc:cache', JSON.stringify(m)); }
+      cached = row;
+    } catch (e) {}
+    if (cached && Array.isArray(cached.lines) && cached.lines.length) {
+      lines = cached.lines;
+      lastIdx = -1;
+      if (textEl) textEl.textContent = lines[0][1];
+      if (enabled) place(); // 歌词写入后条宽变化，重定位（clamp 回视口）
+      return;
+    }
     try {
       const kw = encodeURIComponent(((s.title || '') + ' ' + (s.artist || '')).trim());
       const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=3')).json();
       const cand = j && j.data && j.data[0];
       lines = (cand && cand.lines) || [];
+      // 抓到的新词写入同一缓存（面板下次直接用，面板选定也会覆盖同键）
+      if (cand && cand.id && lines.length) {
+        try {
+          const m = JSON.parse(localStorage.getItem('hc:lyc:cache') || '{}');
+          cand.at = Date.now();
+          m[s.bvid] = cand;
+          const keys = Object.keys(m).sort((a, b) => (m[a].at || 0) - (m[b].at || 0));
+          while (keys.length > 50) delete m[keys.shift()]; // LRU 淘汰最旧
+          localStorage.setItem('hc:lyc:cache', JSON.stringify(m));
+        } catch (e2) {}
+      }
     } catch (e) { lines = []; }
     lastIdx = -1;
     if (textEl) textEl.textContent = lines.length ? lines[0][1] : '';
