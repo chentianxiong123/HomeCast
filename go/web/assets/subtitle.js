@@ -21,8 +21,12 @@
   try { subPos = JSON.parse(localStorage.getItem('hc:subpos') || 'null'); } catch (e) {}
   function place() {
     const w = bar.offsetWidth || 200, h = bar.offsetHeight || 36;
-    let x = subPos ? subPos.x : Math.round((window.innerWidth - w) / 2);
-    let y = subPos ? subPos.y : Math.round(window.innerHeight - h - 130); // 默认 dock 上方
+    // 非法持久位置防御（非数字 → 用默认居中）
+    const px = (subPos && typeof subPos.x === 'number') ? subPos.x : null;
+    const py = (subPos && typeof subPos.y === 'number') ? subPos.y : null;
+    let x = px != null ? px : Math.round((window.innerWidth - w) / 2);
+    let y = py != null ? py : Math.round(window.innerHeight - h - 130); // 默认 dock 上方
+    // 硬 clamp：任何来源的位置都拉回视口内（不超越屏幕）
     x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
     y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
     bar.style.left = x + 'px';
