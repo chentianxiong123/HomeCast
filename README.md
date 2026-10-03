@@ -5,11 +5,22 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?logo=vue.js" alt="Vue 3">
-  <img src="https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Python-3.12+-3776AB?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go" alt="Go">
+  <img src="https://img.shields.io/badge/htmx-2.x-3366CC?logo=htmx" alt="htmx">
+  <img src="https://img.shields.io/badge/SQLite-内嵌-003B57?logo=sqlite" alt="SQLite">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
+
+---
+
+## 🧭 架构演进：Python 探索 → Go 实现
+
+本项目的核心技术路线是 **「Python 探索、Go 实现」**：
+
+- **`backend/`（Python/FastAPI）是探索路径** —— 早期用 Python 快速验证玩法（B站音乐、DLNA 投屏、音箱、嗅探），逻辑成熟后由 Go 正式实现。
+- **`go/` 是正式实现** —— 单二进制、全部内嵌（htmx + Tailwind CDN + SQLite，无 Node 构建链、无依赖安装），一个端口跑全部。
+- 探索版保留在仓库内**只读参考**，不参与维护；新改动只做 Go 版。
+- Python 端沉淀的接口语义（`/api/v1/*` 前缀、`{code,message,data}` 信封）已 1:1 对齐进 Go 实现，前端无感知切换。
 
 ---
 
@@ -57,6 +68,15 @@
 ---
 
 ## 技术栈
+
+### ✅ 当前正式版（Go）
+- **Go 1.26** - 单二进制，全内嵌（模板/静态资源/SQLite）
+- **htmx** - 页面交互（无状态优先，服务端渲染片段）
+- **SQLite**（modernc.org/sqlite 纯 Go 无 CGO） - 本地持久化
+- **Tailwind CDN** - 样式（本地化资源，无构建链）
+- **测试**：Go 单测/E2E 全覆盖（`go test ./...` + Playwright 真浏览器冒烟）
+
+### 🧪 探索版（Python · 历史只读，不维护）
 
 <table>
 <tr>
