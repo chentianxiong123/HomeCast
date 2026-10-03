@@ -8,6 +8,7 @@ import (
 	"embed"
 	"html/template"
 	"io/fs"
+	"regexp"
 	"strings"
 )
 
@@ -40,6 +41,22 @@ func Funcs() template.FuncMap {
 			m := sec / 60
 			s := sec % 60
 			return template.HTML("<span>" + itoa(m) + ":" + pad2(s) + "</span>")
+		},
+		// 标题呈现：只显示括号内容（《》（）【】「」及半角[] 内文字全提取拼接）；无括号→原题。与前端 title.js hcTitle 同规则
+		"shortTitle": func(t string) string {
+			var parts []string
+			re := regexp.MustCompile(`《([^》]+)》|（([^）]+)）|【([^】]+)】|「([^」]+)」|\[([^\]]+)\]`)
+			for _, m := range re.FindAllStringSubmatch(t, -1) {
+				for i := 1; i < len(m); i++ {
+					if m[i] != "" && strings.TrimSpace(m[i]) != "" {
+						parts = append(parts, strings.TrimSpace(m[i]))
+					}
+				}
+			}
+			if len(parts) > 0 {
+				return strings.Join(parts, " · ")
+			}
+			return t
 		},
 	}
 }
