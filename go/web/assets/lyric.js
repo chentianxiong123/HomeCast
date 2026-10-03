@@ -98,7 +98,9 @@
     if (idx >= 0) linesEl.children[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
+  let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲
   async function load(song) {
+    currentSong = song;
     titleEl.textContent = song.title || '';
     artistEl.textContent = song.artist || '';
     if (coverEl && song.cover) coverEl.src = song.cover;
@@ -175,5 +177,33 @@
   hcBus.on('lytime', (d) => { if (d && typeof d.on === 'boolean') { lyTime = d.on; renderLines(); lastIdx = -1; sync(audio.currentTime); } });
   document.getElementById('ly-small').addEventListener('click', () => setLyIdx(-1));
   document.getElementById('ly-big').addEventListener('click', () => setLyIdx(1));
+  // 调音 ±0.5（变速不变调；速率由 player 统一管理并持久化 hc:speed）
+  const pitchVal = document.getElementById('ly-pitch-val');
+  const showPitch = () => { if (pitchVal) pitchVal.textContent = (audio.playbackRate || 1).toFixed(2).replace(/\.?0+$/, '') + 'x'; };
+  document.getElementById('ly-pitch-up').addEventListener('click', () => hcBus.emit('pitch', { d: 0.5 }));
+  document.getElementById('ly-pitch-down').addEventListener('click', () => hcBus.emit('pitch', { d: -0.5 }));
+  hcBus.on('speed', showPitch);
+  // 侧栏歌曲操作（网易云歌词页同款）
+  document.getElementById('ly-fav').addEventListener('click', () => {
+    if (!currentSong) return;
+    const fd = new FormData();
+    fd.set('bvid', currentSong.bvid);
+    fd.set('title', currentSong.title || '');
+    fd.set('artist', currentSong.artist || '');
+    fd.set('cover', currentSong.cover || '');
+    fd.set('duration', String(currentSong.duration || 0));
+    fetch('/hx/fav/toggle', { method: 'POST', body: fd })
+      .then(() => hcBus.emit('toast', { msg: '收藏已切换 ♥' }))
+      .catch(() => hcBus.emit('toast', { msg: '收藏失败' }));
+  });
+  document.getElementById('ly-bili').addEventListener('click', () => {
+    if (currentSong && currentSong.bvid) window.open('https://www.bilibili.com/video/' + currentSong.bvid);
+  });
+  document.getElementById('ly-copy').addEventListener('click', () => {
+    if (!currentSong || !currentSong.bvid) return;
+    navigator.clipboard.writeText('https://www.bilibili.com/video/' + currentSong.bvid)
+      .then(() => hcBus.emit('toast', { msg: '链接已复制' }))
+      .catch(() => hcBus.emit('toast', { msg: '复制失败' }));
+  });
   setLyIdx(0); // 应用已存档位并显示
 })();
