@@ -109,8 +109,6 @@
         '<div class="flex-1 min-w-0">' +
         '<div class="flex items-center gap-1">' +
         '<p class="q-title flex-1 min-w-0 text-base font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="点击展开/收起完整歌名">' + esc(q.title) + '</p>' +
-        '<button class="q-bili w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-pink-400 transition-colors" data-bvid="' + esc(q.bvid) + '" title="打开 B 站原视频">' +
-        '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></button>' +
         '</div>' +
         '<p class="text-sm text-gray-500 dark:text-gray-400 truncate">' + esc(q.artist) + '</p></div>' +
         (active ? '<span class="flex-shrink-0 text-pink-400 text-sm py-2">正在播放</span>' : '') +
@@ -141,10 +139,7 @@
         t.classList.toggle('break-words');
       });
     });
-    // 打开 B 站原视频：移到行尾外链小图标（标题点击改展开歌名了）
-    view.querySelectorAll('.q-bili').forEach((btn) => {
-      btn.addEventListener('click', () => hcBus.emit('open-bili', { bvid: btn.dataset.bvid }));
-    });
+    // 打开 B 站原视频入口已移除（用户不要跳转）
     view.querySelectorAll('.q-next').forEach((btn) => {
       btn.addEventListener('click', () => {
         const s = list.find((x) => x.bvid === btn.dataset.bvid);
