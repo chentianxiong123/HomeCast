@@ -31,11 +31,12 @@ type LyricLine [2]any
 
 // LyricResult 歌词返回（对齐 Python get_lyric_lines）
 type LyricResult struct {
-	ID     int         `json:"id"`
-	Name   string      `json:"name"`
-	Artist string      `json:"artist"`
-	Album  string      `json:"album"`
-	Lines  []LyricLine `json:"lines"`
+	ID       int         `json:"id"`
+	Name     string      `json:"name"`
+	Artist   string      `json:"artist"`
+	Album    string      `json:"album"`
+	Duration int         `json:"duration"` // 秒（候选行展示 mm:ss）
+	Lines    []LyricLine `json:"lines"`
 }
 
 // parseLRC LRC 文本 → [][秒,行]，时间升序；过滤元信息行；无词返回 nil
@@ -159,11 +160,12 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 			album, _ = al["name"].(string)
 		}
 		out = append(out, LyricResult{
-			ID:     sid,
-			Name:   strAny(song["name"]),
-			Artist: artist,
-			Album:  album,
-			Lines:  lines,
+			ID:       sid,
+			Name:     strAny(song["name"]),
+			Artist:   artist,
+			Album:    album,
+			Duration: int(toFloat(song["duration"]) / 1000),
+			Lines:    lines,
 		})
 	}
 	return out
