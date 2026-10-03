@@ -12,17 +12,17 @@
 </head>
 <body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
   <!-- 顶部导航（对照 Vue 版 navItems：音乐/搜索/收藏夹/投屏；高亮由 nav.js 按 URL 推导） -->
-  <header class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
+    <header class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <!-- 桌面（≥768px）：品牌小图标 + 导航整行（顶层专用导航，不藏） -->
+      <div class="hidden md:flex items-center gap-4 h-16">
         <a href="/hx/search" hx-get="/hx/search" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-           class="flex items-center space-x-2">
-          <div class="w-10 h-10 bg-gradient-to-br from-pink-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg">
-            <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg>
+           class="flex items-center flex-shrink-0" title="myMusic">
+          <div class="w-8 h-8 bg-gradient-to-br from-pink-500 to-violet-500 rounded-lg flex items-center justify-center shadow">
+            <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg>
           </div>
-          <h1 class="text-xl font-bold bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent">myMusic</h1>
         </a>
-        <nav class="hidden md:flex space-x-2">
+        <nav class="flex-1 flex items-center space-x-2">
           <a href="/hx/queue"  hx-get="/hx/queue"  hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
              class="nav-tab flex items-center space-x-1 px-4 py-2 rounded-full text-base font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6H7v12h2zm8-12v12h2V6h-2z"/></svg><span>队列</span>
@@ -44,7 +44,17 @@
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span>
           </a>
         </nav>
-
+      </div>
+      <!-- 移动端（<768px）：顶部搜索框整行（不用先进搜索页） -->
+      <div class="md:hidden flex items-center h-14 justify-center">
+        <form hx-get="/hx/search" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
+              class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700/70 rounded-full px-3.5 h-9 w-full max-w-md">
+          <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" name="kw" placeholder="搜索音乐" enterkeyhint="search"
+                 class="flex-1 min-w-0 bg-transparent text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none"
+                 hx-get="/hx/search" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
+                 hx-trigger="input changed delay:600ms" hx-params="kw">
+        </form>
       </div>
     </div>
   </header>
