@@ -97,10 +97,10 @@ func Start(snapshot SnapshotProvider, playerCtl PlayerCtl, backend string) error
 	st.winW = MinW
 
 	x, y := loadPos()
-	if x < 0 || y < 0 {
-		// 默认：屏幕水平居中，底部上方 40px（对齐原版）
-		d := newDisplay()
-		sw, sh := d.ScreenSize()
+	d := newDisplay()
+	sw, sh := d.ScreenSize()
+	// 位置不合法（无记忆/负坐标/超出屏幕——例如 Linux 位置被 Wine 更小屏幕加载）→ 居中
+	if x < 0 || y < 0 || x > sw-MinW || y > sh-WinH {
 		x = (sw - MinW) / 2
 		y = sh - WinH - 40
 	}
@@ -109,8 +109,28 @@ func Start(snapshot SnapshotProvider, playerCtl PlayerCtl, backend string) error
 	if err := disp.Init(x, y); err != nil {
 		return err
 	}
+	// 校准：Init 后显示层已建，此时 ScreenSize 才可靠（Wine 等虚拟屏在窗口创建前可能误报）
+	px, py := disp.Pos()
+	sw, sh = disp.ScreenSize()
+	log.Printf("[widget] 位置校准: pos=(%d,%d) screen=%dx%d", px, py, sw, sh)
+	if px < 0 || py < 0 || px > sw-MinW || py > sh-WinH {
+		px, py = (sw-MinW)/2, sh-WinH-40
+		if px < 0 || py < 0 {
+			px, py = 0, 0
+		}
+		disp.Move(px, py)
+		log.Printf("[widget] 位置超屏，已居中到 (%d,%d)", px, py)
+	}
 	disp.Tick(TickEvery, tick)
 	return nil
+}
+
+// MainLoop 进入显示层事件循环（阻塞）。Linux 版 GTK 主循环由宿主壳（wails）驱动，
+// 此函数为空操作；Windows/安卓版由各自显示层实现（demo/真壳调用）
+func MainLoop() {
+	if disp != nil {
+		disp.MainLoop()
+	}
 }
 
 // ── 位置记忆 ──

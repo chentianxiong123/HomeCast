@@ -1,3 +1,5 @@
+#ifndef _WIN32
+// C 实现层：GTK 挂件窗口的 C 侧代码（独立编译单元，避免 preamble 重复定义）
 // C 实现层：GTK 挂件窗口的 C 侧代码（独立编译单元，避免 preamble 重复定义）
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
@@ -99,3 +101,4 @@ int pointer_global(int *x, int *y) {
 	XCloseDisplay(dpy);
 	return ok;
 }
+#endif // _WIN32
