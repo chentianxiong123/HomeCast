@@ -97,6 +97,15 @@ Waydroid 上跑了三轮实测：
 
 **给爸妈升级的直接含义**：以后发新版本直接覆盖安装新 APK 即可，歌单/设置零丢失；只有卸载重装或手动清数据才会回到空库。
 
+## 壳的两处稳定性修复（ETXTBSY + 主线程闪退）
+
+调试期踩了两个壳层坑，都是用户场景必踩的：
+
+1. **ETXTBSY（重复打开）**：App 每次 onCreate 都覆盖写 assets 拷出的 hc-server 二进制并重启——后台实例/重复打开时旧进程还映射着该文件，直写被内核拒（`Text file busy`）。修复：启动前先探测 28976 已就绪则直接复用（单实例语义）；拷贝改「写 tmp → `Files.move(REPLACE_EXISTING)`」，rename 可替换被映射的文件。
+2. **主线程网络闪退**：第一版把端口探测放进了 onCreate **主线程**——Android 主线程禁网络（StrictMode 抛 `NetworkOnMainThreadException`，RuntimeException，普通 try-catch 抓不住）→ 一点开就闪退。修复：启动全流程（探测→启动→轮询→load）移入后台线程，主线程零网络，`loadUrl` 回主线程执行。
+
+实测（waydroid）：force-stop 冷启动、后台复用、连开三次均正常，收藏数据完好。
+
 ## 坑与教训
 
 1. **`go build -overlay` 不能替换 GOMODCACHE 下的文件**——官方硬限制，报错前会静默忽略导致 patch 根本没进二进制（还以为是 patch 写错了）。
@@ -105,6 +114,8 @@ Waydroid 上跑了三轮实测：
 4. **刷 issue 前先搜**——`gitlab.com/cznic/libc` #41 撞车（已关未修）；GitHub 侧 `modernc/*` 全 404，唯一存在的是 2018 年归档的 `cznic/sqlite`（fork 后可开 issue，但上游看不见）。
 5. **strace 过滤**：`strace -e trace=%stat` 在这版 strace 里没抓到任何调用（过滤集问题），直接全跟踪再 grep 才是稳的。
 6. **`adb exec-out screencap -p` 的 stderr 会混进 PNG**——重定向没写干净会把二进制文件搞坏。
+7. **Android 主线程禁网络**：StrictMode 直接抛 `NetworkOnMainThreadException`（RuntimeException）——任何 HTTP 探测必须放后台线程，否则一点开就闪退；最坑的是**旧进程活着时探测返回 200，调试永远发现不了**，旧进程一死就必现。
+8. **覆盖写正在执行的文件 = ETXTBSY**：可执行文件被进程映射时 `open(O_WRONLY/truncate)` 被内核拒；标准做法是写 `tmp` 再 `rename` 替换（旧 inode 由运行中的进程保留，新文件就位）。
 
 ## 相关链接
 
