@@ -32,7 +32,12 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         try {
-            startBackend();
+            // 先探测再启动：旧实例（后台重建/重复打开）的 hc-server 还在跑时直接复用，
+            // 避免覆盖写正在执行的文件触发 ETXTBSY(Text file busy)。单实例语义，升级不受影响
+            // （覆盖安装会先杀干净旧进程组）。
+            if (!backendReady()) {
+                startBackend();
+            }
 
             web = new WebView(this);
             WebSettings s = web.getSettings();
