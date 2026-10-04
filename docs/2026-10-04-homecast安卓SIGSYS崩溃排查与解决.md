@@ -85,6 +85,18 @@ db, err := sql.Open("sqlite3", path)
 - **体积**：服务端二进制 14MB → 3.3MB
 - **Waydroid 实测**：重出 APK 装进 App，内嵌服务端**存活稳定、零 SIGSYS**，`fav/list` 和页面 HTML 全通，adb forward 直连确认请求打到了 App 进程内的服务端
 
+## 持久化与 App 升级（实测结论）
+
+**WASM 只是"SQLite 怎么跑"，数据照样写真实文件**——引擎通过 WASI → wazero → Go 标准库写到磁盘，WASM 沙箱隔离的是"系统调用方式"不是"存储介质"。安卓侧数据落在 App 私有目录 `filesDir/.config/homecast/homecast.db`（MainActivity 设 HOME=filesDir），Android 保证私有目录持久化（卸载/清数据才丢）。
+
+Waydroid 上跑了三轮实测：
+
+1. **写入**：`POST /api/v1/fav/add` 加一条 `BV1TEST0001` → `fav/list` 立刻可见 ✓
+2. **进程重启**：`am force-stop` 杀 App → 重新启动 → 收藏完好 ✓
+3. **App 升级**：`adb install -r` 覆盖安装 → 重启 → 收藏完好 ✓（Android 覆盖安装保留私有数据，卸载才清）
+
+**给爸妈升级的直接含义**：以后发新版本直接覆盖安装新 APK 即可，歌单/设置零丢失；只有卸载重装或手动清数据才会回到空库。
+
 ## 坑与教训
 
 1. **`go build -overlay` 不能替换 GOMODCACHE 下的文件**——官方硬限制，报错前会静默忽略导致 patch 根本没进二进制（还以为是 patch 写错了）。
