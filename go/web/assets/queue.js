@@ -10,7 +10,7 @@
     if (qraw) {
       const qd = JSON.parse(qraw);
       if (qd && Array.isArray(qd.list) && qd.list.length) {
-        list = qd.list.map((q) => ({ bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover }));
+        list = qd.list.map(function (q) { return { bvid: q.bvid, title: q.title, artist: q.artist, cover: q.cover, duration: q.duration }; });
         idx = typeof qd.idx === 'number' && qd.idx >= 0 && qd.idx < list.length ? qd.idx : 0;
         render();
       }
@@ -31,10 +31,11 @@
     }
   }).catch(function () {});
 
-  // 收藏按钮（初始未收藏灰心；已收藏粉心 + 取消确认，对齐右键菜单语义）
+  // 收藏按钮：未收藏=空心白/灰心，已收藏=实心红心（updateFavBtn 切换）
+  const FAV_HOLLOW = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>';
+  const FAV_SOLID = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>';
   function favBtnHTML(q) {
-    return '<button class="q-fav w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-bvid="' + esc(q.bvid) + '" title="收藏">' +
-      '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg></button>';
+    return '<button class="q-fav w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-bvid="' + esc(q.bvid) + '" title="收藏">' + FAV_HOLLOW + '</button>';
   }
 
   function updateFavBtn(btn, faved) {
@@ -43,6 +44,8 @@
     btn.classList.toggle('text-gray-500', !faved);
     btn.classList.toggle('dark:text-gray-400', !faved);
     btn.title = faved ? '取消收藏' : '收藏';
+    const svg = btn.querySelector('svg');
+    if (svg) svg.outerHTML = faved ? FAV_SOLID : FAV_HOLLOW;
   }
 
   // 「上次在听」卡片（hc:last：手动点播时记录，刷新/播完永久保留；点卡片直接播）
@@ -165,13 +168,11 @@
         if (!q) return;
         const faved = favedSet.has(q.bvid);
         if (faved && !window.confirm('确定取消收藏？')) return;
-        const fd = new FormData();
-        fd.append('bvid', q.bvid);
-        fd.append('title', q.title || '');
-        fd.append('artist', q.artist || '');
-        fd.append('cover', q.cover || '');
+        // 安卓壳（wails3 asset 桥）丢弃 POST body——参数走 query（Go 侧 r.FormValue 两者都认）
+        const params = new URLSearchParams({ bvid: q.bvid, title: q.title || '', artist: q.artist || '', cover: q.cover || '' });
+        if (q.duration != null) params.set('duration', q.duration);
         try {
-          const r = await fetch('/hx/fav/toggle', { method: 'POST', body: fd });
+          const r = await fetch('/hx/fav/toggle?' + params.toString(), { method: 'POST' });
           if (!r.ok) return;
           if (faved) favedSet.delete(q.bvid); else favedSet.add(q.bvid);
           updateFavBtn(btn, !faved);

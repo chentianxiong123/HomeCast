@@ -52,7 +52,7 @@
           <span>播放</span>
         </button>
         <button class="hx-fav w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                hx-post="/hx/fav/toggle" hx-target="this" hx-swap="outerHTML"
+                hx-post="/hx/fav/toggle?bvid={{.BVID}}&title={{.Title | urlquery}}&artist={{.Artist | urlquery}}&cover={{coverURL .Cover | urlquery}}&duration={{.DurationSec}}" hx-target="this" hx-swap="outerHTML"
                 hx-on::after-request="hcBus.emit('toast', {msg: this.classList.contains('text-pink-500') ? '已收藏 ♥' : '已取消收藏'})"
                 hx-vals='{"bvid":"{{.BVID}}","title":"{{.Title}}","artist":"{{.Artist}}","cover":"{{coverURL .Cover}}","duration":"{{.DurationSec}}"}'
                 title="收藏">

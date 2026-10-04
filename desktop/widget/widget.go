@@ -542,7 +542,12 @@ func displayIdxLocked() int {
 // ── 歌词拉取（goroutine + 内嵌后端 HTTP） ──
 func fetchLyric(keyword, key string) {
 	q := url.QueryEscape(keyword)
-	resp, err := http.Get(Backend + "/api/v1/music/lyric?keyword=" + q)
+	// 带 bvid：后端命中「已选歌词源」（歌词页切源上报）返回同一份歌词——两端同步
+	u := Backend + "/api/v1/music/lyric?keyword=" + q
+	if key != "" {
+		u += "&bvid=" + url.QueryEscape(key)
+	}
+	resp, err := http.Get(u)
 	if err != nil {
 		log.Printf("[widget] 歌词请求失败: %v", err)
 		return
