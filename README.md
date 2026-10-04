@@ -102,7 +102,7 @@ homecast/
 ├── go/          # 正式实现：cmd/server（入口）+ web（htmx/模板/静态）+ internal（api/service/store）
 ├── desktop/     # Linux 桌面壳（wails3 v3 + GTK 挂件）+ widget/（多态显示层）
 ├── wails3/      # 安卓 + Windows 统一壳（main.go + ensurehome* 跨平台数据路径）
-├── explore/     # 历史只读：backend/（Python 探索）+ android/（手搓壳早期实现）
+├── explore/     # 历史只读：backend/（Python 探索）+ frontend/（Vue 旧前端，htmx 重构前）+ android/（手搓壳早期实现）
 ├── docs/        # 排查/架构记录（troubleshooting 风格）
 ├── scripts/     # E2E 冒烟等
 └── README.md
