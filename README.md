@@ -1,163 +1,96 @@
 # HomeCast
 
 <p align="center">
-  <b>🏠 家庭影音投屏平台</b>
+  <b>🏠 家庭影音平台 · B站音乐播放器</b>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go" alt="Go">
   <img src="https://img.shields.io/badge/htmx-2.x-3366CC?logo=htmx" alt="htmx">
+  <img src="https://img.shields.io/badge/wails3-beta.25-3B3B5C?logo=wails" alt="wails3">
   <img src="https://img.shields.io/badge/SQLite-内嵌-003B57?logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
 
 ---
 
-## 🧭 架构演进：Python 探索 → Go 实现
+## 三端支持
 
-本项目的核心技术路线是 **「Python 探索、Go 实现」**：
+| 端 | 壳 | 状态 | 说明 |
+|---|---|---|---|
+| 🐧 Linux 桌面 | `desktop/`（wails3 v3 + GTK 挂件） | ✅ 正式用 | 主窗口 WebView + 透明穿透桌面歌词挂件 |
+| 🪟 Windows | `wails3/` → `hcexp-win.exe` | 🟡 交叉编译通过，Wine 实跑通 | 纯 Go（WebView2 走 COM，无 CGO）；挂件 Win32 层代码就位待真机验证 |
+| 🤖 安卓 | `wails3/` → `hcexp.apk` | 🟡 壳+持久化+升级实测过 | 悬浮窗歌词挂件待写 |
 
-- **`explore/`（探索目录，历史只读）** —— 收纳两条探索路径：
-  - `explore/backend/`（Python/FastAPI）：早期用 Python 快速验证玩法（B站音乐、DLNA 投屏、音箱、嗅探），逻辑成熟后由 Go 正式实现。
-  - `explore/android/`（手搓 WebView 壳）：安卓壳的早期实现（纯 Go 服务端二进制 + 极简 WebView + 零 Gradle 手搓 APK），已验证稳定但已切到 Wails v3，保留作兜底参考。
-- **`go/` 是正式实现** —— 单二进制、全部内嵌（htmx + Tailwind CDN + SQLite，无 Node 构建链、无依赖安装），一个端口跑全部。
-- **`wails3/` 是安卓主线壳** —— Wails v3 壳（Go 编 libwails.so 进 APK + WebView），homecast 全路由挂 AssetOptions.Handler，框架管生命周期。
-- 探索版保留在仓库内**只读参考**，不参与维护；新改动只做 Go 版。
-- Python 端沉淀的接口语义（`/api/v1/*` 前缀、`{code,message,data}` 信封）已 1:1 对齐进 Go 实现，前端无感知切换。
+> 一律一个二进制：后端 + 前端（htmx 全内嵌）+ SQLite 全塞进壳里，一个端口跑全部，无构建链依赖。
 
 ---
 
-## 简介
+## 架构演进：Python 探索 → Go 实现
 
-**HomeCast** 是一个家庭影音投屏平台，集成了 Bilibili 音乐播放、DLNA 视频投屏、小米音箱控制等功能。通过简洁的 Web 界面或 Android APP，轻松管理和播放你的音乐与视频内容。
+核心技术路线 **「Python 探索、Go 实现」**：
 
-### ✨ 核心亮点
+- **`explore/`（历史只读，不维护）** —— 两条探索路径的收纳：
+  - `explore/backend/`（Python/FastAPI）：早期验证玩法（B站音乐、DLNA、音箱、嗅探）
+  - `explore/android/`（手搓 WebView 壳）：安卓壳早期实现，兜底参考
+- **`go/` 正式实现** —— 单二进制：htmx + Tailwind + SQLite（驱动 `github.com/ncruces/go-sqlite3`，纯 Go/WASM，规避安卓 seccomp），全部内嵌
+- **`desktop/` Linux 桌面壳** —— wails3 v3（`Assets.Handler` 反向代理到 go/ server）+ 桌面歌词挂件（GTK 多态显示层）
+- **`wails3/` 安卓+Windows 统一壳** —— wails3 v3 固定 `v3.0.0-beta.25`；安卓 WebView 渲染同套 htmx 界面
+- Python 端沉淀的接口语义（`/api/v1/*` 前缀、`{code,message,data}` 信封）已 1:1 对齐进 Go 实现
 
-- 🎧 **Bilibili 音乐** - 搜索、收藏、播放 Bilibili 音频内容
-- 📺 **DLNA 投屏** - 自动发现局域网设备，一键投屏视频
-- 🔍 **智能嗅探** - 自动解析视频网站，提取播放链接
-- 📱 **跨平台** - Web + Android APP，随时随地使用
-- 🔊 **小米音箱** - 支持小米智能音箱音乐推送
+### 为什么两个壳
 
----
+- `desktop/` 集成 GTK 画笔挂件（cgo）→ **仅 Linux 编译**
+- `wails3/` 无平台耦合 → **安卓 APK + Windows exe 都从它出**
+- wails3 生态里桌面挂件无现成方案，挂件是自己写的多态显示层：
 
-## 功能模块
-
-### 🎵 音乐播放
-| 功能 | 描述 |
-|-----|------|
-| 音乐搜索 | 搜索 Bilibili 视频音频 |
-| 收藏管理 | 同步 Bilibili 收藏夹 |
-| 播放列表 | 创建和管理本地歌单 |
-| 歌词显示 | 实时歌词滚动 |
-| 音频代理 | 解决跨域播放问题 |
-
-### 📺 视频投屏
-| 功能 | 描述 |
-|-----|------|
-| 设备发现 | 自动搜索局域网 DLNA 设备 |
-| 视频嗅探 | 智能解析视频网站播放链接 |
-| 集数提取 | 自动识别剧集列表 |
-| 播放控制 | 播放/暂停/停止/进度/音量 |
-| 常用网站 | 保存常用视频网站 |
-
-### 🔊 小米音箱
-| 功能 | 描述 |
-|-----|------|
-| 账号登录 | 密码/Cookie/二维码登录 |
-| 设备管理 | 查看和管理小米音箱设备 |
-| 音乐推送 | 将音乐推送到音箱播放 |
-
----
-
-## 技术栈
-
-### ✅ 当前正式版（Go）
-- **Go 1.26** - 单二进制，全内嵌（模板/静态资源/SQLite）
-- **htmx** - 页面交互（无状态优先，服务端渲染片段）
-- **SQLite**（modernc.org/sqlite 纯 Go 无 CGO） - 本地持久化
-- **Tailwind CDN** - 样式（本地化资源，无构建链）
-- **测试**：Go 单测/E2E 全覆盖（`go test ./...` + Playwright 真浏览器冒烟）
-
-### 🧪 探索版（Python · 历史只读，不维护）
-
-<table>
-<tr>
-<td width="50%">
-
-### 后端
-- **Python 3.12**
-- **FastAPI** - 高性能异步框架
-- **Playwright** - 视频嗅探
-- **yt-dlp** - 视频解析
-- **async-upnp-client** - DLNA 协议
-
-</td>
-<td width="50%">
-
-### 前端
-- **Vue 3** - 渐进式框架
-- **TypeScript** - 类型安全
-- **Naive UI** - 组件库
-- **Vite** - 构建工具
-- **Capacitor** - Android 打包
-
-</td>
-</tr>
-</table>
-
----
-
-## 快速开始
-
-### 环境要求
-- Python 3.12+
-- Node.js 18+
-- FFmpeg（可选，用于音频转码）
-
-### 🚀 后端启动
-
-```bash
-cd explore/backend
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 安装 Playwright 浏览器
-playwright install chromium
-
-# 启动服务
-uvicorn app.main:app --host 0.0.0.0 --port 28974 --reload
+```
+widget/
+├── display.go          # Display/Canvas 接口（多态）
+├── display_linux.go    # GTK3 实装（cgo）
+├── display_windows.go  # Win32：Layered+ColorKey 透明穿透（真机验证待定）
+└── widget.go           # 纯核心（tick/绘制/交互，三端共享）
 ```
 
-### 💻 前端启动
+---
+
+## 功能
+
+- 🎧 **B站音乐** — 搜索 / 收藏 / 播放 / 本地歌单，滑块细节与 YesPlayMusic 对齐
+- 🪟 **桌面歌词挂件** — 主界面跟随歌词 + 桌面穿透挂件（悬停浮现控制条/锁定态）
+- 📺 **DLNA 投屏** — 自动发现设备，一键投屏视频
+- 🔊 **小米音箱** — 登录 / 设备管理 / 音乐推送
+- 📱 **三端界面同一套** — htmx 服务端渲染，壳只负责窗口和生命周期
+
+---
+
+## 构建
+
+### Linux 桌面
 
 ```bash
-cd frontend
-
-# 安装依赖
-npm install
-
-# 开发模式
-npm run dev
-
-# 构建生产版本
-npm run build
+cd desktop && ./build.sh        # 产 homecast-desktop，含 GTK 挂件
 ```
 
-### 📱 Android APP
+### Windows（交叉编译，纯 Go 无 CGO）
 
 ```bash
-cd frontend
+cd wails3 && GOOS=windows CGO_ENABLED=0 go build -o bin/hcexp-win.exe .
+```
 
-# 构建
-npm run build
+运行（真机）：装 WebView2 Runtime 后直接跑 `hcexp-win.exe`。
+Wine 测试：`wine bin/hcexp-win.exe`（Wine 内需先装 WebView2 Runtime；已知限制：WebView2 区域内光标不显示，见 docs/）。
 
-# 同步到 Android
-npx cap sync android
+### 安卓 APK
 
-# 用 Android Studio 打开
-npx cap open android
+```bash
+cd wails3 && task android:package ARCH=amd64   # 产 bin/hcexp.apk（x86_64 模拟器）
+# 真机改 ARCH=arm64；包名 com.wails.app（wails3 安卓 JNI 符号写死，不可改）
+```
+
+### Go 服务单独跑（调试）
+
+```bash
+cd go && go run ./cmd/server    # 一个端口跑全部（htmx 界面 + API）
 ```
 
 ---
@@ -166,83 +99,25 @@ npx cap open android
 
 ```
 homecast/
-├── go/                        # 正式实现（单二进制，htmx + Tailwind CDN + SQLite）
-│   ├── cmd/server/            # 服务入口
-│   ├── web/                   # 页面/模板/静态资源
-│   └── internal/              # api / service / store / bilibili / dlna / speaker
-│
-├── wails3/                    # 安卓主线壳（Wails v3：Go 编 .so + WebView）
-├── desktop/                   # 桌面壳（Wails v2）
-├── explore/                   # 探索目录（历史只读）
-│   ├── backend/               # Python/FastAPI 探索版
-│   └── android/               # 手搓 WebView 壳（安卓早期实现，兜底参考）
-├── scripts/                   # E2E 冒烟等脚本
-├── docs/                      # 文档/记录
+├── go/          # 正式实现：cmd/server（入口）+ web（htmx/模板/静态）+ internal（api/service/store）
+├── desktop/     # Linux 桌面壳（wails3 v3 + GTK 挂件）+ widget/（多态显示层）
+├── wails3/      # 安卓 + Windows 统一壳（main.go + ensurehome* 跨平台数据路径）
+├── explore/     # 历史只读：backend/（Python 探索）+ android/（手搓壳早期实现）
+├── docs/        # 排查/架构记录（troubleshooting 风格）
+├── scripts/     # E2E 冒烟等
 └── README.md
 ```
 
 ---
 
-## API 接口
+## 已踩的关键坑（详见 docs/）
 
-| 接口 | 方法 | 说明 |
-|-----|------|------|
-| `/api/v1/music/search` | GET | 搜索音乐 |
-| `/api/v1/music/play` | GET | 获取播放链接 |
-| `/api/v1/cast/devices` | GET | 获取 DLNA 设备 |
-| `/api/v1/cast/sniff` | POST | 嗅探视频 |
-| `/api/v1/cast/start` | POST | 开始投屏 |
-| `/api/v1/cast/control` | POST | 投屏控制 |
-| `/api/v1/speaker/devices` | GET | 获取小米音箱 |
-| `/api/v1/favlist/sync` | POST | 同步收藏夹 |
-
----
-
-## 配置说明
-
-### 后端配置 (`explore/backend/configs/config.yaml`)
-
-```yaml
-server:
-  host: "0.0.0.0"
-  port: 28974
-
-bilibili:
-  cookie: ""  # Bilibili Cookie（可选）
-
-xiaomi:
-  enable: false
-  account: ""
-  password: ""
-```
-
----
-
-## 注意事项
-
-1. **DLNA 投屏** - 需要手机/电脑与投屏设备在同一局域网
-2. **视频嗅探** - 需要安装 Playwright 浏览器
-3. **音频代理** - 用于解决 Bilibili 跨域限制
-4. **小米音箱** - 需要小米账号登录
-
----
-
-## 开发计划
-
-- [ ] iOS APP 支持
-- [ ] 更多视频网站支持
-- [ ] 播放历史记录
-- [ ] 歌词同步优化
-- [ ] PWA 支持
-
----
+- 安卓 SIGSYS：SQLite 驱动换 `ncruces/go-sqlite3`（modernc 老 syscall × seccomp）
+- wails3 安卓 asset 桥三丢（query 剥/header 丢/body 弃）→ 前端传参数走 query + `hc=1` 标记
+- 安卓包名锁死 `com.wails.app`（JNI 符号写死）；apk 被冻结需 `adb reboot` 清
+- Wine/WebView2：光标在渲染区内消失（WineHQ 58922 未修复，真 Windows 正常）
+- cgo 宏不认（`C.RGB` 等）→ 手动位运算；`cglue.c` 用 `#ifndef _WIN32` 保护
 
 ## License
 
-[MIT](LICENSE)
-
----
-
-<p align="center">
-  Made with ❤️ by HomeCast Team
-</p>
+MIT
