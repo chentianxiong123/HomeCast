@@ -55,7 +55,7 @@ func logRequest(h http.Handler) http.Handler {
 
 func main() {
 	ensureHome() // 必须在 main()（nativeInit 之后，JNI bridge 可用时）调用；init() 里拿不到 StoragePath
-	httpLog = filepath.Join(application.Android.StoragePath(), "hc-http.log")
+	httpLog = filepath.Join(hcDataPath(), "hc-http.log")
 	os.WriteFile(httpLog, []byte("HOME="+os.Getenv("HOME")+"\n"), 0644)
 
 	app := application.New(application.Options{
