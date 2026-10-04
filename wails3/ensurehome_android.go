@@ -18,3 +18,8 @@ func init() {
 func ensureHome() {
 	os.Setenv("HOME", application.Android.StoragePath())
 }
+
+// hcDataPath 应用数据目录（日志/配置落盘处）
+func hcDataPath() string {
+	return application.Android.StoragePath()
+}
