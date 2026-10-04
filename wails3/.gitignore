@@ -1,0 +1,10 @@
+# wails3 构建产物与依赖（可重新生成）
+bin/
+build/
+# build/linux/
+build/darwin/
+build/windows/
+build/ios/
+build/overlay.json
+frontend/node_modules/
+frontend/dist/
