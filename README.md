@@ -17,8 +17,11 @@
 
 本项目的核心技术路线是 **「Python 探索、Go 实现」**：
 
-- **`backend/`（Python/FastAPI）是探索路径** —— 早期用 Python 快速验证玩法（B站音乐、DLNA 投屏、音箱、嗅探），逻辑成熟后由 Go 正式实现。
+- **`explore/`（探索目录，历史只读）** —— 收纳两条探索路径：
+  - `explore/backend/`（Python/FastAPI）：早期用 Python 快速验证玩法（B站音乐、DLNA 投屏、音箱、嗅探），逻辑成熟后由 Go 正式实现。
+  - `explore/android/`（手搓 WebView 壳）：安卓壳的早期实现（纯 Go 服务端二进制 + 极简 WebView + 零 Gradle 手搓 APK），已验证稳定但已切到 Wails v3，保留作兜底参考。
 - **`go/` 是正式实现** —— 单二进制、全部内嵌（htmx + Tailwind CDN + SQLite，无 Node 构建链、无依赖安装），一个端口跑全部。
+- **`wails3/` 是安卓主线壳** —— Wails v3 壳（Go 编 libwails.so 进 APK + WebView），homecast 全路由挂 AssetOptions.Handler，框架管生命周期。
 - 探索版保留在仓库内**只读参考**，不参与维护；新改动只做 Go 版。
 - Python 端沉淀的接口语义（`/api/v1/*` 前缀、`{code,message,data}` 信封）已 1:1 对齐进 Go 实现，前端无感知切换。
 
@@ -115,7 +118,7 @@
 ### 🚀 后端启动
 
 ```bash
-cd backend
+cd explore/backend
 
 # 安装依赖
 pip install -r requirements.txt
@@ -163,27 +166,18 @@ npx cap open android
 
 ```
 homecast/
-├── backend/                    # 后端服务
-│   ├── app/
-│   │   ├── api/               # API 路由
-│   │   ├── bilibili/          # Bilibili API
-│   │   ├── dlna/              # DLNA 投屏
-│   │   ├── proxy/             # 音频代理
-│   │   ├── service/           # 业务服务
-│   │   ├── sniffer/           # 视频嗅探
-│   │   └── speaker/           # 小米音箱
-│   ├── data/                  # 数据存储
-│   └── requirements.txt
+├── go/                        # 正式实现（单二进制，htmx + Tailwind CDN + SQLite）
+│   ├── cmd/server/            # 服务入口
+│   ├── web/                   # 页面/模板/静态资源
+│   └── internal/              # api / service / store / bilibili / dlna / speaker
 │
-├── frontend/                   # 前端应用
-│   ├── src/
-│   │   ├── api/               # API 调用
-│   │   ├── components/        # 组件
-│   │   ├── views/             # 页面
-│   │   └── stores/            # 状态管理
-│   ├── android/               # Android APP
-│   └── package.json
-│
+├── wails3/                    # 安卓主线壳（Wails v3：Go 编 .so + WebView）
+├── desktop/                   # 桌面壳（Wails v2）
+├── explore/                   # 探索目录（历史只读）
+│   ├── backend/               # Python/FastAPI 探索版
+│   └── android/               # 手搓 WebView 壳（安卓早期实现，兜底参考）
+├── scripts/                   # E2E 冒烟等脚本
+├── docs/                      # 文档/记录
 └── README.md
 ```
 
@@ -206,7 +200,7 @@ homecast/
 
 ## 配置说明
 
-### 后端配置 (`backend/configs/config.yaml`)
+### 后端配置 (`explore/backend/configs/config.yaml`)
 
 ```yaml
 server:
