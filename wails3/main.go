@@ -36,13 +36,17 @@ func logRequest(h http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		start := time.Now()
 		defer func() {
+			var msg string
 			if p := recover(); p != nil {
-				msg := fmt.Sprintf("PANIC %s %s -> %v\n%s\n", r.Method, r.URL.Path, p, debug.Stack())
-				os.WriteFile(httpLog, []byte(msg), 0644)
+				msg = fmt.Sprintf("PANIC %s %s -> %v\n%s\n", r.Method, r.URL.Path, p, debug.Stack())
 				sw.WriteHeader(500)
 			} else {
-				msg := fmt.Sprintf("%s %s -> %d (%s) via %s\n", r.Method, r.URL.Path, sw.status, time.Since(start), r.RemoteAddr)
-				os.WriteFile(httpLog, []byte(msg), 0644)
+				msg = fmt.Sprintf("%s %s -> %d (%s)\n", r.Method, r.URL.Path, sw.status, time.Since(start))
+			}
+			f, err := os.OpenFile(httpLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err == nil {
+				f.WriteString(msg)
+				f.Close()
 			}
 		}()
 		h.ServeHTTP(sw, r)

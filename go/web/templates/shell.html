@@ -288,6 +288,14 @@
   </div>
 
   <script src="/assets/htmx.min.js"></script>
+  <script>
+    // 安卓壳（wails3 asset 桥不透传 HX-Request 头、剥 query）已由 MainActivity 保留 query；
+    // 这里补 hc=1 参数作为「htmx 请求」标记（桌面壳注入 window.hcEnv='desktop' 不加，
+    // 直接访问 URL 也不带——Go 侧据此返回结果片段，完整页不受影响）。
+    document.body.addEventListener('htmx:configRequest', function (e) {
+      if (!window.hcEnv) e.detail.parameters['hc'] = '1';
+    });
+  </script>
   <script src="/assets/event-bus.js"></script>
   <script src="/assets/nav.js"></script>
   <script src="/assets/list-highlight.js"></script>

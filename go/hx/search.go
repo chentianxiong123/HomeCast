@@ -48,7 +48,8 @@ func (h *H) searchFragment(kw string) (template.HTML, error) {
 //   - 直接访问 → 完整页（shell + 搜索框 + 预渲染结果），刷新/直达可用
 func (h *H) Search(w http.ResponseWriter, r *http.Request) {
 	kw := strings.TrimSpace(r.URL.Query().Get("kw"))
-	isHX := r.Header.Get("HX-Request") != ""
+	// 安卓壳（wails3 asset 桥不透传 HX-Request 头）由前端补 hc=1 参数区分 htmx 请求
+	isHX := r.Header.Get("HX-Request") != "" || r.URL.Query().Get("hc") == "1"
 
 	if kw == "" {
 		if isHX {
