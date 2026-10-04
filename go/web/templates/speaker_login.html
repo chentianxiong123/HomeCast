@@ -11,4 +11,28 @@
       扫码登录
     </button>
   </div>
+
+  <details class="mt-6 text-left max-w-md mx-auto text-xs text-gray-400">
+    <summary class="cursor-pointer hover:text-pink-400 inline-flex items-center space-x-1">
+      <span>已有 token？粘贴复用登录（多端共用一个账号）</span>
+    </summary>
+    <div class="mt-3 flex flex-col space-y-2">
+      <textarea id="sp-token-input" rows="4" placeholder="粘贴其他端导出的 token JSON（音箱面板→导出 token）"
+        class="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 font-mono text-[10px] border border-gray-200 dark:border-gray-700 leading-relaxed"></textarea>
+      <button onclick="hcSpeakerImport()" class="px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-full text-xs hover:brightness-110">导入登录</button>
+      <p class="text-gray-400">安卓端：token 也可直接拷到 filesDir/.config/homecast/speaker.json</p>
+    </div>
+  </details>
 </div>
+<script>
+function hcSpeakerImport() {
+  var tok = document.getElementById('sp-token-input').value.trim();
+  if (!tok) return;
+  fetch('/api/v1/speaker/token/import', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: tok})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.code === 0) { htmx.ajax('GET','/hx/speaker',{target:'#speaker-section',swap:'innerHTML'}); }
+      else alert('导入失败: ' + (d.message || '未知错误'));
+    });
+}
+</script>
