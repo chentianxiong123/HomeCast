@@ -38,6 +38,8 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("GET /api/v1/speaker/status", speaker.Status)
 	mux.HandleFunc("POST /api/v1/speaker/login", speaker.Login)
 	mux.HandleFunc("POST /api/v1/speaker/logout", speaker.Logout)
+	mux.HandleFunc("GET /api/v1/speaker/token/export", speaker.TokenExport)
+	mux.HandleFunc("POST /api/v1/speaker/token/import", speaker.TokenImport)
 	mux.HandleFunc("GET /api/v1/speaker/devices", speaker.Devices)
 	mux.HandleFunc("POST /api/v1/speaker/play", speaker.Play)
 	mux.HandleFunc("POST /api/v1/speaker/control", speaker.Control)

@@ -17,4 +17,25 @@
   <div id="sp-devices">
     {{template "speaker_devices.html" .}}
   </div>
+
+  <details class="mt-3 text-left text-xs text-gray-400">
+    <summary class="cursor-pointer hover:text-pink-400 inline-flex items-center space-x-1">
+      <span>导出 token 给其他设备复用（免重复扫码）</span>
+    </summary>
+    <div class="mt-2 flex items-center space-x-2">
+      <button onclick="hcSpeakerExport()" class="px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded-full text-xs hover:brightness-110">复制 token</button>
+      <span class="text-gray-400">粘贴到其他端（桌面/安卓）音箱面板的"已有 token？粘贴复用登录"</span>
+    </div>
+  </details>
 </div>
+<script>
+function hcSpeakerExport() {
+  fetch('/api/v1/speaker/token/export')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.code === 0 && d.data && d.data.token) {
+        navigator.clipboard.writeText(d.data.token).then(function(){ alert('token 已复制，去其他设备粘贴导入'); });
+      } else alert('导出失败: ' + (d.message || '未登录'));
+    });
+}
+</script>
