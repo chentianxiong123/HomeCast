@@ -1,4 +1,5 @@
-// Package store 本地持久层：SQLite 单文件（modernc.org/sqlite，无 CGO，安卓可交叉编译）
+// Package store 本地持久层：SQLite 单文件（ncruces/go-sqlite3，纯 Go 无 CGO，安卓可交叉编译；
+// WASM 虚拟化，文件 IO 走 Go 标准库，只用 Android seccomp 允许的 syscall）
 // 只负责打开 / 建表 / 首启迁移（JSON → SQLite）；业务 CRUD 写在各自功能切片内
 package store
 
@@ -8,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
 // Open 打开（不存在则创建）SQLite 文件
@@ -16,7 +17,7 @@ func Open(path string) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
