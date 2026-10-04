@@ -96,3 +96,8 @@ fixme:perf:PerfCreateInstance ... WebView2: myMusic    ← WebView2 引擎起来
 - **Wine 跑完整应用要装 WebView2 Runtime**：bootstrapper 静默装进 prefix，几分钟，装完 `EdgeWebView/Application/<版本号>` 出现即可
 - **桌面挂件（GTK）的 cglue.c 编译坑**：Windows 交叉编译时被一起编——cgo 对 C 文件没有 build tag，用 `#ifndef _WIN32` 包住
 - **cgo 宏调用坑**：`C.RGB`、`C.GET_X_LPARAM` 这类宏 cgo 不认（"could not determine what C.XXX refers to"）——手动位运算拼（COLORREF 用 `r | g<<8 | b<<16`，LOWORD/HIWORD 用 int16 截断）
+
+## 跟踪
+
+- 记录 issue（小号 fork + 大号提交，与 niubihaizi/sqlite#1 同模式）：https://github.com/niubihaizi/wine-staging/issues/1
+- 上游：WineHQ Bugzilla 58922（UNCONFIRMED）https://bugs.winehq.org/show_bug.cgi?id=58922
