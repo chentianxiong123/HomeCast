@@ -13,6 +13,43 @@
 
 ---
 
+## 多端适配总览
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │  core/ = go/ 业务核心（三端共用）         │
+                    │  服务端 + htmx 前端 + SQLite 全内嵌       │
+                    │  一个端口 / 一个二进制，反复用            │
+                    └──────────────────┬──────────────────────┘
+                                       │
+             ┌─────────────────────────┼────────────────────────┐
+             ▼                         ▼                        ▼
+   ┌───────────────────┐   ┌────────────────────┐   ┌────────────────────┐
+   │ desktop/          │   │ wails3/            │   │ wails3/            │
+   │ 🐧 Linux 桌面壳    │   │ 🤖 安卓 APK        │   │ 🪟 Windows exe     │
+   │ WebView 窗口       │   │ (JNI 桥 + WebView)  │   │ (纯 Go COM 无 CGO)  │
+   │ + GTK 歌词挂件     │   │ hcexp.apk          │   │ hcexp-win.exe      │
+   │ homecast-desktop  │   └────────────────────┘   └────────────────────┘
+   └───────────────────┘
+```
+
+**壳的分工（为什么 Linux 单独一个目录）**：
+
+- `desktop/` 集成了**桌面歌词挂件** → 挂件是 cgo（GTK/Win32 都是 C 库，Go 调 C 库只能 cgo）→ 编译要各平台 C 工具链 → 只能做本机 Linux 壳
+- `wails3/` **不带挂件** → 零 C 依赖（WebView2 走文档化 COM 由纯 Go syscall 调、安卓走 JNI 桥）→ `CGO_ENABLED=0` 一个命令交叉编出安卓 APK + Windows exe
+
+**挂件多态层**（`desktop/widget/`，一套接口三实现）：
+
+```
+widget/
+├── display.go          # Display/Canvas 接口（多态）
+├── display_linux.go    # GTK3 实装（cgo）      —— 已在用
+├── display_windows.go  # Win32 实装（cgo）     —— 代码就位，待真机验证
+└── display_android.go  # 悬浮窗 Service         —— 待写
+```
+
+---
+
 ## 三端支持
 
 | 端 | 壳 | 状态 | 说明 |
@@ -99,10 +136,10 @@ cd go && go run ./cmd/server    # 一个端口跑全部（htmx 界面 + API）
 
 ```
 homecast/
-├── go/          # 正式实现：cmd/server（入口）+ web（htmx/模板/静态）+ internal（api/service/store）
-├── desktop/     # Linux 桌面壳（wails3 v3 + GTK 挂件）+ widget/（多态显示层）
-├── wails3/      # 安卓 + Windows 统一壳（main.go + ensurehome* 跨平台数据路径）
-├── explore/     # 历史只读：backend/（Python 探索）+ frontend/（Vue 旧前端，htmx 重构前）+ android/（手搓壳早期实现）
+├── go/          # core：三端共用业务核心（cmd/server + web 前端 + internal）—— 壳都反代到它
+├── desktop/     # 🐧 Linux 端壳：wails3 v3 + GTK 歌词挂件（widget/ 多态层在此）—— README 见目录内
+├── wails3/      # 🤖🪟 安卓+Windows 端壳：纯 Go 交叉编 APK/exe —— 不带挂件（cgo）—— README 见目录内
+├── explore/     # 历史只读：backend/（Python 探索）+ frontend/（Vue 旧前端）+ android/（手搓壳早期）
 ├── docs/        # 排查/架构记录（troubleshooting 风格）
 ├── scripts/     # E2E 冒烟等
 └── README.md
