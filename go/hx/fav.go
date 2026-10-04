@@ -33,12 +33,12 @@ func (h *H) FavsPage(w http.ResponseWriter, r *http.Request) {
 // FavToggle POST /hx/fav/toggle → 在则取消、不在则收藏；返回按钮片段（outerHTML 替换）
 func (h *H) FavToggle(w http.ResponseWriter, r *http.Request) {
 	v := &favBtnView{
-		BVID:   r.PostFormValue("bvid"),
-		Title:  r.PostFormValue("title"),
-		Artist: r.PostFormValue("artist"),
-		Cover:  r.PostFormValue("cover"),
+		BVID:   r.FormValue("bvid"),
+		Title:  r.FormValue("title"),
+		Artist: r.FormValue("artist"),
+		Cover:  r.FormValue("cover"),
 	}
-	v.Duration, _ = strconv.Atoi(r.PostFormValue("duration"))
+	v.Duration, _ = strconv.Atoi(r.FormValue("duration"))
 	if v.BVID == "" {
 		http.Error(w, "bvid required", http.StatusBadRequest)
 		return
