@@ -8,3 +8,5 @@ build/ios/
 build/overlay.json
 frontend/node_modules/
 frontend/dist/
+.task/
+frontend/bindings/
