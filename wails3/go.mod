@@ -1,4 +1,4 @@
-module changeme
+module homecast/app
 
 go 1.26.0
 
