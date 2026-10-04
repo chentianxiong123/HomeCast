@@ -96,6 +96,43 @@ func (h *SpeakerHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	ok(w, true)
 }
 
+// TokenExport GET /api/v1/speaker/token/export —— 导出登录 token（复用登录：一台登录，多端粘贴）
+func (h *SpeakerHandler) TokenExport(w http.ResponseWriter, r *http.Request) {
+	t := h.Svc.Auth.Tokens()
+	if t == nil {
+		errResp(w, http.StatusBadRequest, "未登录，无 token 可导出")
+		return
+	}
+	data, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		errResp(w, http.StatusInternalServerError, "序列化失败")
+		return
+	}
+	ok(w, map[string]any{"token": string(data)})
+}
+
+// TokenImport POST /api/v1/speaker/token/import  body: {token} —— 粘贴其他端导出的 token 复用登录
+func (h *SpeakerHandler) TokenImport(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Token == "" {
+		errResp(w, http.StatusBadRequest, "token required")
+		return
+	}
+	var t miservice.Tokens
+	if err := json.Unmarshal([]byte(body.Token), &t); err != nil {
+		errResp(w, http.StatusBadRequest, "token 解析失败: "+err.Error())
+		return
+	}
+	if err := h.Svc.Auth.LoginWithToken(&t); err != nil {
+		errResp(w, http.StatusUnauthorized, "token 登录失败: "+err.Error())
+		return
+	}
+	devices, _ := h.Svc.RefreshDevices()
+	ok(w, map[string]any{"device_count": len(devices), "devices": devices})
+}
+
 // Devices GET /api/v1/speaker/devices
 func (h *SpeakerHandler) Devices(w http.ResponseWriter, r *http.Request) {
 	ok(w, h.Svc.ListDevices())
