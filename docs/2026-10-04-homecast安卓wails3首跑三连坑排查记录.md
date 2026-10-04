@@ -104,6 +104,54 @@ mux.HandleFunc("GET /index.html", func(w http.ResponseWriter, r *http.Request) {
 - `files/.config/homecast/homecast.db` 落盘 = server.New() 全链路初始化成功
 - 进程稳定存活、前台 MainActivity
 
+## 后续第 4 坑：htmx 搜索嵌套（query 参数被剥）——用户实测暴雷
+
+页面通后让用户实测，立刻报"巨大问题"：**搜索一次多一个搜索框，再搜再多一层**。
+
+### 现象
+
+搜索框输入关键词 → 结果区没有结果，反而**嵌套了一个新的完整搜索页**（含搜索框），再搜又嵌一层。
+
+### 排查（这次先取证没瞎猜）
+
+hc-http.log 铁证：用户搜了一堆，日志里全是
+
+```
+GET /hx/search -> 200
+GET /hx/search -> 200
+...
+```
+
+**全是无 query 的 /hx/search**——搜索词 `?kw=` 压根没到 Go。
+
+### 根因链（wails3 安卓 asset 桥三丢）
+
+```
+WebView 请求 /hx/search?kw=xxx（htmx 局部请求，带 HX-Request 头）
+  → MainActivity.shouldInterceptRequest: path=/hx/search（非 /wails/ 前缀）
+  → 交给 WebViewAssetLoader
+  → WebViewAssetLoader.PathHandler 剥掉 query（模板注释原话："strips query params"）
+  → WailsPathHandler.handle("/hx/search")
+  → bridge.serveAsset(path) → JNI → Go（headers 参数根本没用到）
+  → Go 收到 GET /hx/search：无 kw、无 HX-Request 头
+  → hx.Search 判定"直接访问完整页" → 返回整个搜索页
+  → htmx 把完整页塞进 #results → 嵌套搜索框
+```
+
+**wails3 安卓 asset 桥的能力边界：path + method 透传，query 被剥、header 不透传、body 直接丢弃（Go 侧构造请求时 req.Body = http.NoBody）**。任何依赖 query/header/body 的请求（htmx 搜索、分页、表单 POST）在安卓壳上都会坏。
+
+### 修复（三层配合，全在我们可控层）
+
+1. **MainActivity.java**（build 模板，构建不覆盖）：非 /wails/ 请求不交给 WebViewAssetLoader，手动拼 `path + "?" + query` 直连 serveAsset——query 保到 Go
+2. **shell.html**（正式代码）：`htmx:configRequest` 事件监听，无 `window.hcEnv`（安卓壳没注入）时给所有 htmx 请求补 `hc=1` 参数——替代丢失的 HX-Request 头。桌面壳注入了 hcEnv='desktop' 不加；直接访问 URL 不带——两端行为都不变
+3. **hx/search.go**（正式代码）：片段判断兼容 `HX-Request != "" || query.hc == "1"`
+
+### 教训
+
+- **wails3 安卓壳的请求参数通道只剩 path+method**，这是 beta 的实现边界；凡是靠 query/header/body 的功能都要在壳层补桥
+- **故障取证只能靠 Go 侧自己写请求日志**（安卓 stderr 不可见 + 无调试口）——`hc-http.log` 的 path 记录直接指认根因，没它这坑要猜很久
+- 修复三层里只有第 1 层在 build/ 生成物（不提交），第 2/3 层是正式代码（已提交）——重装/换机时记得 MainActivity 的补丁在磁盘不在 git
+
 ## 坑与教训
 
 1. **两个同质壳（都是 WebView + 同一页面）共存测试，日志不可区分——所有"验证成功"都不可信**。必须找可区分的铁证（本案例：favicon.svg 200 + SQLite 落盘 + 进程稳定）。这是本次浪费最多时间的原因。
