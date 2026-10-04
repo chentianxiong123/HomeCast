@@ -50,6 +50,8 @@ func (h *H) Router() http.Handler {
 	mux.Handle("GET /assets/", assetHandler(web.Assets()))
 	// 页面（对照 Vue 版 nav：音乐/搜索/收藏夹/投屏）
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { h.searchPage(w, r) })
+	// 安卓壳（wails3 WailsPathHandler / serveAssetForAndroid）会把 / 转成 /index.html，须同样渲染首页
+	mux.HandleFunc("GET /index.html", func(w http.ResponseWriter, r *http.Request) { h.searchPage(w, r) })
 	mux.HandleFunc("GET /hx/queue", h.QueuePage)
 	mux.HandleFunc("GET /hx/recent", h.RecentPage)
 	mux.HandleFunc("GET /hx/search", func(w http.ResponseWriter, r *http.Request) {
