@@ -1,11 +1,10 @@
-// homecast 桌面壳（Wails v2）：内嵌全部 Go 后端 + 窗口直载 htmx 页面
-// （AssetServer 代理 wails:// → 内嵌后端，Vue 前端已废弃停用）
-// + 桌面歌词挂件窗口（同进程，GTK3）
+// homecast 桌面壳（Wails v3）：内嵌全部 Go 后端 + 窗口直载 htmx 页面 + 桌面歌词挂件（GTK3）
+// 与 v2 行为等价：端口后端保留（挂件拉歌词、局域网音箱/DLNA 访问代理流地址）、
+// wails asset → 反向代理 → 内嵌后端（同源）+ 注入 window.hcEnv='desktop'。
 package main
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"log"
 	"net/http"
@@ -14,27 +13,24 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
-	"homecast-desktop/widget"
 	"homecast/server"
+	"homecast-desktop/widget"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// wailEvents EventsEmit 包装（挂件 → 前端）
-type wailEvents struct{}
+var app *application.App
 
-func (wailEvents) Emit(cmd string, payload ...any) {
-	if runtimeApp == nil {
-		return
+// desktopEvents widget → 前端事件桥（wails 事件系统）
+type desktopEvents struct{}
+
+func (desktopEvents) Emit(cmd string, payload ...any) {
+	if app != nil {
+		app.Event.Emit("widget-cmd", append([]any{cmd}, payload...)...)
 	}
-	runtime.EventsEmit(runtimeApp, "widget-cmd", append([]any{cmd}, payload...)...)
 }
-
-var runtimeApp context.Context
 
 func main() {
 	port := os.Getenv("HC_PORT")
@@ -49,10 +45,9 @@ func main() {
 		}
 	}()
 
-	// 壳窗口直载 htmx 页：wails:// 所有请求代理到内嵌后端（同源，无跨域）
+	// 壳窗口直载 htmx 页：asset 请求代理到内嵌后端（同源，无跨域）
 	backend, _ := url.Parse("http://127.0.0.1:" + port)
 	proxy := httputil.NewSingleHostReverseProxy(backend)
-	// 多态注入：网页 UI 据此知晓运行在桌面壳环境（字幕条默认关，由桌面 GTK 挂件承担）
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
 			body, _ := io.ReadAll(resp.Body)
@@ -65,30 +60,34 @@ func main() {
 		return nil
 	}
 
-	app := NewApp(port)
-	err := wails.Run(&options.App{
-		Title:     "HomeCast 家庭投屏播放器",
-		Width:     1280,
-		Height:    800,
-		MinWidth:  920,
-		MinHeight: 620,
-		AssetServer: &assetserver.Options{
-			Handler: proxy, // 直载 htmx 页（不再用 Vue dist）
-		},
-		OnStartup: func(ctx context.Context) {
-			runtimeApp = ctx
-			// 桌面歌词挂件（主线程内创建 GTK 窗口）
-			if os.Getenv("HC_NO_WIDGET") == "" {
-				if err := widget.Start(server.WidgetStateSnapshot, wailEvents{}, "http://127.0.0.1:"+port); err != nil {
-					log.Printf("[widget] 启动失败: %v", err)
-				}
-			}
-		},
-		Bind: []interface{}{
-			app,
+	app = application.New(application.Options{
+		Name:        "HomeCast",
+		Description: "家庭投屏播放器（B站音乐 · 个人免费）",
+		Assets: application.AssetOptions{
+			Handler: proxy,
 		},
 	})
-	if err != nil {
+
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:            "HomeCast 家庭投屏播放器",
+		Width:            1280,
+		Height:           800,
+		MinWidth:         920,
+		MinHeight:        620,
+		BackgroundColour: application.NewRGB(17, 17, 17),
+		URL:              "/",
+	})
+
+	// 桌面歌词挂件（GTK3 独立组件，信号回调由 v3 主循环驱动）
+	if os.Getenv("HC_NO_WIDGET") == "" {
+		time.AfterFunc(time.Second, func() {
+			if err := widget.Start(server.WidgetStateSnapshot, desktopEvents{}, "http://127.0.0.1:"+port); err != nil {
+				log.Printf("[widget] 启动失败: %v", err)
+			}
+		})
+	}
+
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
