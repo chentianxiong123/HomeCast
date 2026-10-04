@@ -119,6 +119,9 @@
       while (keys.length > 50) delete m[keys.shift()]; // LRU 淘汰最旧
       localStorage.setItem(LY_CACHE_KEY, JSON.stringify(m));
     } catch (e) {}
+    // 上报后端（桌面歌词挂件随动）：安卓壳丢 POST body，参数走 query
+    fetch('/api/v1/lyric/select?bvid=' + encodeURIComponent(bvid) + '&sid=' + encodeURIComponent((row && row.id) || 0), { method: 'POST' })
+      .catch(function () {});
   }
   // 来源行：当前歌词来自哪个网易云候选（无黑盒：可推导、可换）
   // 歌名解析（对齐 music.py _title_to_song：剥 []【】取《》; 取不到用全标题）

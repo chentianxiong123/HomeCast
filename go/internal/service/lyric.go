@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -186,6 +187,33 @@ func GetLyricLines(keyword string, sid int) *LyricResult {
 		return &cands[0]
 	}
 	return nil
+}
+
+// ── 已选歌词源记忆（前端切源上报；桌面歌词挂件与歌词页共用） ──
+// 与 music.py 的 LYRIC_MAP（bvid → 已选歌词版本）同款语义，但状态收在 Go 后端：
+// 歌词页切源 → 上报这里 → 挂件请求带 bvid → 后端优先返回已选源，两端同步。
+
+var (
+	lyricSelMu sync.Mutex
+	lyricSel   = map[string]int{} // bvid → 已选歌词源 sid
+)
+
+// SetLyricSelection 记录歌曲的已选歌词源（sid<=0 清除）
+func SetLyricSelection(bvid string, sid int) {
+	lyricSelMu.Lock()
+	defer lyricSelMu.Unlock()
+	if sid <= 0 {
+		delete(lyricSel, bvid)
+		return
+	}
+	lyricSel[bvid] = sid
+}
+
+// SelectedSID 返回 bvid 的已选歌词源 sid（无则 0）
+func SelectedSID(bvid string) int {
+	lyricSelMu.Lock()
+	defer lyricSelMu.Unlock()
+	return lyricSel[bvid]
 }
 
 // ── 小工具 ──
