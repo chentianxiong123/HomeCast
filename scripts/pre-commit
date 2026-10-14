@@ -1,0 +1,36 @@
+#!/bin/bash
+# git pre-commit hook：提交前自动校验 HTML 模板结构
+#
+# 目的：挡住残缺模板（div/span 开闭不配对）进库。
+# 背景：Go html/template 只校验 {{}} 语法，不检查 HTML 标签闭合，残缺模板会
+#       被浏览器自动修复掩盖（10 月 14 日发现 speaker_devices.html 残缺跑了 12 天）。
+#
+# 校验层：
+#   go test ./web/ -run TestTemplates
+#     - TestTemplatesParseSyntax：模板必须能被 html/template 解析
+#     - TestTemplatesHTMLBalance：div/span/button/details/summary/select/textarea 开闭平衡
+#     零外部依赖（纯正则统计）。
+#
+# 触发：git commit 时自动跑（core.hooksPath 指向本目录，见 README 或 docs）
+# 跳过：git commit --no-verify（应急，但要意识到风险）
+#
+# 退出码非 0 → 阻止提交。
+
+set -eo pipefail
+# 注意：set -e 在管道里不生效（bash 特性：管道最后一个命令决定退出码），
+# 所以必须加 pipefail，否则 go test 失败会被后续 sed 吞掉，hook 静默退出 0 导致残缺模板被提交。
+cd "$(git rev-parse --show-toplevel)"
+
+# 只在校验相关文件变更时跑（加速，避免每次 commit 都编译）
+if ! git diff --cached --name-only | grep -qE '^go/web/templates/|^go/web/templates_test\.go'; then
+    exit 0
+fi
+
+echo "▶ [pre-commit] 校验 HTML 模板结构..."
+(cd go && go test ./web/ -run TestTemplates -count=1) | sed 's/^/  /'
+rc=${PIPESTATUS[0]}
+if [ $rc -ne 0 ]; then
+    echo "✗ [pre-commit] 模板结构不合法，提交被阻止（如确实要跳过：git commit --no-verify）" >&2
+    exit $rc
+fi
+echo "✓ [pre-commit] 模板结构 OK"
