@@ -21,14 +21,14 @@
     </div>
     <div class="mt-3 flex items-center space-x-2">
       <button class="sp-play-btn px-3 py-1.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white rounded-full text-xs hover:brightness-110 flex items-center space-x-1"
-              data-did="{{.DeviceID}}"
+              data-did="{{.DID}}"
               onclick="hcBus.emit('speaker-play',{did:this.dataset.did})">
         <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         <span>投送当前歌</span>
       </button>
-      <button hx-post="/hx/speaker/control" hx-vals='{"did":"{{.DeviceID}}","action":"pause"}'
+      <button hx-post="/hx/speaker/control" hx-vals='{"did":"{{.DID}}","action":"pause"}'
               class="px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded-full text-xs hover:brightness-110">暂停</button>
-      <button hx-post="/hx/speaker/control" hx-vals='{"did":"{{.DeviceID}}","action":"play"}'
+      <button hx-post="/hx/speaker/control" hx-vals='{"did":"{{.DID}}","action":"play"}'
               class="px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded-full text-xs hover:brightness-110">恢复</button>
     </div>
   </div>

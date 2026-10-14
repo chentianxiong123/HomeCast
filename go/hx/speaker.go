@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/lsongdev/miservice-go/miservice"
 
@@ -86,13 +87,40 @@ func (h *H) SpeakerPlay(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bvid and did required", http.StatusBadRequest)
 		return
 	}
-	if _, err := h.Speaker.Play(bvid, did, 30280); err != nil {
-		log.Printf("[speaker play] %v", err)
+	res, err := h.Speaker.Play(bvid, did, 30280)
+	log.Printf("[speaker play] bvid=%s did=%s err=%v res=%v", bvid, did, err, res)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err != nil {
 		w.Write([]byte(`<span class="text-red-400 text-sm">播放失败</span>`))
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if !speakerOK(res, &w) {
+		return
+	}
 	w.Write([]byte(`<span class="text-green-400 text-sm">正在音箱播放 ✓</span>`))
+}
+
+// speakerOK 检查 service 返回的 {code,message}；code!=0 时向 w 写失败原因并返回 false。
+// service 层对“设备未找到/音频流失败”这类软失败返回 err=nil + code!=0，
+// handler 只判 err 会把失败当成功（绿色对勾），必须同时查 code。
+func speakerOK(res map[string]any, w *http.ResponseWriter) bool {
+	if res == nil {
+		return true
+	}
+	if c, ok := res["code"].(int); ok && c != 0 {
+		msg, _ := res["message"].(string)
+		if msg == "" {
+			msg = "未知错误"
+		}
+		log.Printf("[speaker] 软失败 code=%d message=%s", c, msg)
+		(*w).Write([]byte(`<span class="text-red-400 text-sm">` + htmlEscape(msg) + `</span>`))
+		return false
+	}
+	return true
+}
+
+func htmlEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\"", "&quot;").Replace(s)
 }
 
 // SpeakerControl POST /hx/speaker/control 表单 did,action(play/pause/previous/next),volume
@@ -107,9 +135,15 @@ func (h *H) SpeakerControl(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "did and action required", http.StatusBadRequest)
 		return
 	}
-	if _, err := h.Speaker.Control(did, action, vol); err != nil {
+	// Control 对“设备未找到/未知操作/无已保存 URL”返回 err=nil + code!=0（软失败），
+	// 必须同时查 code，否则界面会显示“✓ 操作成功”而实际未生效。
+	if res, err := h.Speaker.Control(did, action, vol); err != nil {
 		log.Printf("[speaker control] %v", err)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(`<span class="text-red-400 text-xs">操作失败</span>`))
+		return
+	} else if !speakerOK(res, &w) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
