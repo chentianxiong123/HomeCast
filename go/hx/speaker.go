@@ -3,6 +3,7 @@
 package hx
 
 import (
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -51,7 +52,9 @@ func (h *H) SpeakerQRStart(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	img, _ := m["qr_image"].(string)
-	h.Tpl.ExecuteTemplate(w, "speaker_qr.html", map[string]any{"QRImage": img})
+	// template.URL：img 是 data:image/png;base64，普通 string 会被 html/template
+	// 当不安全 URL scheme 替换成 #ZgotmplZ（图片死链）；template.URL 是白名单类型
+	h.Tpl.ExecuteTemplate(w, "speaker_qr.html", map[string]any{"QRImage": template.URL(img)})
 }
 
 // SpeakerQRStatus GET /hx/speaker/qr-status → CheckStatus 挂起（最长 120s）等待扫码
