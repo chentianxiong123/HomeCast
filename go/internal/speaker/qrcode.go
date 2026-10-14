@@ -73,6 +73,26 @@ func (q *QRLogin) loadAuthData() {
 		return
 	}
 	_ = json.Unmarshal(data, &q.authData)
+	// 清洗历史坏值：旧版用 fmt.Sprint(float64) 把 userId 存成科学计数法
+	// （如 "2.908798005e+09"），登录/恢复必败。此处恢复整数形式。
+	if uid := q.authData["userId"]; uid != "" {
+		if fixed, bad := fixSciNotation(uid); bad {
+			q.authData["userId"] = fixed
+			q.saveAuthData()
+		}
+	}
+}
+
+// fixSciNotation 把科学计数法数字串还原成普通整数串（如 2.908798005e+09 → 2908798005）
+func fixSciNotation(s string) (string, bool) {
+	if !strings.ContainsAny(s, "eE") {
+		return s, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return s, false
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64), true
 }
 
 func (q *QRLogin) saveAuthData() {
@@ -117,6 +137,26 @@ func stripStart(text string) string {
 	return strings.TrimPrefix(text, "&&&START&&&")
 }
 
+// decodeJSONNum UseNumber 解码：JSON 数字保持原文（
+// 否则 userId 等被 float64 吃掉，fmt.Sprint 会输出科学计数法 "2.908798005e+09"，
+// 传给小米接口登录失败、重启无法恢复登录态——Python 版无此问题（数字原样））
+func decodeJSONNum(s string, v any) error {
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+	return dec.Decode(v)
+}
+
+// numEq0 兼容 json.Number / float64 的 code==0 判断
+func numEq0(v any) bool {
+	switch n := v.(type) {
+	case json.Number:
+		return n.String() == "0"
+	case float64:
+		return n == 0
+	}
+	return false
+}
+
 // GenerateQRCode 生成二维码（返回 map：qr_url/qr_image/status_url）
 func (q *QRLogin) GenerateQRCode() (map[string]any, error) {
 	client := q.getSession()
@@ -135,12 +175,12 @@ func (q *QRLogin) GenerateQRCode() (map[string]any, error) {
 		return nil, err
 	}
 	var serviceData map[string]any
-	if err := json.Unmarshal([]byte(stripStart(text)), &serviceData); err != nil {
+	if err := decodeJSONNum(stripStart(text), &serviceData); err != nil {
 		return nil, err
 	}
 
 	// token 有效直接成功
-	if code, _ := serviceData["code"].(float64); code == 0 {
+	if numEq0(serviceData["code"]) {
 		if loc, _ := serviceData["location"].(string); loc != "" {
 			if t, err := q.doGet(client, loc, headers, 30*time.Second); err == nil && t == "ok" {
 				q.status = "success"
@@ -181,7 +221,7 @@ func (q *QRLogin) GenerateQRCode() (map[string]any, error) {
 		return nil, err
 	}
 	var loginData map[string]any
-	if err := json.Unmarshal([]byte(stripStart(t2)), &loginData); err != nil {
+	if err := decodeJSONNum(stripStart(t2), &loginData); err != nil {
 		return nil, err
 	}
 	qrURL, _ := loginData["loginUrl"].(string)
@@ -239,13 +279,13 @@ func (q *QRLogin) CheckStatus() (map[string]any, error) {
 		return map[string]any{"status": "failed", "message": err.Error(), "user_id": ""}, nil
 	}
 	var lpData map[string]any
-	if err := json.Unmarshal([]byte(stripStart(text)), &lpData); err != nil {
+	if err := decodeJSONNum(stripStart(text), &lpData); err != nil {
 		q.mu.Lock()
 		q.status = "failed"
 		q.mu.Unlock()
 		return map[string]any{"status": "failed", "message": "解析失败", "user_id": ""}, nil
 	}
-	if code, _ := lpData["code"].(float64); code == 0 {
+	if numEq0(lpData["code"]) {
 		for _, key := range []string{"psecurity", "nonce", "ssecurity", "passToken", "userId", "cUserId", "serviceToken"} {
 			if v, ok := lpData[key]; ok {
 				q.authData[key] = fmt.Sprint(v)

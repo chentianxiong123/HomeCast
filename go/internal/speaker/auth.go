@@ -8,10 +8,12 @@ package speaker
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/lsongdev/miservice-go/miservice"
 )
@@ -53,8 +55,48 @@ func NewSpeakerAuth() *SpeakerAuth {
 		client.Token = t
 		a.client = client
 		a.loggedIn = true
+		return a
+	}
+	// 回退：QR 扫码产物 speaker_auth.json（对齐 Python auth._set_token 优先读 auth.json）。
+	// passToken+userId 在即可构造 token（serviceToken 由首次 Login("micoapi") 刷新补全），
+	// 避免“扫码成功但没写 speaker.json → 重启就未登录”。
+	if t := restoreFromQR(filepath.Join(home, ".config", "homecast", "speaker_auth.json")); t != nil {
+		client := miservice.NewClient("", "")
+		client.Token = t
+		a.client = client
+		a.loggedIn = true
+		log.Printf("[speaker] 从 QR speaker_auth.json 恢复登录态 (userId=%s)", t.UserId)
 	}
 	return a
+}
+
+// restoreFromQR 从 QRLogin 扫码产物构造最小 token（换掉坏 payload 历史数据时用）
+func restoreFromQR(path string) *miservice.Tokens {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var m map[string]any
+	if json.Unmarshal(data, &m) != nil {
+		return nil
+	}
+	pt, _ := m["passToken"].(string)
+	uid, _ := m["userId"].(string)
+	if pt == "" || uid == "" {
+		return nil
+	}
+	if fixed, bad := fixSciNotation(uid); bad {
+		uid = fixed
+	}
+	// deviceId 不在 QR 产物里，用随机占位（不影响 passToken 刷新）
+	t := miservice.NewTokens()
+	t.PassToken = pt
+	t.UserId = uid
+	t.DeviceId = fmt.Sprintf("%016x", time.Now().UnixNano())
+	if ssec, ok := m["ssecurity"].(string); ok && ssec != "" {
+		t.Sids["micoapi"] = miservice.SidToken{Ssecurity: ssec}
+	}
+	return t
 }
 
 // restoreToken 从持久化文件恢复 miservice.Tokens
