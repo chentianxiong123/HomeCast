@@ -79,7 +79,18 @@ func (h *H) Router() http.Handler {
 	mux.HandleFunc("POST /hx/fav/toggle", h.FavToggle)
 	mux.HandleFunc("POST /hx/fav/remove/{bvid}", h.FavRemove)
 	mux.HandleFunc("POST /hx/fav/clear", h.FavClear)
-	return mux
+	// 页面/htmx 片段一律 no-store：模板 go:embed 进二进制，WebView/浏览器一旦缓存
+	// GET /hx/* 旧响应，换新二进制也看不到新 UI（本次音箱面板“还是旧版”的根因）
+	return noPageCache(mux)
+}
+
+// noPageCache 页面/片段响应强制不缓存（静态资源已有 assetHandler 单独处理）
+func noPageCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // assetHandler 静态资源包装：HTTP 返回强制不缓存（asset 治理为服务端最新）
