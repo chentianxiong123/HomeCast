@@ -13,7 +13,7 @@ import (
 // listenBackend 0.0.0.0 单端口起后端
 func listenBackend(h http.Handler) {
 	addr := "0.0.0.0:" + backendPort()
-	if err := http.ListenAndServe(addr, h); err != nil {
+	if err := http.ListenAndServe(addr, logRequest(h)); err != nil {
 		log.Printf("[backend] %v", err)
 	}
 }

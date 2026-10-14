@@ -11,7 +11,7 @@ import (
 
 func listenBackend(h http.Handler) {
 	addr := "127.0.0.1:" + backendPort()
-	if err := http.ListenAndServe(addr, h); err != nil {
+	if err := http.ListenAndServe(addr, logRequest(h)); err != nil {
 		log.Printf("[backend] %v", err)
 	}
 }
