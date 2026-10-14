@@ -58,14 +58,19 @@ func NewSpeakerAuth() *SpeakerAuth {
 		return a
 	}
 	// 回退：QR 扫码产物 speaker_auth.json（对齐 Python auth._set_token 优先读 auth.json）。
-	// passToken+userId 在即可构造 token（serviceToken 由首次 Login("micoapi") 刷新补全），
-	// 避免“扫码成功但没写 speaker.json → 重启就未登录”。
+	// passToken+userId 在即可构造 token，但 QR 产物缺 serviceToken（设备列表认证必需），
+	// 必须 Login("micoapi") 用已有 passToken 刷新（Python auth.login 同语义），成功才登录态成立。
 	if t := restoreFromQR(filepath.Join(home, ".config", "homecast", "speaker_auth.json")); t != nil {
 		client := miservice.NewClient("", "")
 		client.Token = t
-		a.client = client
-		a.loggedIn = true
-		log.Printf("[speaker] 从 QR speaker_auth.json 恢复登录态 (userId=%s)", t.UserId)
+		if err := client.Login("micoapi"); err == nil {
+			a.client = client
+			a.loggedIn = true
+			a.saveToken() // 刷新后的 token 落 speaker.json，下次走 restoreToken 快路径
+			log.Printf("[speaker] 从 QR speaker_auth.json 恢复并刷新登录态 (userId=%s)", t.UserId)
+		} else {
+			log.Printf("[speaker] QR 恢复刷新失败（需重新扫码）: %v", err)
+		}
 	}
 	return a
 }
