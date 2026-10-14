@@ -2,9 +2,9 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
 
 	"homecast/internal/bilibili"
@@ -92,36 +92,29 @@ func (s *SpeakerService) GetDevice(did string) (speaker.SpeakerDevice, bool) {
 	return s.getDevice(did)
 }
 
-// localIP 音箱可访问的局域网 IP（对齐 Python config.public_url，但加自动探测）。
+// localIP 音箱可访问的局域网 IP。
 //
-// 为什么不能只用 UDP 探测：本机有 Mihomo/Tailscale 等 VPN 时，路由优先走 VPN 接口，
-// net.Dial("udp","8.8.8.8") 会返回 198.18.x.x / 100.64.x.x。小米 API 返回 code:0
-// “消息已代理到设备”，但音箱在 192.168 网段根本访问不到该 IP → 推送“成功”却无声。
-//
-// 优先级：HC_PUBLIC_IP 环境变量 > 网卡扫描 RFC1918 > UDP 探测 > 127.0.0.1。
-// 用户明确知道局域网地址时，export HC_PUBLIC_IP=192.168.31.9 即可锁定。
+// 为什么不能只用 UDP 探测：本机同时有 Mihomo/Tailscale VPN 时，路由优先走 VPN 接口，
+// net.Dial("udp","8.8.8.8") 返回 198.18.x.x / 100.64.x.x。小米 API 照例返回 code:0
+// “消息已代理到设备”，但音箱在 192.168 网段根本访问不到 → 推送“成功”却无声。
+// 所以不做人工配置，直接在网卡里打分挑最像家用局域网的那个。
 func localIP() string {
-	if v := strings.TrimSpace(os.Getenv("HC_PUBLIC_IP")); v != "" {
-		return v
-	}
 	if ip := lanIP(); ip != "" {
 		return ip
 	}
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		return "127.0.0.1"
-	}
-	defer conn.Close()
-	return conn.LocalAddr().(*net.UDPAddr).IP.String()
+	// 纯 VPN/容器环境找不到局域网地址：宁可报 127.0.0.1 失败也不要给个 VPN IP
+	// 假装成功——音箱无声时比直接报错难查得多。
+	log.Printf("[speaker] 未找到局域网 IP，音箱投送将不可用（纯 VPN/容器环境？）")
+	return "127.0.0.1"
 }
 
-// lanIP 扫描网卡，返回第一个 RFC1918 IPv4（10 / 172.16-31 / 192.168），
-// 跳过回环、link-local、以及 Tailscale(100.64/10) 与 Mihomo(198.18/15) VPN 段。
+// lanIP 扫描网卡打分，返回最高分的 IPv4。0 分一律排除。
 func lanIP() string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
+	best, bestScore := "", 0
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
@@ -136,29 +129,54 @@ func lanIP() string {
 				continue
 			}
 			ip := ipnet.IP.To4()
-			if ip != nil && isLanIPv4(ip) {
-				return ip.String()
+			if ip == nil {
+				continue
+			}
+			if sc := scoreAddr(ip, iface.Flags); sc > bestScore {
+				best, bestScore = ip.String(), sc
 			}
 		}
 	}
-	return ""
+	return best
 }
 
-// isLanIPv4 仅接受家用局域网地址，排除 VPN/容器网段。
-func isLanIPv4(ip net.IP) bool {
-	if ip == nil {
-		return false
+// scoreAddr 给候选地址打分，越高越可能是家用局域网网卡；0 表示彻底排除。
+func scoreAddr(ip net.IP, flags net.Flags) int {
+	if ip == nil || len(ip) == 0 {
+		return 0
 	}
 	a, b := ip[0], ip[1]
 	switch {
-	case a == 10:
-		return true
-	case a == 172 && b >= 16 && b <= 31:
-		return true
-	case a == 192 && b == 168:
-		return true
+	// link-local 169.254/16
+	case a==169 && b==254,
+		// Tailscale 100.64.0.0/10（b 在 64..127）
+		a==100 && b&0xC0==64,
+		// Mihomo/CGNAT 198.18.0.0/15（b 在 18..19）
+		a==198 && b&0xFE==18:
+		return 0
 	}
-	return false
+	var score int
+	switch {
+	// 家用路由器几乎都用 192.168，docker 默认也不用它
+	case a==192 && b==168:
+		score = 100
+	case a==10:
+		score = 40
+	case a==172 && b>=16 && b<=31:
+		// docker 默认从 172.17/16 递增，172.17-20 基本是容器网桥
+		if b>=17 && b<=20 {
+			score = 5
+		} else {
+			score = 40
+		}
+	default:
+		return 0
+	}
+	// 真实网卡带 BROADCAST；POINTOPOINT 隧道（Mihomo）没有
+	if flags&net.FlagBroadcast != 0 {
+		score += 20
+	}
+	return score
 }
 
 // proxyAudioURL 音箱可访问的代理 URL（局域网 IP + token）
@@ -271,4 +289,3 @@ func (s *SpeakerService) SetVolume(did string, volume int) (map[string]any, erro
 	return map[string]any{"code": 0, "message": "success", "data": map[string]any{"volume": volume}}, nil
 }
 
-var _ = strings.TrimSpace
