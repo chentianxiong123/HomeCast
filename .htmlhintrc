@@ -1,0 +1,25 @@
+{
+  // HTML linter 配置：扫描 go/web/templates/*.html（即 go:embed 内嵌的源文件）
+  //
+  // 关键结论（实测）：
+  //   1. go:embed 只是把文件内容复制进二进制，源文件仍在磁盘上。
+  //      linter 扫磁盘上的 .html，不扫二进制 —— 内嵌和可扫描是正交的，不冲突。
+  //   2. "tag-pair" 规则能精确抓住残缺模板（div 少闭合 → 报错并点名缺失哪几个标签），
+  //      这是 Go html/template 完全没有的检查能力（它只校验 {{}} 语法）。
+  //
+  // 已知局限：
+  //   Go template 的 {{if}}...{{end}} 语法会让 htmlhint 解析错乱，产生假阳性
+  //   （例如 fav_btn.html 的 </button> 被误报"无开标签"）。所以 HTMLHint 定位为辅、
+  //   go/web/templates_test.go 的定位为主（正则统计，零误报）。
+  //
+  // 用法：
+  //   npx htmlhint "go/web/templates/*.html"
+  //   或装 VSCode 插件 HTMLHint，配 "htmlhint.configFile": ".htmlhintrc" 编辑器实时提示
+
+  "doctype-first": false,   // 模板是 htmx 片段，不是完整文档，不该要求 doctype
+  "tag-pair": true,         // 标签成对闭合检查（核心，抓残缺模板）
+  "tag-self-close": false,  // HTML5 不要求自闭合
+  "attr-lowercase": false,  // Go template 里可能有特殊大小写需求
+  "attr-value-double-quotes": false,
+  "id-unique": false        // htmx 片段复用，同 id 在不同实例中合法
+}
