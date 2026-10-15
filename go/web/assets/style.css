@@ -29,6 +29,9 @@
 /* 歌词字号（lyric.js 调节 --line-size） */
 .ly-line { font-size: var(--line-size, 18px); line-height: 1.8; }
 #ly-lines { font-size: var(--line-size, 18px); }
+/* 歌词当前行逐行进度：--prog（0~1，当前行唱到百分之几，lyric.js sync 每 tick 更新）
+   yrc 逐字歌词行自带时长（l[2]），LRC 用下一行时间差估算 */
+.ly-line.ly-active { background: linear-gradient(90deg, rgba(236, 72, 153, 0.22) calc(var(--prog, 0) * 100%), transparent 0); border-radius: 8px; }
 
 /* 播放频谱（dock 封面叠加，播放中跳动） */
 @keyframes eq-bounce { 0%,100% { height: 25%; } 50% { height: 100%; } }

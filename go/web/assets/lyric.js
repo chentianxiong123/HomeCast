@@ -87,6 +87,15 @@
     for (let i = 0; i < lines.length; i++) {
       if (lines[i][0] <= t) idx = i; else break;
     }
+    // 逐行进度（当前行唱到百分之几）：yrc 行自带时长（l[2]），LRC 用下一行差估算
+    if (idx >= 0) {
+      const start = lines[idx][0];
+      const dur = (typeof lines[idx][2] === 'number' && lines[idx][2] > 0) ? lines[idx][2]
+        : (lines[idx + 1] ? lines[idx + 1][0] - start : 0);
+      const p = dur > 0 ? Math.min(1, Math.max(0, (t - start) / dur)) : 1;
+      const d = linesEl.children[idx];
+      if (d) d.style.setProperty('--prog', p.toFixed(3));
+    }
     if (idx === lastIdx) return;
     lastIdx = idx;
     linesEl.querySelectorAll('.ly-line').forEach((d, i) => {
@@ -102,6 +111,7 @@
   }
 
   let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲
+  let loadGen = 0; // 换歌竞态保护：旧请求晚到直接丢弃（music.py bvid 校验同款，bili-music generation 同款）
 
   // ---- 歌词缓存（localStorage LRU 50 首）----
   const LY_CACHE_KEY = 'hc:lyc:cache';
@@ -193,16 +203,19 @@
     setSource(cand);
   }
   async function load(song) {
+    const gen = ++loadGen; // 竞态保护：本次加载的代际（music.py _panel_with bvid 校验同款）
     currentSong = song;
     titleEl.textContent = song.title || '';
     artistEl.textContent = song.artist || '';
     if (coverEl && song.cover) coverEl.src = song.cover;
     if (bgCover && song.cover) bgCover.style.backgroundImage = 'url("' + song.cover + '")'; // 封面模糊背景（网易云同款）
     linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载中…</p></div>';
+    const stale = () => gen !== loadGen || !currentSong || currentSong.bvid !== song.bvid;
     // 恢复存档：选的是哪个候选 + 对齐偏移（SQLite 持久化，localStorage 清掉也不丢）
     selMeta = null;
     try {
       const mj = await (await fetch('/api/v1/lyric/meta?bvid=' + encodeURIComponent(song.bvid))).json();
+      if (stale()) return; // 等待期间又切了歌 → 丢弃旧响应
       selMeta = (mj && mj.data) || null;
     } catch (e) {}
     setOffset(selMeta ? (parseFloat(selMeta.offset) || 0) : 0);
@@ -212,10 +225,12 @@
     try {
       const kw = encodeURIComponent(titleToSong(song.title) + ' ' + (song.artist || ''));
       const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=8')).json();
+      if (stale()) return; // 等待期间又切了歌 → 丢弃旧响应
       cands = (j && j.data) || [];
       renderCandBar(); // 候选栏渲染 + 无选中时用第一源
       if (!cands.length) { setSource(null); return; }
     } catch (e) {
+      if (stale()) return;
       if (!lines.length) {
         linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载失败</p></div>';
       }
@@ -294,6 +309,8 @@
   }
   document.getElementById('ly-nudge-up').addEventListener('click', () => nudge(0.5));
   document.getElementById('ly-nudge-down').addEventListener('click', () => nudge(-0.5));
+  // 一键归零：点击偏移值显示 → resetOffset（bili-music 同款；复用 nudge 路径持久化+广播）
+  if (nudgeVal) nudgeVal.addEventListener('click', () => { if (offset !== 0) nudge(-offset); });
   // 侧栏歌曲操作（网易云歌词页同款）
   document.getElementById('ly-fav').addEventListener('click', () => {
     if (!currentSong) return;

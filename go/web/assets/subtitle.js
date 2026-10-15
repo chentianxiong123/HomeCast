@@ -11,8 +11,9 @@
 
   const envDesktop = window.hcEnv === 'desktop';
   let enabled = envDesktop ? false : localStorage.getItem('hc:subtitle') !== '0';
-  let lines = [];   // [[sec, line], ...]
+  let lines = [];   // [[sec, line, dur?], ...]
   let lastIdx = -1;
+  let loadGen = 0; // 换歌竞态保护（music.py bvid 校验同款；旧请求晚到丢弃）
   let lastBvid = '';
   let songTitle = '';
   let offset = 0; // 歌词对齐偏移（秒；面板 ±0.5 调节后经 lyric-offset 广播同步）
@@ -80,10 +81,13 @@
   }
 
   async function loadLyrics(s) {
+    const gen = ++loadGen; // 竞态保护：本次加载代际
     songTitle = s.title || '';
+    const stale = () => gen !== loadGen || lastBvid !== s.bvid;
     // 对齐偏移：从后端 meta 恢复（SQLite 持久化，不随 localStorage 缓存丢）
     try {
       const m = await (await fetch('/api/v1/lyric/meta?bvid=' + encodeURIComponent(s.bvid))).json();
+      if (stale()) return; // 等待期间又切歌 → 丢弃旧响应
       offset = ((m && m.data && m.data.offset) || 0);
     } catch (e) { offset = 0; }
     // 歌词缓存（与歌词面板共用 hc:lyc:cache，LRU 50 首）：命中直接读，不再请求网易云
@@ -104,6 +108,7 @@
     try {
       const kw = encodeURIComponent(((s.title || '') + ' ' + (s.artist || '')).trim());
       const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=3')).json();
+      if (stale()) return; // 等待期间又切歌 → 丢弃旧响应
       const cand = j && j.data && j.data[0];
       lines = (cand && cand.lines) || [];
       // 抓到的新词写入同一缓存（面板下次直接用，面板选定也会覆盖同键）
@@ -117,7 +122,7 @@
           localStorage.setItem('hc:lyc:cache', JSON.stringify(m));
         } catch (e2) {}
       }
-    } catch (e) { lines = []; }
+    } catch (e) { if (stale()) return; lines = []; }
     lastIdx = -1;
     if (textEl) textEl.textContent = lines.length ? lines[0][1] : '';
     if (enabled) place(); // 歌词写入后条宽变化，重定位（clamp 回视口）
@@ -149,17 +154,21 @@
   });
 
   audio.addEventListener('timeupdate', () => {
-    sync(audio.currentTime);
-    // 卡拉OK横向进度：当前句内推进（句起点→下一句起点）；无歌词行时整曲推进
+    const tCur = audio.currentTime;
+    sync(tCur);
+    // 卡拉OK横向进度：当前句内推进；与 sync 用同一个对齐后时间 t = pos + offset（±0.5s 补偿后进度条与文字同拍）
+    // yrc 行自带时长（l[2]）优先，LRC 才退化用下一句起点差
     if (!progEl) return;
     let pct = 0;
     if (lines.length && enabled) {
+      const t = tCur + offset;
       let idx = -1;
-      for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= audio.currentTime) idx = i; else break; }
+      for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= t) idx = i; else break; }
       if (idx >= 0) {
         const t0 = lines[idx][0];
-        const t1 = idx + 1 < lines.length ? lines[idx + 1][0] : (audio.duration || t0 + 1);
-        pct = t1 > t0 ? Math.min(100, Math.max(0, ((audio.currentTime - t0) / (t1 - t0)) * 100)) : 0;
+        const dur = (typeof lines[idx][2] === 'number' && lines[idx][2] > 0) ? lines[idx][2]
+          : (idx + 1 < lines.length ? lines[idx + 1][0] - t0 : (audio.duration || t0 + 1) - t0);
+        pct = dur > 0 ? Math.min(100, Math.max(0, ((t - t0) / dur) * 100)) : 0;
       }
     } else if (audio.duration) {
       pct = (audio.currentTime / audio.duration) * 100;
