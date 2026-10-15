@@ -107,7 +107,8 @@
     }
     try {
       const kw = encodeURIComponent(((s.title || '') + ' ' + (s.artist || '')).trim());
-      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=3')).json();
+      // 带 bvid：服务端优先用分P标题作关键词（bili-music lyricSearchTitles 同款）
+      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&bvid=' + encodeURIComponent(s.bvid) + '&limit=3')).json();
       if (stale()) return; // 等待期间又切歌 → 丢弃旧响应
       const cand = j && j.data && j.data[0];
       lines = (cand && cand.lines) || [];

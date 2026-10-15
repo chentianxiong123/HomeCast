@@ -33,6 +33,42 @@ var lrcTimeRe = regexp.MustCompile(`\[(\d+):(\d+(?:.\d+)?)\]`)
 // 解析时折进每行时间（t' = t + offsetMs/1000），前端零感知。
 var offsetTagRe = regexp.MustCompile(`(?i)^\[offset[:,](-?\d+)\]$`)
 
+// ── 搜索关键词清洗（musicxx 智能识别规则子集 + bili-music 正则回退同款） ──
+// 对齐 bili-music meting_logic.extractSearchKeyword：《》「」优先提取，剥【】；
+// 再按 musicxx 智能识别思路去 B 站标题噪音词（4K/无损/纯享…）：
+// B 站标题混冗余是歌词匹配错的第一大原因（musicxx 文档原话）。
+var (
+	bookTitleRe = regexp.MustCompile(`[《「〈]([^》」〉]+)[》」〉]`)
+	bracketRe   = regexp.MustCompile(`[【\[(][^】\])]*[】\])]`)
+	sepRe       = regexp.MustCompile(`[·•|/\\]`)
+	seqPrefixRe = regexp.MustCompile(`^\s*\d+[.、．]\s*`) // 分P序号前缀：“001.周杰伦-晴天”→“周杰伦-晴天”
+	// 画质/格式/版本噪音词（不杀“翻唱/现场/Live”——那是版本信息，musicxx 归为版本字段权重，非删）
+	noiseWords = []string{"1080P", "4K", "720P", "超清", "高清", "无损", "FLAC", "HIRES", "HQ", "MV", "官方", "哔哩哔哩", "BILI", "纯享", "完整版", "现场版"}
+)
+
+// CleanSearchKeyword 搜索关键词清洗：歌名优先（《》内），去噪音词，折叠空白。
+func CleanSearchKeyword(title string) string {
+	s := strings.TrimSpace(title)
+	if s == "" {
+		return ""
+	}
+	if m := bookTitleRe.FindStringSubmatch(s); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	s = bracketRe.ReplaceAllString(s, " ")
+	up := strings.ToUpper(s)
+	for _, w := range noiseWords {
+		up = strings.ReplaceAll(up, w, " ")
+	}
+	s = sepRe.ReplaceAllString(up, " ")
+	s = seqPrefixRe.ReplaceAllString(s, "")
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > 40 {
+		s = s[:40] // 防超长关键词
+	}
+	return strings.TrimSpace(s)
+}
+
 // timedLineRe 增强格式行：`[startMs,durMs](字级时间戳…) 文本`（yrc/qrc/krc）
 var timedLineRe = regexp.MustCompile(`^\[(\d+),(\d+)(?:,\d+)?\]\s*(.*)$`)
 
@@ -208,8 +244,14 @@ func fetchLyricLines(sid int) []LyricLine {
 	return nil
 }
 
-// SearchLyricCandidates 搜歌名 → 候选（只含有词 ≥3 行）
+// SearchLyricCandidates 搜歌名 → 候选。惰性取词（musicxx 两段式 API 同思路）：
+// 搜索只回元数据；第一个有词候选验证并带 Lines（保住“自动选第一有词源、自动跳脏候选”语义），
+// 其余候选不拉正文（前端选中时懒拉 /api/v1/music/lyric?sid=）→ 9 次串行请求降到 2 次。
 func SearchLyricCandidates(keyword string, limit int) []LyricResult {
+	keyword = CleanSearchKeyword(keyword)
+	if keyword == "" {
+		return nil
+	}
 	if limit <= 0 || limit > 20 {
 		limit = 8
 	}
@@ -225,6 +267,7 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 	result, _ := j["result"].(map[string]any)
 	songs, _ := result["songs"].([]any)
 	var out []LyricResult
+	gotLines := false
 	for _, s := range songs {
 		song, ok := s.(map[string]any)
 		if !ok {
@@ -232,10 +275,6 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 		}
 		sid := int(toFloat(song["id"]))
 		if sid == 0 {
-			continue
-		}
-		lines := fetchLyricLines(sid)
-		if len(lines) < 3 {
 			continue
 		}
 		artists, _ := song["artists"].([]any)
@@ -249,20 +288,31 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 		if al, ok := song["album"].(map[string]any); ok {
 			album, _ = al["name"].(string)
 		}
-		out = append(out, LyricResult{
+		r := LyricResult{
 			ID:       sid,
 			Name:     strAny(song["name"]),
 			Artist:   artist,
 			Album:    album,
 			Duration: int(toFloat(song["duration"]) / 1000),
-			Lines:    lines,
-		})
+		}
+		if !gotLines {
+			if lines := fetchLyricLines(sid); len(lines) >= 3 {
+				r.Lines = lines
+				gotLines = true
+			} else {
+				continue // 无词/拉词失败：不展示（保持“候选只含有词≥3行”体验）
+			}
+		}
+		out = append(out, r)
 	}
 	return out
 }
 
-// GetLyricLines 按歌名自动取第一源；或 sid 精确取。找不到返回 nil（业务正常）
-func GetLyricLines(keyword string, sid int) *LyricResult {
+// GetLyricLines 按备选关键词取第一源；或 sid 精确取。找不到返回 nil（业务正常）
+func GetLyricLines(keywords []string, sid int) *LyricResult {
+	if len(keywords) == 0 && sid == 0 {
+		return nil // 空关键词不发网易云（挂件 bvid 模式无已选源时）
+	}
 	if sid > 0 {
 		lines := fetchLyricLines(sid)
 		if lines != nil {
@@ -270,9 +320,23 @@ func GetLyricLines(keyword string, sid int) *LyricResult {
 		}
 		return nil
 	}
-	cands := SearchLyricCandidates(keyword, 8)
-	if len(cands) > 0 {
+	cands := SearchLyricCandidatesByTitles(keywords, 8)
+	if len(cands) > 0 && len(cands[0].Lines) >= 3 {
 		return &cands[0]
+	}
+	return nil
+}
+
+// SearchLyricCandidatesByTitles 备用标题逐个搜（bili-music lyricSearchTitles 同款）：
+// 第一个搜到候选（且第一候选有词）的关键词即用，避免“第一P占位标题”直接翻车。
+func SearchLyricCandidatesByTitles(titles []string, limit int) []LyricResult {
+	for _, kw := range titles {
+		if kw == "" {
+			continue
+		}
+		if res := SearchLyricCandidates(kw, limit); len(res) > 0 {
+			return res
+		}
 	}
 	return nil
 }
