@@ -12,6 +12,19 @@ import (
 // LyricHandler 歌词端点（网易云源）
 type LyricHandler struct {
 	Lyric *service.LyricStore
+	Music *service.MusicService // bvid → 分P标题作搜索关键词（B 站合集痛点；带 view 缓存）
+}
+
+// keywordsFor bvid 非空时优先分P标题列表（bili-music lyricSearchTitles 同款，逐个搜第一个命中），
+// 否则原关键词清洗
+func (h *LyricHandler) keywordsFor(bvid, keyword string) []string {
+	if h.Music != nil && bvid != "" {
+		return h.Music.LyricKeywords(bvid, keyword)
+	}
+	if k := service.CleanSearchKeyword(keyword); k != "" {
+		return []string{k}
+	}
+	return nil
 }
 
 // Get GET /api/v1/music/lyric?keyword=&sid=&bvid=
@@ -19,10 +32,10 @@ type LyricHandler struct {
 // 与歌词页（切源后）拿到同一份歌词，两端同步；bvid 模式同时返回本歌存档的对齐偏移。
 func (h *LyricHandler) Get(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	keyword := strings.TrimSpace(q.Get("keyword"))
 	sid, _ := strconv.Atoi(q.Get("sid"))
 	bvid := strings.TrimSpace(q.Get("bvid"))
-	if keyword == "" && sid == 0 && bvid == "" {
+	keywords := h.keywordsFor(bvid, q.Get("keyword"))
+	if len(keywords) == 0 && sid == 0 {
 		errResp(w, http.StatusBadRequest, "keyword or sid required")
 		return
 	}
@@ -31,7 +44,7 @@ func (h *LyricHandler) Get(w http.ResponseWriter, r *http.Request) {
 			sid = sel
 		}
 	}
-	res := service.GetLyricLines(keyword, sid)
+	res := service.GetLyricLines(keywords, sid)
 	if res == nil {
 		// 找不到歌词是正常业务，code=0 data=null（前端拦截器按 code!=0 弹错）
 		ok(w, nil)
@@ -127,8 +140,8 @@ func (h *LyricHandler) Offset(w http.ResponseWriter, r *http.Request) {
 // Candidates GET /api/v1/music/lyric/candidates?keyword=&limit=
 func (h *LyricHandler) Candidates(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	keyword := strings.TrimSpace(q.Get("keyword"))
-	if keyword == "" {
+	keywords := h.keywordsFor(q.Get("bvid"), q.Get("keyword"))
+	if len(keywords) == 0 {
 		errResp(w, http.StatusBadRequest, "keyword required")
 		return
 	}
@@ -136,5 +149,5 @@ func (h *LyricHandler) Candidates(w http.ResponseWriter, r *http.Request) {
 	if limit == 0 {
 		limit = 8
 	}
-	ok(w, service.SearchLyricCandidates(keyword, limit))
+	ok(w, service.SearchLyricCandidatesByTitles(keywords, limit))
 }
