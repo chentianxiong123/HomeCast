@@ -405,17 +405,32 @@
   });
 
   // ---- 音箱投送桥接：同 cast 模式，player 持当前歌调后端 ----
+  // 带 title/duration/next_bvid：服务端建本地模拟进度 + 播完自动连播队列下一首（不打小米云轮询）
   hcBus.on('speaker-play', (d) => {
     if (!song) {
       hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '请先播放一首歌' });
       return;
     }
-    const body = new URLSearchParams({ bvid: song.bvid, did: d.did });
+    const body = new URLSearchParams({
+      bvid: song.bvid,
+      did: d.did,
+      title: song.title || '',
+      duration: String(song.duration || 0),
+      next_bvid: nextBVID() || '',
+    });
     fetch('/hx/speaker/play', { method: 'POST', body })
       .then((r) => r.text())
       .then((t) => hcBus.emit('speaker-result', { ok: t.includes('音箱播放'), did: d.did, msg: '投送失败' }))
       .catch(() => hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '网络错误' }));
   });
+
+  // 队列下一首（循环语义，与 step() 一致）：推送模式播完自动连播用
+  function nextBVID() {
+    if (!song || queue.length < 2) return '';
+    const i = queue.findIndex((q) => q.bvid === song.bvid);
+    if (i < 0) return queue[0].bvid;
+    return queue[(i + 1) % queue.length].bvid;
+  }
 
   restoreP();
   render();

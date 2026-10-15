@@ -11,6 +11,7 @@ import (
 
 	"github.com/lsongdev/miservice-go/miservice"
 
+	"homecast/internal/service"
 	"homecast/internal/speaker"
 )
 
@@ -87,7 +88,12 @@ func (h *H) SpeakerPlay(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bvid and did required", http.StatusBadRequest)
 		return
 	}
-	res, err := h.Speaker.Play(bvid, did, 30280)
+	duration, _ := strconv.ParseFloat(r.PostFormValue("duration"), 64)
+	res, err := h.Speaker.Play(bvid, did, 30280, service.PlayOpts{
+		Title:    r.PostFormValue("title"),
+		Duration: duration,
+		NextBVID: r.PostFormValue("next_bvid"),
+	})
 	log.Printf("[speaker play] bvid=%s did=%s err=%v res=%v", bvid, did, err, res)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err != nil {

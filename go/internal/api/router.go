@@ -48,6 +48,7 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("GET /api/v1/speaker/volume/{did}", speaker.GetVolume)
 	mux.HandleFunc("POST /api/v1/speaker/volume", speaker.SetVolume)
 	mux.HandleFunc("GET /api/v1/speaker/player_status/{did}", speaker.PlayerStatus)
+	mux.HandleFunc("GET /api/v1/speaker/progress/{did}", speaker.Progress)
 	mux.HandleFunc("GET /api/v1/speaker/refresh", speaker.Refresh)
 	mux.HandleFunc("POST /api/v1/speaker/qr/generate", speaker.QRGenerate)
 	mux.HandleFunc("GET /api/v1/speaker/qr/status", speaker.QRStatus)

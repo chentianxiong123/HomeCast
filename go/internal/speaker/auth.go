@@ -53,9 +53,17 @@ func NewSpeakerAuth() *SpeakerAuth {
 	if t := a.restoreToken(); t != nil {
 		client := miservice.NewClient("", "")
 		client.Token = t
-		a.client = client
-		a.loggedIn = true
-		return a
+		// 持久化 token 必须 Login("micoapi") 刷新 serviceToken：serviceToken 有效期短，
+		// 直接使用会 401（device_list 空）。passToken 快路径无需密码。
+		if err := client.Login("micoapi"); err == nil {
+			a.client = client
+			a.loggedIn = true
+			a.saveToken()
+			log.Printf("[speaker] 恢复持久化 token 并刷新登录态 (userId=%s)", t.UserId)
+			return a
+		} else {
+			log.Printf("[speaker] 持久化 token 刷新失败（可能过期，尝试 QR 回退）: %v", err)
+		}
 	}
 	// 回退：QR 扫码产物 speaker_auth.json（对齐 Python auth._set_token 优先读 auth.json）。
 	// passToken+userId 在即可构造 token，但 QR 产物缺 serviceToken（设备列表认证必需），

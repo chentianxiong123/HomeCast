@@ -31,6 +31,16 @@
       <button hx-post="/hx/speaker/control" hx-vals='{"did":"{{.DID}}","action":"play"}'
               class="px-3 py-1.5 bg-gray-800 dark:bg-gray-700 text-white rounded-full text-xs hover:brightness-110">恢复</button>
     </div>
+    {{/* 本地模拟进度（speaker.js 轮询 /api/v1/speaker/progress/{did}，不打小米云） */}}
+    <div class="sp-prog mt-3 hidden" data-did="{{.DID}}">
+      <div class="h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div class="sp-prog-fill h-full bg-gradient-to-r from-pink-500 to-violet-500 rounded-full" style="width:0%"></div>
+      </div>
+      <div class="mt-1 flex items-center justify-between text-[11px] text-gray-400">
+        <span class="sp-prog-time">--:--</span>
+        <span class="sp-prog-state font-medium"></span>
+      </div>
+    </div>
   </div>
 {{end}}
 </div>
