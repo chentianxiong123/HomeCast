@@ -44,7 +44,8 @@ func TestCleanSearchKeyword(t *testing.T) {
 	}
 }
 
-// LyricKeywords 分P标题列表：跳过与总标题相同的 part、清洗、去重、fallback 兜底（bili-music 同款）
+// LyricKeywords 分P标题选择：播放固定第一P（前端无 cid，后端 VideoInfo.CID=第一P）→
+// 只取第一个有效 part（清洗后）+ fallback 兜底（bili-music 分P语义，但收敛到当前播放的P）
 func TestLyricsKeywords(t *testing.T) {
 	mk := func(pages ...string) *bilibili.VideoInfo {
 		info := &bilibili.VideoInfo{Title: "周杰伦50首精选"}
@@ -64,15 +65,15 @@ func TestLyricsKeywords(t *testing.T) {
 		return m
 	}
 
-	// 多P：分P标题优先（去重、跳过与总标题相同），总标题兜底
-	m := mkMusic(mk("周杰伦50首精选", "晴天", "晴天", "七里香"))
-	if got := m.LyricKeywords("BV1", "周杰伦50首精选"); !reflect.DeepEqual(got, []string{"晴天", "七里香", "周杰伦50首精选"}) {
+	// 第一P是歌名 → 只取第一P（当前播放的P），不走第二P
+	m := mkMusic(mk("001.周杰伦-晴天", "002.周杰伦-夜曲", "003.周杰伦-星晴"))
+	if got := m.LyricKeywords("BV1", "周杰伦50首精选"); !reflect.DeepEqual(got, []string{"周杰伦-晴天", "周杰伦50首精选"}) {
 		t.Errorf("LyricKeywords = %v", got)
 	}
-	// 无有效分P：fallback 清洗
-	m2 := mkMusic(mk("周杰伦50首精选"))
-	if got := m2.LyricKeywords("BV1", "【4K】周杰伦 - 晴天 无损"); !reflect.DeepEqual(got, []string{"周杰伦 - 晴天"}) {
-		t.Errorf("fallback = %v", got)
+	// 第一P是占位标题（跳过后才轮到第二P——但播放仍第一P，宁可 fallback 也不错配）
+	m1 := mkMusic(mk("周杰伦50首精选", "晴天"))
+	if got := m1.LyricKeywords("BV1", "周杰伦50首精选"); !reflect.DeepEqual(got, []string{"周杰伦50首精选"}) {
+		t.Errorf("占位第一P = %v", got)
 	}
 	// 视图失败/无 Client：纯 fallback 清洗
 	m3 := &MusicService{}

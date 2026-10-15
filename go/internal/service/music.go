@@ -89,10 +89,9 @@ func (m *MusicService) VideoInfo(bvid string) (*bilibili.VideoInfo, error) {
 	return info, nil
 }
 
-// LyricKeywords 歌词搜索关键词列表（bili-music lyricSearchTitles 同款语义：
-// 分P标题们优先 + fallback 总标题兜底，逐个尝试，第一个搜到词的用）：
-// B 站合集痛点——总标题“周杰伦50首精选”没有歌名，分P标题才是歌名。
-// 返回去重后的清洗关键词（最多 3 个分P + fallback）。
+// LyricKeywords 歌词搜索关键词（对齐使用场景：播放固定第一P——前端无 cid 概念，
+// 后端 VideoInfo.CID 即第一P。所以关键词 = 第一P part 清洗 + fallback 总标题兜底，
+// 不做“多个分P逐个试”——第二P的词会错配给正在播的第一P）。
 func (m *MusicService) LyricKeywords(bvid, fallback string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -107,13 +106,11 @@ func (m *MusicService) LyricKeywords(bvid, fallback string) []string {
 		if info, err := m.VideoInfo(bvid); err == nil {
 			for _, p := range info.Pages {
 				part := strings.TrimSpace(p.Part)
-				if part == "" || part == info.Title {
+				if part == "" {
 					continue
 				}
-				add(part)
-				if len(out) >= 3 {
-					break
-				}
+				add(part) // 只取第一P（当前播放的P）；占位标题（如==总标题）清洗后与 fallback 去重，自然收敛
+				break
 			}
 		}
 	}

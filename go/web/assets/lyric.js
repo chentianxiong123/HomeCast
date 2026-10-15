@@ -184,13 +184,17 @@
     // 当前选中高亮：后端已存 sid（SQLite 持久化）优先，localStorage 缓存兜底；无则第一个
     const curId = (selMeta && selMeta.sid) || (lycGet(currentSong.bvid) || {}).id || 0;
     let chosen = null; // 无选中时自动用的候选：第一个带正文的（保“自动选第一有词源”语义）
+    let needLazy = null; // 已选候选但无正文（懒拉场景：跨设备/缓存被清，只有 SQLite sid 记忆）
     let first = true;
     cands.forEach((c) => {
       const it = document.createElement('button');
       it.className = 'w-full text-left px-2.5 py-2 rounded-lg transition-colors ' +
         (first && !curId ? 'bg-pink-500/20 text-pink-300' : 'hover:bg-gray-800 text-gray-300');
       if (first && !curId && !chosen && c.lines && c.lines.length) { chosen = c; first = false; }
-      if (curId && c.id === curId) it.className = 'bg-pink-500/20 text-pink-300';
+      if (curId && c.id === curId) {
+        it.className = 'bg-pink-500/20 text-pink-300';
+        if (!(c.lines && c.lines.length)) needLazy = c; // 已选候选正文还没拉 → 懒拉
+      }
       it.innerHTML = '<span class="block text-sm truncate">' + (c.name || '') + '</span>' +
         '<span class="block text-xs text-gray-500 truncate mt-0.5">' + (c.artist || '') + ' · ' + candDur(c) + '</span>';
       it.addEventListener('click', () => {
@@ -202,7 +206,8 @@
       candList.appendChild(it);
     });
     // 无选中来源时用第一个带正文候选（脏候选已被服务端跳过）
-    if (chosen) renderFromCand(chosen);
+    if (needLazy) lycSelLazy(needLazy, loadGen);
+    else if (chosen) renderFromCand(chosen);
   }
   const sourceEl = document.getElementById('ly-source');
   function setSource(cand) {
