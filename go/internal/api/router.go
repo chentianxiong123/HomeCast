@@ -19,6 +19,8 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("GET /api/v1/music/lyric", lyric.Get)
 	mux.HandleFunc("POST /api/v1/lyric/select", lyric.Select)
 	mux.HandleFunc("GET /api/v1/music/lyric/candidates", lyric.Candidates)
+	mux.HandleFunc("GET /api/v1/lyric/meta", lyric.Meta)
+	mux.HandleFunc("POST /api/v1/lyric/offset", lyric.Offset)
 	mux.HandleFunc("GET /api/v1/fav/list", fav.List)
 	mux.HandleFunc("POST /api/v1/fav/add", fav.Add)
 	mux.HandleFunc("DELETE /api/v1/fav/{bvid}", fav.Remove)

@@ -16,7 +16,6 @@
   const SUB_SIZES = [16, 20, 24, 28, 32];
   const MODES = ['order', 'loop', 'single', 'random'];
   const MODE_NAMES = { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' };
-  const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
   const THEMES = [['auto', '自动'], ['light', '明亮'], ['dark', '暗黑']];
 
   function lycCount() {
@@ -32,7 +31,6 @@
   function render() {
     const subOn = envDesktop ? false : S('hc:subtitle', '1') !== '0';
     const quality = S('hc:quality', '192');
-    const speed = S('hc:speed', '1');
     const mode = S('hc:mode', 'order');
     const lyIdx = Math.max(0, LY_SIZES.indexOf(parseInt(S('hc:lysize', '18'), 10)));
     const subIdx = Math.max(0, SUB_SIZES.indexOf(parseInt(S('hc:subsize', '24'), 10)));
@@ -77,16 +75,6 @@
         '<button class="set-q px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
         (parseInt(quality, 10) === q ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
         '" data-q="' + q + '">' + q + 'k</button>').join('') +
-      '</div></div>' +
-
-      // 速度
-      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
-      '<p class="font-medium text-gray-900 dark:text-white mb-2">播放速度</p>' +
-      '<div class="flex space-x-2">' +
-      SPEEDS.map((v) =>
-        '<button class="set-spd px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
-        (parseFloat(speed) === v ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
-        '" data-v="' + v + '">' + v + 'x</button>').join('') +
       '</div></div>' +
 
       // 播放模式
@@ -201,9 +189,6 @@
     }));
     view.querySelectorAll('.set-q').forEach((b) => b.addEventListener('click', () => {
       const q = parseInt(b.dataset.q, 10); W('hc:quality', String(q)); hcBus.emit('quality', { q }); render();
-    }));
-    view.querySelectorAll('.set-spd').forEach((b) => b.addEventListener('click', () => {
-      const v = parseFloat(b.dataset.v); W('hc:speed', String(v)); hcBus.emit('speed', { v }); render();
     }));
     view.querySelectorAll('.set-mode').forEach((b) => b.addEventListener('click', () => {
       const m = b.dataset.m; W('hc:mode', m); hcBus.emit('mode', { m }); render();

@@ -33,6 +33,11 @@ func Migrate(db *sql.DB, dataDir string) error {
 		`CREATE TABLE IF NOT EXISTS playlist (
 			bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT,
 			duration TEXT, duration_sec INTEGER, created_at INTEGER DEFAULT 0)`,
+		`CREATE TABLE IF NOT EXISTS lyric_sels (
+			bvid TEXT PRIMARY KEY, sid INTEGER NOT NULL DEFAULT 0,
+			name TEXT DEFAULT '', artist TEXT DEFAULT '', cover TEXT DEFAULT '',
+			duration INTEGER DEFAULT 0, offset REAL DEFAULT 0,
+			updated_at INTEGER DEFAULT 0)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

@@ -13,6 +13,8 @@
 
   let lines = []; // [[sec, text], ...]
   let lastIdx = -1;
+  let offset = 0; // 歌词对齐偏移（秒，±0.5 手动调，SQLite 持久化；music.py _lyric_offset 同款）
+  let selMeta = null; // 后端已存选择（meta 端点：选的是哪个候选 + 对齐偏移）
 
   // 字号标准化 5 档（14/16/18/22/26px），档位数字展示（无黑盒）
   const LY_SIZES = [14, 16, 18, 22, 26];
@@ -67,9 +69,9 @@
       const txt = document.createElement('span');
       txt.textContent = l[1];
       d.appendChild(txt);
-      // 点击行 → 跳到该句时间（YesPlayMusic 同款）
+      // 点击行 → 跳到该句时间（YesPlayMusic 同款；跳转位置减去对齐偏移保持所见即所听）
       d.addEventListener('click', () => {
-        const t = lines[i][0];
+        const t = lines[i][0] - offset;
         audio.currentTime = t + 0.1;
         lastIdx = -1;
         sync(t);
@@ -80,9 +82,10 @@
 
   function sync(sec) {
     if (!lines.length) return;
+    const t = sec + offset; // 对齐偏移：行时间 s <= 播放位置+偏移（music.py t = pos + offset）
     let idx = -1;
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i][0] <= sec) idx = i; else break;
+      if (lines[i][0] <= t) idx = i; else break;
     }
     if (idx === lastIdx) return;
     lastIdx = idx;
@@ -119,8 +122,14 @@
       while (keys.length > 50) delete m[keys.shift()]; // LRU 淘汰最旧
       localStorage.setItem(LY_CACHE_KEY, JSON.stringify(m));
     } catch (e) {}
-    // 上报后端（桌面歌词挂件随动）：安卓壳丢 POST body，参数走 query
-    fetch('/api/v1/lyric/select?bvid=' + encodeURIComponent(bvid) + '&sid=' + encodeURIComponent((row && row.id) || 0), { method: 'POST' })
+    // 同步 selMeta（当前高亮跟随本次选择）
+    selMeta = { sid: row && row.id, name: row && row.name, artist: row && row.artist, duration: (row && (row.duration || row.dur)) || 0, offset: selMeta ? selMeta.offset : 0 };
+    // 上报后端持久化“选的是哪个候选”（SQLite，增删改查；安卓壳丢 POST body，参数走 query）
+    fetch('/api/v1/lyric/select?bvid=' + encodeURIComponent(bvid) +
+      '&sid=' + encodeURIComponent((row && row.id) || 0) +
+      '&name=' + encodeURIComponent((row && row.name) || '') +
+      '&artist=' + encodeURIComponent((row && row.artist) || '') +
+      '&duration=' + encodeURIComponent((row && (row.duration || row.dur)) || 0), { method: 'POST' })
       .catch(function () {});
   }
   // 来源行：当前歌词来自哪个网易云候选（无黑盒：可推导、可换）
@@ -147,8 +156,8 @@
       return;
     }
     candList.innerHTML = '';
-    // 当前选中（缓存里存的源 id）高亮；无则第一个
-    const curId = (lycGet(currentSong.bvid) || {}).id;
+    // 当前选中高亮：后端已存 sid（SQLite 持久化）优先，localStorage 缓存兜底；无则第一个
+    const curId = (selMeta && selMeta.sid) || (lycGet(currentSong.bvid) || {}).id || 0;
     let chosen = null;
     let first = true;
     cands.forEach((c) => {
@@ -190,7 +199,14 @@
     if (coverEl && song.cover) coverEl.src = song.cover;
     if (bgCover && song.cover) bgCover.style.backgroundImage = 'url("' + song.cover + '")'; // 封面模糊背景（网易云同款）
     linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">歌词加载中…</p></div>';
-    // 先查缓存（同歌秒显，离线可看）；同时后台刷新候选栏（选中项=cached.id）
+    // 恢复存档：选的是哪个候选 + 对齐偏移（SQLite 持久化，localStorage 清掉也不丢）
+    selMeta = null;
+    try {
+      const mj = await (await fetch('/api/v1/lyric/meta?bvid=' + encodeURIComponent(song.bvid))).json();
+      selMeta = (mj && mj.data) || null;
+    } catch (e) {}
+    setOffset(selMeta ? (parseFloat(selMeta.offset) || 0) : 0);
+    // 先查缓存（同歌秒显，离线可看）；同时后台刷新候选栏（选中项=已存档 sid）
     const cached = lycGet(song.bvid);
     if (cached && cached.lines) renderFromCand(cached);
     try {
@@ -260,12 +276,24 @@
   hcBus.on('lytime', (d) => { if (d && typeof d.on === 'boolean') { lyTime = d.on; renderLines(); lastIdx = -1; sync(audio.currentTime); } });
   document.getElementById('ly-small').addEventListener('click', () => setLyIdx(-1));
   document.getElementById('ly-big').addEventListener('click', () => setLyIdx(1));
-  // 调音 ±0.5（变速不变调；速率由 player 统一管理并持久化 hc:speed）
-  const pitchVal = document.getElementById('ly-pitch-val');
-  const showPitch = () => { if (pitchVal) pitchVal.textContent = (audio.playbackRate || 1).toFixed(2).replace(/\.?0+$/, '') + 'x'; };
-  document.getElementById('ly-pitch-up').addEventListener('click', () => hcBus.emit('pitch', { d: 0.5 }));
-  document.getElementById('ly-pitch-down').addEventListener('click', () => hcBus.emit('pitch', { d: -0.5 }));
-  hcBus.on('speed', showPitch);
+  // ---- 歌词对齐 ±0.5s（music.py _nudge_lyric 同款：即时生效 + SQLite 持久化 + 广播字幕条随动） ----
+  const nudgeVal = document.getElementById('ly-nudge-val');
+  function setOffset(v) {
+    offset = Math.round(v * 10) / 10; // 0.1s 精度防浮点丑数
+    if (nudgeVal) nudgeVal.textContent = (offset > 0 ? '+' : '') + offset.toFixed(1) + 's';
+    lastIdx = -1;
+    if (lines.length) sync(audio.currentTime);
+  }
+  function nudge(d) {
+    setOffset(offset + d);
+    if (currentSong && currentSong.bvid) {
+      // 对齐偏移持久化（回写 SQLite；安卓壳丢 POST body，参数走 query）
+      fetch('/api/v1/lyric/offset?bvid=' + encodeURIComponent(currentSong.bvid) + '&offset=' + offset, { method: 'POST' }).catch(function () {});
+      hcBus.emit('lyric-offset', { bvid: currentSong.bvid, offset: offset }); // 字幕条随动
+    }
+  }
+  document.getElementById('ly-nudge-up').addEventListener('click', () => nudge(0.5));
+  document.getElementById('ly-nudge-down').addEventListener('click', () => nudge(-0.5));
   // 侧栏歌曲操作（网易云歌词页同款）
   document.getElementById('ly-fav').addEventListener('click', () => {
     if (!currentSong) return;

@@ -45,7 +45,7 @@ func New() http.Handler {
 	musicSvc := &service.MusicService{Client: client}
 	musicHandler := api.NewMusicHandler(musicSvc)
 	favHandler := &api.FavHandler{Fav: service.NewFavService(db)}
-	lyricHandler := &api.LyricHandler{}
+	lyricHandler := &api.LyricHandler{Lyric: service.NewLyricStore(db)}
 	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, db)}
 	tokenStore := service.NewTokenStore()
 	castSvc := service.NewCastService(client, tokenStore)
