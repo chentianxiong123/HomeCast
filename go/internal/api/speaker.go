@@ -141,9 +141,12 @@ func (h *SpeakerHandler) Devices(w http.ResponseWriter, r *http.Request) {
 // Play POST /api/v1/speaker/play  body: {bvid, did, quality}
 func (h *SpeakerHandler) Play(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		BVID    string `json:"bvid"`
-		DID     string `json:"did"`
-		Quality int    `json:"quality"`
+		BVID    string  `json:"bvid"`
+		DID     string  `json:"did"`
+		Quality int     `json:"quality"`
+		Title   string  `json:"title"`
+		Duration float64 `json:"duration"`
+		NextBVID string `json:"next_bvid"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.BVID == "" || body.DID == "" {
 		errResp(w, http.StatusBadRequest, "bvid and did required")
@@ -152,11 +155,20 @@ func (h *SpeakerHandler) Play(w http.ResponseWriter, r *http.Request) {
 	if body.Quality == 0 {
 		body.Quality = 30280 // 192k
 	}
-	res, err := h.Svc.Play(body.BVID, body.DID, body.Quality)
+	res, err := h.Svc.Play(body.BVID, body.DID, body.Quality, service.PlayOpts{
+		Title:    body.Title,
+		Duration: body.Duration,
+		NextBVID: body.NextBVID,
+	})
 	if err != nil {
 		log.Printf("[speaker play] %v", err)
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// Progress GET /api/v1/speaker/progress/{did} 本地模拟进度（前端轮询本端点，不打小米云）
+func (h *SpeakerHandler) Progress(w http.ResponseWriter, r *http.Request) {
+	ok(w, h.Svc.Progress(r.PathValue("did")))
 }
 
 // Control POST /api/v1/speaker/control  body: {did, action, volume}

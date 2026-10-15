@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"homecast/internal/bilibili"
 	"homecast/internal/speaker"
@@ -17,9 +18,43 @@ type SpeakerService struct {
 	client *bilibili.Client
 	tokens *TokenStore
 	mu     sync.Mutex
-	devices map[string]speaker.SpeakerDevice
-	playing map[string]string // did -> url
-	port    string
+	devices  map[string]speaker.SpeakerDevice
+	playing  map[string]string // did -> url
+	progress map[string]*SpeakerProgress // did -> 本地模拟进度（零小米云轮询）
+	port     string
+}
+
+// SpeakerProgress 推送播放的本地模拟进度（xiaomusic/MiAir 同款方法论：
+// 进度 = 本地时钟，自动连播 = 本地定时器，不打小米云）。
+type SpeakerProgress struct {
+	BVID     string    `json:"bvid"`
+	Title    string    `json:"title,omitempty"`
+	Duration float64   `json:"duration"`      // 秒（前端已知优先，否则 B 站 view duration）
+	NextBVID string    `json:"next_bvid,omitempty"` // 播完自动连播的下一首
+	Started  time.Time `json:"-"`             // 本次播放开始（本地时钟基准）
+	PausedAt time.Time `json:"-"`             // 暂停开始；零值=未暂停
+	Paused   float64   `json:"-"`             // 累计暂停秒（恢复时补偿）
+	timer    *time.Timer `json:"-"`
+	stopped  bool      `json:"-"`
+}
+
+// Position 本地模拟当前位置（秒）：暂停中固定，播放中随本地时钟走
+func (p *SpeakerProgress) Position() float64 {
+	if !p.PausedAt.IsZero() {
+		return p.PausedAt.Sub(p.Started).Seconds() - p.Paused
+	}
+	return time.Since(p.Started).Seconds() - p.Paused
+}
+
+// State 播放状态
+func (p *SpeakerProgress) State() string {
+	if p == nil {
+		return "idle"
+	}
+	if !p.PausedAt.IsZero() {
+		return "paused"
+	}
+	return "playing"
 }
 
 // NewSpeakerService 构造
@@ -34,6 +69,7 @@ func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, token
 		tokens:  tokens,
 		devices: map[string]speaker.SpeakerDevice{},
 		playing: map[string]string{},
+		progress: map[string]*SpeakerProgress{},
 		port:    port,
 	}
 }
@@ -201,8 +237,16 @@ func (s *SpeakerService) proxyAudioURL(bvid string, quality int, device speaker.
 	return proxyURL, stream.MimeType, nil
 }
 
-// Play 播放到音箱：B站 bvid → DASH 音频 → 代理 URL → 音箱播放
-func (s *SpeakerService) Play(bvid, did string, quality int) (map[string]any, error) {
+// PlayOpts 推送可选参数（进度/自动连播用）
+type PlayOpts struct {
+	Title    string  // 歌曲名（前端已知；进度面板用）
+	Duration float64 // 秒（前端本地播放器已知最准；0 则回退 B 站 view duration）
+	NextBVID string  // 播完自动连播的下一首
+}
+
+// Play 播放到音箱：B站 bvid → DASH 音频 → 代理 URL → 音箱播放。
+// 成功后建立本地模拟进度 + 自动连播定时器（xiaomusic/MiAir 同款方法论）。
+func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map[string]any, error) {
 	device, ok := s.getDevice(did)
 	if !ok {
 		return map[string]any{"code": 404, "message": "设备未找到，请先刷新设备列表"}, nil
@@ -220,7 +264,75 @@ func (s *SpeakerService) Play(bvid, did string, quality int) (map[string]any, er
 	if err != nil {
 		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
 	}
+	// 播放指令下发成功 → 建立本地进度 + 自动连播定时器
+	s.startProgress(did, bvid, opts, quality)
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
+}
+
+// startProgress 建立本地模拟进度（Started=now + duration 定时器）。
+// 自动连播：duration 后触发下一首（NextBVID 非空）；duration 优先前端（本地播放器已知），
+// 否则回退 B 站 view duration（自动连播场景）。
+func (s *SpeakerService) startProgress(did, bvid string, opts PlayOpts, quality int) {
+	duration := opts.Duration
+	if duration <= 0 && s.client != nil {
+		if info, err := s.client.GetVideoInfo(bvid); err == nil && info.Duration > 0 {
+			duration = float64(info.Duration)
+		}
+	}
+	title := opts.Title
+	if title == "" && s.client != nil {
+		if info, err := s.client.GetVideoInfo(bvid); err == nil && info.Title != "" {
+			title = info.Title
+		}
+	}
+
+	s.mu.Lock()
+	old := s.progress[did]
+	if old != nil && old.timer != nil {
+		old.timer.Stop()
+	}
+	p := &SpeakerProgress{
+		BVID:     bvid,
+		Title:    title,
+		Duration: duration,
+		NextBVID: opts.NextBVID,
+		Started:  time.Now(),
+	}
+	if duration > 0 && opts.NextBVID != "" {
+		p.timer = time.AfterFunc(time.Duration(duration*float64(time.Second)), func() {
+			s.playNextAuto(did, opts.NextBVID, quality)
+		})
+	}
+	s.progress[did] = p
+	s.mu.Unlock()
+}
+
+// playNextAuto 自动连播：上一首播完（本地定时器到点）推下一首
+func (s *SpeakerService) playNextAuto(did, nextBVID string, quality int) {
+	log.Printf("[speaker] 定时器到点（本地模拟播完）→ 自动连播下一首 %s did=%s", nextBVID, did)
+	s.Play(nextBVID, did, quality, PlayOpts{}) // 递归建立新进度；title/duration 回退 B 站 view
+}
+
+// Progress 本地模拟进度（前端轮询本端点，不打小米云）
+func (s *SpeakerService) Progress(did string) map[string]any {
+	s.mu.Lock()
+	p := s.progress[did]
+	s.mu.Unlock()
+	if p == nil || p.stopped {
+		return map[string]any{"state": "idle", "bvid": "", "position": 0, "duration": 0}
+	}
+	pos := p.Position()
+	if pos < 0 {
+		pos = 0
+	}
+	return map[string]any{
+		"state":    p.State(),
+		"bvid":     p.BVID,
+		"title":    p.Title,
+		"position": pos,
+		"duration": p.Duration,
+		"next_bvid": p.NextBVID,
+	}
 }
 
 // Control 控制：pause/stop/resume/volume
@@ -236,14 +348,21 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 	switch action {
 	case "pause":
 		ret, err = s.Auth.Pause(device.DeviceID)
+		if err == nil {
+			s.pauseProgress(did)
+		}
 	case "stop":
 		s.mu.Lock()
 		delete(s.playing, did)
+		s.stopProgressLocked(did)
 		s.mu.Unlock()
 		ret, err = s.Auth.Stop(device.DeviceID)
 	case "resume", "play":
 		if u, ok := s.playing[did]; ok {
 			ret, err = s.Auth.PlayURL(device.DeviceID, u)
+			if err == nil {
+				s.resumeProgress(did)
+			}
 		} else {
 			return map[string]any{"code": 400, "message": "无已保存的播放 URL"}, nil
 		}
@@ -259,6 +378,54 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 		return map[string]any{"code": 500, "message": "操作失败: " + err.Error()}, err
 	}
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
+}
+
+// pauseProgress 暂停：记 PausedAt（恢复时补偿）
+func (s *SpeakerService) pauseProgress(did string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.progress[did]
+	if p == nil || !p.PausedAt.IsZero() {
+		return
+	}
+	p.PausedAt = time.Now()
+}
+
+// resumeProgress 恢复：累计暂停秒 + 重起剩余定时器（播完自动连播仍有效）
+func (s *SpeakerService) resumeProgress(did string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.progress[did]
+	if p == nil || p.PausedAt.IsZero() {
+		return
+	}
+	p.Paused += time.Since(p.PausedAt).Seconds()
+	p.PausedAt = time.Time{}
+	if p.timer != nil {
+		p.timer.Stop()
+		p.timer = nil
+	}
+	if p.Duration > 0 && p.NextBVID != "" {
+		remaining := p.Duration - p.Position()
+		if remaining > 0 {
+			p.timer = time.AfterFunc(time.Duration(remaining*float64(time.Second)), func() {
+				s.playNextAuto(did, p.NextBVID, 30280)
+			})
+		}
+	}
+}
+
+// stopProgressLocked 停止：清进度 + 停定时器（调用方需持锁）
+func (s *SpeakerService) stopProgressLocked(did string) {
+	p := s.progress[did]
+	if p == nil {
+		return
+	}
+	if p.timer != nil {
+		p.timer.Stop()
+	}
+	p.stopped = true
+	delete(s.progress, did)
 }
 
 // GetStatus 播放状态
