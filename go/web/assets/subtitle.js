@@ -15,6 +15,7 @@
   let lastIdx = -1;
   let lastBvid = '';
   let songTitle = '';
+  let offset = 0; // 歌词对齐偏移（秒；面板 ±0.5 调节后经 lyric-offset 广播同步）
 
   // ---- 拖动定位（对齐桌面挂件可移动；坐标持久化 hc:subpos） ----
   let subPos = null;
@@ -80,6 +81,11 @@
 
   async function loadLyrics(s) {
     songTitle = s.title || '';
+    // 对齐偏移：从后端 meta 恢复（SQLite 持久化，不随 localStorage 缓存丢）
+    try {
+      const m = await (await fetch('/api/v1/lyric/meta?bvid=' + encodeURIComponent(s.bvid))).json();
+      offset = ((m && m.data && m.data.offset) || 0);
+    } catch (e) { offset = 0; }
     // 歌词缓存（与歌词面板共用 hc:lyc:cache，LRU 50 首）：命中直接读，不再请求网易云
     let cached = null;
     try {
@@ -119,12 +125,20 @@
 
   function sync(sec) {
     if (!enabled || !lines.length) return;
+    const t = sec + offset; // 对齐偏移（music.py t = pos + offset）
     let idx = -1;
-    for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= sec) idx = i; else break; }
+    for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= t) idx = i; else break; }
     if (idx === lastIdx) return;
     lastIdx = idx;
     if (textEl) textEl.textContent = idx >= 0 ? lines[idx][1] : (songTitle || '');
   }
+
+  // 歌词对齐随动：歌词面板 ±0.5s 调节时字幕条实时同步（同 bvid 才生效）
+  hcBus.on('lyric-offset', (d) => {
+    if (!d || typeof d.offset !== 'number') return;
+    offset = d.offset;
+    if (enabled) sync(audio.currentTime);
+  });
 
   // 播放状态（含歌曲信息）：无歌隐藏，换歌重新取词
   hcBus.on('state', (d) => {
