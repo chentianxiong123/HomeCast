@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"homecast/internal/bilibili"
 )
@@ -54,6 +56,69 @@ func ParseDurationSec(s string) int {
 // MusicService 音乐业务
 type MusicService struct {
 	Client *bilibili.Client
+
+	mu        sync.Mutex
+	viewCache map[string]viewCacheEntry // bvid → view 结果（短 TTL：播放链路与歌词搜索复用，免重复打 B 站）
+}
+
+type viewCacheEntry struct {
+	info *bilibili.VideoInfo
+	at   time.Time
+}
+
+const viewCacheTTL = 5 * time.Minute
+
+// VideoInfo 带缓存的 /x/web-interface/view（播放取 cid + 歌词搜索取分P标题共用）
+func (m *MusicService) VideoInfo(bvid string) (*bilibili.VideoInfo, error) {
+	m.mu.Lock()
+	if e, ok := m.viewCache[bvid]; ok && time.Since(e.at) < viewCacheTTL {
+		m.mu.Unlock()
+		return e.info, nil
+	}
+	m.mu.Unlock()
+	info, err := m.Client.GetVideoInfo(bvid)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	if m.viewCache == nil {
+		m.viewCache = map[string]viewCacheEntry{}
+	}
+	m.viewCache[bvid] = viewCacheEntry{info: info, at: time.Now()}
+	m.mu.Unlock()
+	return info, nil
+}
+
+// LyricKeywords 歌词搜索关键词列表（bili-music lyricSearchTitles 同款语义：
+// 分P标题们优先 + fallback 总标题兜底，逐个尝试，第一个搜到词的用）：
+// B 站合集痛点——总标题“周杰伦50首精选”没有歌名，分P标题才是歌名。
+// 返回去重后的清洗关键词（最多 3 个分P + fallback）。
+func (m *MusicService) LyricKeywords(bvid, fallback string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(s string) {
+		s = CleanSearchKeyword(s)
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	if m != nil && m.Client != nil && bvid != "" {
+		if info, err := m.VideoInfo(bvid); err == nil {
+			for _, p := range info.Pages {
+				part := strings.TrimSpace(p.Part)
+				if part == "" || part == info.Title {
+					continue
+				}
+				add(part)
+				if len(out) >= 3 {
+					break
+				}
+			}
+		}
+	}
+	add(fallback)
+	return out
 }
 
 // searchRank 加权分（对齐 X11 python 版 _rank）：越低越靠前。
@@ -117,7 +182,7 @@ func (m *MusicService) Search(keyword string, page, pageSize int) (*MusicSearchR
 
 // GetAudioStream 播放链路：view 拿 cid → playurl 取 DASH 音频
 func (m *MusicService) GetAudioStream(bvid string, quality int) (*bilibili.AudioStreamResult, error) {
-	info, err := m.Client.GetVideoInfo(bvid)
+	info, err := m.VideoInfo(bvid)
 	if err != nil {
 		return nil, err
 	}

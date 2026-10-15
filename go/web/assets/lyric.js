@@ -154,10 +154,25 @@
     const s = parseInt(c.duration || c.dur || 0, 10) || 0;
     return s > 0 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '--:--';
   };
-  // 左侧候选栏渲染
+  // 左侧候选栏渲染（惰性取词：只有第一候选带正文，其余选中时懒拉——musicxx 两段式同款）
   const candList = document.getElementById('ly-cand-list');
   const candTitle = document.getElementById('ly-cand-title');
   let cands = [];
+  // 懒拉候选歌词正文（/api/v1/music/lyric?sid=；candidates 只回元数据）
+  function lycSelLazy(c, gen) {
+    fetch('/api/v1/music/lyric?sid=' + encodeURIComponent(c.id))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (gen !== loadGen || !currentSong) return; // 等待期间切歌 → 丢弃
+        const d = j && j.data;
+        if (!d || !d.lines || !d.lines.length) { setSource(null); return; }
+        c.lines = d.lines;
+        lycSet(currentSong.bvid, c); // 回写 localStorage（下次直接命中，不用再懒拉）
+        renderFromCand(c);
+        renderCandBar();
+      })
+      .catch(function () { setSource(null); });
+  }
   function renderCandBar() {
     if (candTitle) candTitle.textContent = '《' + titleToSong(currentSong && currentSong.title) + '》';
     if (!candList) return;
@@ -168,24 +183,25 @@
     candList.innerHTML = '';
     // 当前选中高亮：后端已存 sid（SQLite 持久化）优先，localStorage 缓存兜底；无则第一个
     const curId = (selMeta && selMeta.sid) || (lycGet(currentSong.bvid) || {}).id || 0;
-    let chosen = null;
+    let chosen = null; // 无选中时自动用的候选：第一个带正文的（保“自动选第一有词源”语义）
     let first = true;
     cands.forEach((c) => {
       const it = document.createElement('button');
       it.className = 'w-full text-left px-2.5 py-2 rounded-lg transition-colors ' +
         (first && !curId ? 'bg-pink-500/20 text-pink-300' : 'hover:bg-gray-800 text-gray-300');
-      if (first && !curId && !chosen) { chosen = c; first = false; }
+      if (first && !curId && !chosen && c.lines && c.lines.length) { chosen = c; first = false; }
       if (curId && c.id === curId) it.className = 'bg-pink-500/20 text-pink-300';
       it.innerHTML = '<span class="block text-sm truncate">' + (c.name || '') + '</span>' +
         '<span class="block text-xs text-gray-500 truncate mt-0.5">' + (c.artist || '') + ' · ' + candDur(c) + '</span>';
       it.addEventListener('click', () => {
-        if (currentSong) lycSet(currentSong.bvid, c); // 选定即缓存（music.py lyric_map 同款记忆）
-        renderFromCand(c);
-        renderCandBar();
+        const gen = loadGen;
+        lycSet(currentSong.bvid, c); // 选定即记选择（sid 持久化；music.py lyric_map 同款记忆）
+        if (c.lines && c.lines.length) { renderFromCand(c); renderCandBar(); }
+        else lycSelLazy(c, gen); // 惰性拉正文（musicxx 两段式）
       });
       candList.appendChild(it);
     });
-    // 无选中来源时用第一个
+    // 无选中来源时用第一个带正文候选（脏候选已被服务端跳过）
     if (chosen) renderFromCand(chosen);
   }
   const sourceEl = document.getElementById('ly-source');
@@ -224,10 +240,11 @@
     if (cached && cached.lines) renderFromCand(cached);
     try {
       const kw = encodeURIComponent(titleToSong(song.title) + ' ' + (song.artist || ''));
-      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&limit=8')).json();
+      // 带 bvid：服务端优先用分P标题作关键词（B 站合集痛点，bili-music lyricSearchTitles 同款）
+      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&bvid=' + encodeURIComponent(song.bvid) + '&limit=8')).json();
       if (stale()) return; // 等待期间又切了歌 → 丢弃旧响应
       cands = (j && j.data) || [];
-      renderCandBar(); // 候选栏渲染 + 无选中时用第一源
+      renderCandBar(); // 候选栏渲染 + 无选中时用第一个带正文候选
       if (!cands.length) { setSource(null); return; }
     } catch (e) {
       if (stale()) return;

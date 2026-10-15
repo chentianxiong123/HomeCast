@@ -1,6 +1,9 @@
 package bilibili
 
-import "net/url"
+import (
+	"encoding/json"
+	"net/url"
+)
 
 // B站真实 qn 码（桌面项目已验证，Python 版同款）
 const (
@@ -150,7 +153,7 @@ func (c *Client) GetBestVideoURL(bvid string, cid int) (*DashVideoItem, error) {
 	return nil, &BilibiliAPIError{Code: -1, Message: "no video stream available"}
 }
 
-// VideoInfo 视频信息（拿 cid 用）
+// VideoInfo 视频信息（拿 cid 用；Pages 分P标题供歌词搜索关键词，对齐 bili-music lyricSearchTitles）
 type VideoInfo struct {
 	BVID     string `json:"bvid"`
 	AID      int    `json:"aid"`
@@ -164,6 +167,10 @@ type VideoInfo struct {
 		Name string `json:"name"`
 		Face string `json:"face"`
 	} `json:"owner"`
+	Pages []struct {
+		CID  json.RawMessage `json:"cid"` // B 站返回字符串（如 "123"），RawMessage 防反序列化炸，本处只需 Part
+		Part string          `json:"part"`
+	} `json:"pages"`
 }
 
 // GetVideoInfo /x/web-interface/view
