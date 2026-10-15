@@ -26,10 +26,21 @@ var lyricSkipPrefixes = []string{
 	"OP:", "SP:", "和声", "配唱",
 }
 
-var lrcTimeRe = regexp.MustCompile(`\[(\d+):(\d+(?:\.\d+)?)\]`)
+var lrcTimeRe = regexp.MustCompile(`\[(\d+):(\d+(?:.\d+)?)\]`)
 
-// LyricLine [秒, 行]（前端 LyricPanel 用 l[0]/l[1]）
-type LyricLine [2]any
+// offsetTagRe LRC/增强歌词内嵌的整体偏移标签：`[offset:-500]` / `[offset,-500]`
+// 语义对齐 bili-music（desktop_lyrics_controller）：标签值负=歌词整体提前。
+// 解析时折进每行时间（t' = t + offsetMs/1000），前端零感知。
+var offsetTagRe = regexp.MustCompile(`(?i)^\[offset[:,](-?\d+)\]$`)
+
+// timedLineRe 增强格式行：`[startMs,durMs](字级时间戳…) 文本`（yrc/qrc/krc）
+var timedLineRe = regexp.MustCompile(`^\[(\d+),(\d+)(?:,\d+)?\]\s*(.*)$`)
+
+// timedWordRe 字级时间戳 `(ms,ms,dur)` / `<ms,ms>`（逐字卡拉OK），解析时剥离
+var timedWordRe = regexp.MustCompile(`(?:\(-?\d+,-?\d+(?:,-?\d+)?\)|<-?\d+,-?\d+(?:,-?\d+)?>)`)
+
+// LyricLine [秒, 行, 行时长秒]（前端 LyricPanel 用 l[0]/l[1]，l[2] 行时长：0=未知，前端用下一行差估算进度）
+type LyricLine [3]any
 
 // LyricResult 歌词返回（对齐 Python get_lyric_lines）
 type LyricResult struct {
@@ -42,11 +53,16 @@ type LyricResult struct {
 	Offset   float64     `json:"offset,omitempty"` // 本歌已存档的对齐偏移（秒，bvid 模式返回）
 }
 
-// parseLRC LRC 文本 → [][秒,行]，时间升序；过滤元信息行；无词返回 nil
+// parseLRC LRC 文本 → [][秒,行,时长]，时间升序；过滤元信息行；识别 [offset:] 标签折入行时间；无词返回 nil
 func parseLRC(text string) []LyricLine {
 	var lines []LyricLine
+	offsetMs := 0
 	for _, raw := range strings.Split(text, "\n") {
 		ln := strings.TrimSpace(raw)
+		if m := offsetTagRe.FindStringSubmatch(ln); m != nil {
+			offsetMs, _ = strconv.Atoi(m[1]) // 文件内整体偏移（bili-music 同款语义）
+			continue
+		}
 		m := lrcTimeRe.FindStringSubmatch(ln)
 		if m == nil {
 			continue
@@ -58,7 +74,7 @@ func parseLRC(text string) []LyricLine {
 		if txt == "" || hasPrefixAny(txt, lyricSkipPrefixes) {
 			continue
 		}
-		lines = append(lines, LyricLine{t, txt})
+		lines = append(lines, LyricLine{t + float64(offsetMs)/1000, txt, 0.0})
 	}
 	sort.Slice(lines, func(i, j int) bool {
 		return lines[i][0].(float64) < lines[j][0].(float64)
@@ -67,6 +83,59 @@ func parseLRC(text string) []LyricLine {
 		return nil
 	}
 	return lines
+}
+
+// parseYRC 增强格式（yrc 逐字卡拉OK / qrc / krc）：`[start,dur](字级…) 文本`
+// 行时长是自带的（LRC 没有，只能靠下一行差值估算）→ 逐行进度直接用；剥离字级时间戳；过滤元信息行
+func parseYRC(text string) []LyricLine {
+	var lines []LyricLine
+	offsetMs := 0
+	for _, raw := range strings.Split(text, "\n") {
+		ln := strings.TrimSpace(raw)
+		if m := offsetTagRe.FindStringSubmatch(ln); m != nil {
+			offsetMs, _ = strconv.Atoi(m[1])
+			continue
+		}
+		m := timedLineRe.FindStringSubmatch(ln)
+		if m == nil {
+			continue
+		}
+		start, _ := strconv.Atoi(m[1])
+		dur, _ := strconv.Atoi(m[2])
+		txt := strings.TrimSpace(timedWordRe.ReplaceAllString(m[3], ""))
+		if txt == "" || hasPrefixAny(txt, lyricSkipPrefixes) {
+			continue
+		}
+		lines = append(lines, LyricLine{
+			float64(start+offsetMs) / 1000,
+			txt,
+			float64(dur) / 1000,
+		})
+	}
+	sort.Slice(lines, func(i, j int) bool {
+		return lines[i][0].(float64) < lines[j][0].(float64)
+	})
+	if len(lines) == 0 {
+		return nil
+	}
+	return lines
+}
+
+// parseLyrics 自动检测：行首 `[数字,数字]`（增强格式 yrc/qrc/krc）→ 逐字解析；否则 LRC
+func parseLyrics(text string) []LyricLine {
+	for _, raw := range strings.Split(text, "\n") {
+		ln := strings.TrimSpace(raw)
+		if ln == "" {
+			continue
+		}
+		if timedLineRe.MatchString(ln) {
+			return parseYRC(text)
+		}
+		if lrcTimeRe.MatchString(ln) {
+			break // LRC，走 parseLRC
+		}
+	}
+	return parseLRC(text)
 }
 
 func hasPrefixAny(s string, prefixes []string) bool {
@@ -99,25 +168,44 @@ func neteaseGet(u string) (map[string]any, error) {
 	return j, nil
 }
 
-// fetchLyric 网易云 LRC 文本（sid=歌曲id）；无词返回 ""
-func fetchLyric(sid int) string {
+// fetchLyricRaw 网易云歌词原始文本（sid=歌曲id）→ (lrc, yrc)
+// lv/kv/tv/rv/yv 全开：lrc=主歌词，yrc=逐字卡拉OK（增强格式，带行时长），tlyric=翻译（tv=1 不再主动关）
+// 之前 tv=-1 只取 lrc，逐字/翻译白丢（bili-music 同款语义：有 karaokeLyric 优先）
+func fetchLyricRaw(sid int) (lrcText, yrcText string) {
 	params := url.Values{}
 	params.Set("id", strconv.Itoa(sid))
 	params.Set("lv", "1")
 	params.Set("kv", "1")
-	params.Set("tv", "-1")
+	params.Set("tv", "1")
+	params.Set("rv", "1")
+	params.Set("yv", "1")
 	j, err := neteaseGet(lyricFetchURL + "?" + params.Encode())
 	if err != nil {
-		return ""
+		return
 	}
 	if code, _ := j["code"].(float64); int(code) == 200 {
 		if lrc, ok := j["lrc"].(map[string]any); ok {
-			if s, ok := lrc["lyric"].(string); ok {
-				return s
-			}
+			lrcText, _ = lrc["lyric"].(string)
+		}
+		if yrc, ok := j["yrc"].(map[string]any); ok {
+			yrcText, _ = yrc["lyric"].(string)
 		}
 	}
-	return ""
+	return
+}
+
+// fetchLyricLines sid → 歌词行（优先 yrc 逐字版，其次 lrc；[offset:] 标签已折入行时间）
+func fetchLyricLines(sid int) []LyricLine {
+	lrcT, yrcT := fetchLyricRaw(sid)
+	if yrcT != "" {
+		if l := parseLyrics(yrcT); l != nil {
+			return l
+		}
+	}
+	if lrcT != "" {
+		return parseLyrics(lrcT)
+	}
+	return nil
 }
 
 // SearchLyricCandidates 搜歌名 → 候选（只含有词 ≥3 行）
@@ -146,8 +234,7 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 		if sid == 0 {
 			continue
 		}
-		text := fetchLyric(sid)
-		lines := parseLRC(text)
+		lines := fetchLyricLines(sid)
 		if len(lines) < 3 {
 			continue
 		}
@@ -177,8 +264,7 @@ func SearchLyricCandidates(keyword string, limit int) []LyricResult {
 // GetLyricLines 按歌名自动取第一源；或 sid 精确取。找不到返回 nil（业务正常）
 func GetLyricLines(keyword string, sid int) *LyricResult {
 	if sid > 0 {
-		text := fetchLyric(sid)
-		lines := parseLRC(text)
+		lines := fetchLyricLines(sid)
 		if lines != nil {
 			return &LyricResult{ID: sid, Lines: lines}
 		}
