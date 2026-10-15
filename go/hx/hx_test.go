@@ -166,14 +166,22 @@ func TestFavRemoveClearEndpoints(t *testing.T) {
 	}
 }
 
-// TestTemplateFuncsRender 模板函数（shortTitle）经模板引擎实际渲染正确
+// TestTemplateFuncsRender 模板函数（shortTitle/coverURL）经模板引擎实际渲染正确
 func TestTemplateFuncsRender(t *testing.T) {
 	h := newTestH(t)
-	// 直接执行一个含 shortTitle 的模板片段（结果页逻辑同款）
+	// 用真实渲染路径执行 fav_btn.html：favBtnView 零值（Cover 为空串走 coverURL 空值分支）
+	// 不能用空 map：.Cover 缺失为 nil，coverURL(c string) 期望 string 会炸（这是模板函数的输入约束）
 	tpl, _ := web.Templates()
 	var sb strings.Builder
-	if err := tpl.ExecuteTemplate(&sb, "fav_btn.html", map[string]any{}); err != nil {
+	if err := tpl.ExecuteTemplate(&sb, "fav_btn.html", favBtnView{}); err != nil {
 		t.Fatalf("fav_btn render: %v", err)
+	}
+	html := sb.String()
+	if !strings.Contains(html, `hx-post="/hx/fav/toggle`) {
+		t.Errorf("fav_btn 渲染缺 toggle 动作: %s", html)
+	}
+	if !strings.Contains(html, "cover=") {
+		t.Errorf("fav_btn 渲染缺 cover 参数（coverURL 空值分支）: %s", html)
 	}
 	_ = h
 }
