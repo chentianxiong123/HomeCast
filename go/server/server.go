@@ -13,7 +13,15 @@ import (
 	"homecast/hx"
 	"homecast/internal/api"
 	"homecast/internal/bilibili"
-	"homecast/internal/service"
+	"homecast/internal/service/cast"
+	"homecast/internal/service/fav"
+	"homecast/internal/service/lyric"
+	"homecast/internal/service/music"
+	"homecast/internal/service/playlist"
+	"homecast/internal/service/sites"
+	spk "homecast/internal/service/speaker"
+	"homecast/internal/service/token"
+	"homecast/internal/service/widget"
 	"homecast/internal/speaker"
 	"homecast/internal/store"
 	"homecast/web"
@@ -39,30 +47,30 @@ func New() http.Handler {
 		log.Fatalf("open db: %v", err)
 	}
 	if err := store.Migrate(db, []string{
-		service.FavSchema,
-		service.PlaylistSchema,
-		service.LyricSchema,
+		fav.FavSchema,
+		playlist.PlaylistSchema,
+		lyric.LyricSchema,
 	}, map[string]string{
-		service.FavTable:     filepath.Join(dataDir, "favorites.json"),
-		service.PlaylistTable: filepath.Join(dataDir, "playlist.json"),
+		fav.FavTable:     filepath.Join(dataDir, "favorites.json"),
+		playlist.PlaylistTable: filepath.Join(dataDir, "playlist.json"),
 	}); err != nil {
 		log.Fatalf("migrate db: %v", err)
 	}
 
-	musicSvc := &service.MusicService{Client: client}
+	musicSvc := &music.MusicService{Client: client}
 	musicHandler := api.NewMusicHandler(musicSvc)
-	favHandler := &api.FavHandler{Fav: service.NewFavService(db)}
-	lyricHandler := &api.LyricHandler{Lyric: service.NewLyricStore(db), Music: musicSvc}
-	playlistHandler := &api.PlaylistHandler{Playlist: service.NewPlaylistService(client, db)}
-	tokenStore := service.NewTokenStore()
-	castSvc := service.NewCastService(client, tokenStore)
+	favHandler := &api.FavHandler{Fav: fav.NewFavService(db)}
+	lyricHandler := &api.LyricHandler{Lyric: lyric.NewLyricStore(db), Music: musicSvc}
+	playlistHandler := &api.PlaylistHandler{Playlist: playlist.NewPlaylistService(client, db)}
+	tokenStore := token.NewTokenStore()
+	castSvc := cast.NewCastService(client, tokenStore)
 	castHandler := &api.CastHandler{Cast: castSvc}
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
-	speakerSvc := service.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
+	speakerSvc := spk.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
 	speakerQR := speaker.NewQRLogin()
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speakerQR}
-	sitesHandler := &api.SitesHandler{Sites: service.NewSitesService("")}
-	widgetState := service.NewWidgetState()
+	sitesHandler := &api.SitesHandler{Sites: sites.NewSitesService("")}
+	widgetState := widget.NewWidgetState()
 	widgetStateGlobal = widgetState
 	widgetHandler := &api.WidgetHandler{State: widgetState}
 
@@ -72,7 +80,7 @@ func New() http.Handler {
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
-	hxH := &hx.H{Music: musicSvc, Fav: service.NewFavService(db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates()}
+	hxH := &hx.H{Music: musicSvc, Fav: fav.NewFavService(db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates()}
 	outer := http.NewServeMux()
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)
@@ -80,7 +88,7 @@ func New() http.Handler {
 }
 
 // WidgetStateRef 挂件（同进程）读取播放状态用
-func WidgetStateRef() *service.WidgetState { return widgetStateGlobal }
+func WidgetStateRef() *widget.WidgetState { return widgetStateGlobal }
 
 // WidgetStateSnapshot 公开快照（desktop/widget 轮询用，不暴露内部类型）
 func WidgetStateSnapshot() (bvid, title, artist string, currentTime, duration float64, playing bool) {
@@ -90,7 +98,7 @@ func WidgetStateSnapshot() (bvid, title, artist string, currentTime, duration fl
 	return "", "", "", 0, 0, false
 }
 
-var widgetStateGlobal *service.WidgetState
+var widgetStateGlobal *widget.WidgetState
 
 // withCORS 允许任意来源（本地单用户服务；桌面壳 wails:// 域跨域访问）
 func withCORS(h http.Handler) http.Handler {

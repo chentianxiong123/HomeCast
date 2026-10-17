@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"homecast/internal/service"
+	"homecast/internal/service/cast"
+	"homecast/internal/service/fav"
+	"homecast/internal/service/token"
 	"homecast/internal/store"
 	"homecast/web"
 )
@@ -33,8 +35,8 @@ func newTestH(t *testing.T) *H {
 		t.Fatalf("templates: %v", err)
 	}
 	return &H{
-		Fav:  service.NewFavService(db),
-		Cast: service.NewCastService(nil, service.NewTokenStore()),
+		Fav:  fav.NewFavService(db),
+		Cast: cast.NewCastService(nil, token.NewTokenStore()),
 		Tpl:  tpl,
 	}
 }
@@ -148,8 +150,8 @@ func TestFavToggleBehavior(t *testing.T) {
 func TestFavRemoveClearEndpoints(t *testing.T) {
 	h := newTestH(t)
 	r := h.Router()
-	h.Fav.Add(service.FavSong{BVID: "BV1", Title: "一", Artist: "a", Cover: "c", Duration: "3:00", DurationSec: 180})
-	h.Fav.Add(service.FavSong{BVID: "BV2", Title: "二", Artist: "b", Cover: "c", Duration: "4:00", DurationSec: 240})
+	h.Fav.Add(fav.FavSong{BVID: "BV1", Title: "一", Artist: "a", Cover: "c", Duration: "3:00", DurationSec: 180})
+	h.Fav.Add(fav.FavSong{BVID: "BV2", Title: "二", Artist: "b", Cover: "c", Duration: "4:00", DurationSec: 240})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/hx/fav/remove/BV1", nil))

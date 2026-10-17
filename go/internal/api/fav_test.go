@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"homecast/internal/service"
+	"homecast/internal/service/fav"
 	"homecast/internal/store"
 )
 
@@ -20,10 +20,10 @@ func newTestFavHandler(t *testing.T) (*FavHandler, http.Handler) {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := store.Migrate(db, []string{service.FavSchema}, nil); err != nil {
+	if err := store.Migrate(db, []string{fav.FavSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	fav := &FavHandler{Fav: service.NewFavService(db)}
+	fav := &FavHandler{Fav: fav.NewFavService(db)}
 	mux := http.NewServeMux()
 	// 独立组装 fav 端点（对齐 NewMux 中的注册方式）
 	mux.HandleFunc("GET /api/v1/fav/list", fav.List)
@@ -59,7 +59,7 @@ func TestFavEndpoints(t *testing.T) {
 	}
 
 	// add 正常
-	payload, _ := json.Marshal(service.FavSong{BVID: "BV1", Title: "一", Artist: "a", Cover: "c", Duration: "3:00", DurationSec: 180})
+	payload, _ := json.Marshal(fav.FavSong{BVID: "BV1", Title: "一", Artist: "a", Cover: "c", Duration: "3:00", DurationSec: 180})
 	if w := doReq(t, mux, "POST", "/api/v1/fav/add", payload); w.Code != http.StatusOK {
 		t.Errorf("add code=%d, want 200", w.Code)
 	}
@@ -67,7 +67,7 @@ func TestFavEndpoints(t *testing.T) {
 	// list 包含 BV1（响应是 {code,data,message} 信封）
 	var resp struct {
 		Code int                `json:"code"`
-		Data []service.FavSong  `json:"data"`
+		Data []fav.FavSong  `json:"data"`
 	}
 	w := doReq(t, mux, "GET", "/api/v1/fav/list", nil)
 	if w.Code != http.StatusOK {

@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"homecast/internal/service"
+	"homecast/internal/service/fav"
 )
 
 // favPageData 收藏夹页数据
 type favPageData struct {
-	Items []service.FavSong
+	Items []fav.FavSong
 }
 
 // favBtnView 收藏按钮片段数据（toggle 返回 hx-vals 保持可再点）
@@ -54,7 +54,7 @@ func (h *H) FavToggle(w http.ResponseWriter, r *http.Request) {
 	if faved {
 		h.Fav.Remove(v.BVID)
 	} else {
-		h.Fav.Add(service.FavSong{
+		h.Fav.Add(fav.FavSong{
 			BVID:        v.BVID,
 			Title:       v.Title,
 			Artist:      v.Artist,
@@ -92,7 +92,7 @@ func (h *H) renderFavList(w http.ResponseWriter) {
 	h.Tpl.ExecuteTemplate(w, "fav_list.html", &favPageData{Items: h.Fav.List()})
 }
 
-// secondsToStr 秒 → "m:ss"（与 service.FormatDuration 一致，避免导入环）
+// secondsToStr 秒 → "m:ss"（与 playlist.FormatDuration 一致，避免导入环）
 func secondsToStr(sec int) string {
 	if sec <= 0 {
 		return ""

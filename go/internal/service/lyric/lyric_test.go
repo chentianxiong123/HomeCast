@@ -1,4 +1,4 @@
-package service
+package lyric
 
 import (
 	"testing"

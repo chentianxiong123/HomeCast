@@ -1,4 +1,4 @@
-package service
+package speaker
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"homecast/internal/service/token"
 	"homecast/internal/bilibili"
 	"homecast/internal/speaker"
 )
@@ -16,7 +17,7 @@ import (
 type SpeakerService struct {
 	Auth   *speaker.SpeakerAuth
 	client *bilibili.Client
-	tokens *TokenStore
+	tokens *token.TokenStore
 	mu     sync.Mutex
 	devices  map[string]speaker.SpeakerDevice
 	playing  map[string]string // did -> url
@@ -58,7 +59,7 @@ func (p *SpeakerProgress) State() string {
 }
 
 // NewSpeakerService 构造
-func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, tokens *TokenStore) *SpeakerService {
+func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, tokens *token.TokenStore) *SpeakerService {
 	port := os.Getenv("HC_PORT")
 	if port == "" {
 		port = "28976"

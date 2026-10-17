@@ -1,4 +1,4 @@
-package service
+package fav
 
 import (
 	"database/sql"

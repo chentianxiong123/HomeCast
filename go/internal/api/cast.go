@@ -5,12 +5,12 @@ import (
 	"log"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/cast"
 )
 
 // CastHandler 投屏端点
 type CastHandler struct {
-	Cast *service.CastService
+	Cast *cast.CastService
 }
 
 // Devices GET /api/v1/cast/devices
