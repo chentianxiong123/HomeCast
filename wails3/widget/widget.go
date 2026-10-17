@@ -42,11 +42,6 @@ const (
 // SnapshotProvider 播放状态快照（desktop main 提供，直读后端内存）
 type SnapshotProvider func() (bvid, title, artist string, currentTime, duration float64, playing bool)
 
-// PlayerCtl 播放器控制（Wails EventsEmit → 前端）
-type PlayerCtl interface {
-	Emit(cmd string, payload ...any)
-}
-
 // LyricLine 歌词行
 type LyricLine struct {
 	Sec  float64
@@ -79,7 +74,6 @@ type state struct {
 var (
 	st       state
 	prov     SnapshotProvider
-	ctl      PlayerCtl
 	posPath  string
 	Backend  string
 	disp     Display
@@ -87,9 +81,8 @@ var (
 )
 
 // Start 在宿主壳的界面线程调用（wails OnStartup 时机）
-func Start(snapshot SnapshotProvider, playerCtl PlayerCtl, backend string) error {
+func Start(snapshot SnapshotProvider, backend string) error {
 	prov = snapshot
-	ctl = playerCtl
 	Backend = backend
 	home, _ := os.UserHomeDir()
 	posPath = filepath.Join(home, ".config", "homecast", "widget.json")
@@ -158,17 +151,13 @@ func savePos(x, y int) {
 }
 
 // ── 控制条按钮动作（cglue.c _hc_btn_cb → //export 回调 → 核心） ──
+// PlayerCtl 事件桥已退役（前端 htmx 不监听 wails 事件）；±0.5s 仍走本地 offset 显示微调。
 
 func onPauseClick() {
-	if ctl != nil {
-		ctl.Emit("toggle")
-	}
+	// 播放/暂停同步回前端：待 hx 端点挂接（现前端无 wails 事件监听，删死路径）
 }
 
 func onMinusClick() {
-	if ctl != nil {
-		ctl.Emit("seek", -0.5)
-	}
 	st.mu.Lock()
 	st.offset -= 0.5
 	st.mu.Unlock()
@@ -176,9 +165,6 @@ func onMinusClick() {
 }
 
 func onPlusClick() {
-	if ctl != nil {
-		ctl.Emit("seek", 0.5)
-	}
 	st.mu.Lock()
 	st.offset += 0.5
 	st.mu.Unlock()

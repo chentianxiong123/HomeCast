@@ -39,7 +39,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build
+# ── legacy：老 HomeCast（explore/legacy/ 下，Python/Vue 时代）的构建产物与机密 ──
+# 无斜杠模式匹配任意层级，legacy 路径自动覆盖（explore/legacy/python-backend/dist/ 等）
 frontend/dist/
 backend/dist/
 

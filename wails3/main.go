@@ -30,16 +30,6 @@ var httpLog string
 
 var app *application.App
 
-// desktopEventsBridge widget → 前端事件桥（wails 事件系统）。
-// 类型定义放公共文件（main.go）：main() 调用 startWidget 时引用，widget 包只在桌面端编译。
-type desktopEventsBridge struct{}
-
-func (desktopEventsBridge) Emit(cmd string, payload ...any) {
-	if app != nil {
-		app.Event.Emit("widget-cmd", append([]any{cmd}, payload...)...)
-	}
-}
-
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -110,7 +100,7 @@ func main() {
 
 	// 桌面歌词挂件（Linux=GTK / Windows=Win32 显示层）；安卓 no-op（悬浮窗待写）
 	if os.Getenv("HC_NO_WIDGET") == "" {
-		startWidget(server.WidgetStateSnapshot, desktopEventsBridge{}, "http://127.0.0.1:"+backendPort())
+		startWidget(server.WidgetStateSnapshot, "http://127.0.0.1:"+backendPort())
 	}
 
 	if err := app.Run(); err != nil {
