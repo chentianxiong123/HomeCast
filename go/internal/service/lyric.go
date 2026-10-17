@@ -16,6 +16,16 @@ import (
 
 // ── 歌词（对齐桌面播放器：网易云免费源，无需登录/cookie） ──
 
+// LyricTable lyric_sels 表名
+const LyricTable = "lyric_sels"
+
+// LyricSchema lyric_sels 表定义（表结构归业务域；建表执行在 store.Migrate 统一跑）
+const LyricSchema = `CREATE TABLE IF NOT EXISTS lyric_sels (
+	bvid TEXT PRIMARY KEY, sid INTEGER NOT NULL DEFAULT 0,
+	name TEXT DEFAULT '', artist TEXT DEFAULT '', cover TEXT DEFAULT '',
+	duration INTEGER DEFAULT 0, offset REAL DEFAULT 0,
+	updated_at INTEGER DEFAULT 0)`
+
 const (
 	lyricSearchURL = "https://music.163.com/api/search/get/web"
 	lyricFetchURL  = "https://music.163.com/api/song/lyric"

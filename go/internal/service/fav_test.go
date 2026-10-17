@@ -14,7 +14,7 @@ func newTestFav(t *testing.T) *FavService {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := store.Migrate(db, t.TempDir()); err != nil {
+	if err := store.Migrate(db, []string{FavSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return NewFavService(db)
@@ -78,7 +78,7 @@ func TestFavPersist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := store.Migrate(db, dir); err != nil {
+	if err := store.Migrate(db, []string{FavSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	f1 := NewFavService(db)

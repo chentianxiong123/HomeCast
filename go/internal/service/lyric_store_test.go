@@ -14,7 +14,7 @@ func newTestLyricStore(t *testing.T) *LyricStore {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := store.Migrate(db, t.TempDir()); err != nil {
+	if err := store.Migrate(db, []string{LyricSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
@@ -67,7 +67,7 @@ func TestLyricStorePersistAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := store.Migrate(db1, t.TempDir()); err != nil {
+	if err := store.Migrate(db1, []string{LyricSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	s1 := NewLyricStore(db1)

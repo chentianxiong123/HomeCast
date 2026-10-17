@@ -1,6 +1,7 @@
 // Package store 本地持久层：SQLite 单文件（ncruces/go-sqlite3，纯 Go 无 CGO，安卓可交叉编译；
 // WASM 虚拟化，文件 IO 走 Go 标准库，只用 Android seccomp 允许的 syscall）
-// 只负责打开 / 建表 / 首启迁移（JSON → SQLite）；业务 CRUD 写在各自功能切片内
+// 只负责打开 / 建表执行 / 首启迁移（JSON → SQLite）；
+// 表定义归业务域（service.FavSchema 等，由装配层传入），业务 CRUD 写在各自功能切片内
 package store
 
 import (
@@ -24,30 +25,21 @@ func Open(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// Migrate 建表 + 首启迁移：历史 JSON 数据导入 SQLite（JSON 文件保留只读备份）
-func Migrate(db *sql.DB, dataDir string) error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS favs (
-			bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT,
-			duration TEXT, duration_sec INTEGER, play_count INTEGER, created_at INTEGER DEFAULT 0)`,
-		`CREATE TABLE IF NOT EXISTS playlist (
-			bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT,
-			duration TEXT, duration_sec INTEGER, created_at INTEGER DEFAULT 0)`,
-		`CREATE TABLE IF NOT EXISTS lyric_sels (
-			bvid TEXT PRIMARY KEY, sid INTEGER NOT NULL DEFAULT 0,
-			name TEXT DEFAULT '', artist TEXT DEFAULT '', cover TEXT DEFAULT '',
-			duration INTEGER DEFAULT 0, offset REAL DEFAULT 0,
-			updated_at INTEGER DEFAULT 0)`,
-	}
-	for _, s := range stmts {
+// Migrate 建表 + 首启迁移。
+// schemas 由装配层按业务传入（表定义归业务域：service.FavSchema 等），本处统一顺序执行（幂等）；
+// legacy 表名→历史 JSON 路径：仅当表空且 JSON 存在时导入（JSON 文件保留只读备份）
+func Migrate(db *sql.DB, schemas []string, legacy map[string]string) error {
+	for _, s := range schemas {
 		if _, err := db.Exec(s); err != nil {
 			return err
 		}
 	}
-	if err := migrateJSON(db, "favs", filepath.Join(dataDir, "favorites.json")); err != nil {
-		return err
+	for table, path := range legacy {
+		if err := migrateJSON(db, table, path); err != nil {
+			return err
+		}
 	}
-	return migrateJSON(db, "playlist", filepath.Join(dataDir, "playlist.json"))
+	return nil
 }
 
 // jsonRow 历史 JSON 条目（对齐 FavSong / PlaylistItem 字段）

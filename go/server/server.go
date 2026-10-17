@@ -38,7 +38,14 @@ func New() http.Handler {
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
-	if err := store.Migrate(db, dataDir); err != nil {
+	if err := store.Migrate(db, []string{
+		service.FavSchema,
+		service.PlaylistSchema,
+		service.LyricSchema,
+	}, map[string]string{
+		service.FavTable:     filepath.Join(dataDir, "favorites.json"),
+		service.PlaylistTable: filepath.Join(dataDir, "playlist.json"),
+	}); err != nil {
 		log.Fatalf("migrate db: %v", err)
 	}
 

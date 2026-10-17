@@ -14,7 +14,7 @@ func newTestPlaylist(t *testing.T) *PlaylistService {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := store.Migrate(db, t.TempDir()); err != nil {
+	if err := store.Migrate(db, []string{PlaylistSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return NewPlaylistService(nil, db) // client=nil：不联网路径（已存在/移除/清空）不受影响

@@ -18,6 +18,14 @@ type PlaylistItem struct {
 	DurationSec int    `json:"duration_sec"`
 }
 
+// PlaylistTable playlist 表名
+const PlaylistTable = "playlist"
+
+// PlaylistSchema playlist 表定义（表结构归业务域；建表执行在 store.Migrate 统一跑）
+const PlaylistSchema = `CREATE TABLE IF NOT EXISTS playlist (
+	bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT,
+	duration TEXT, duration_sec INTEGER, created_at INTEGER DEFAULT 0)`
+
 // PlaylistResult 列表返回
 type PlaylistResult struct {
 	List []PlaylistItem `json:"list"`
