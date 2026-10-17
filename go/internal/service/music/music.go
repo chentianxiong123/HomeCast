@@ -1,4 +1,5 @@
-// Package service 业务层（对齐 Python music_service / fav_service / lyric_service）
+// Package music 音乐域：B站搜索/取流/播放（本地时钟进度由 speaker 域管）。
+// 全链路：入口 internal/api/music.go · hx/search.go；前端 content_search.html + player.js；表：无
 package music
 
 import (

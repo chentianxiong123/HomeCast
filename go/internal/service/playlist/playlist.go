@@ -1,3 +1,5 @@
+// Package playlist 歌单域：播放列表持久化。
+// 全链路：入口 internal/api/playlist.go；前端 content_queue.html + queue.js；表：playlist（PlaylistSchema 本包）
 package playlist
 
 import (

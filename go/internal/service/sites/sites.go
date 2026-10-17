@@ -1,3 +1,5 @@
+// Package sites 站点域：嗅探站点配置。
+// 全链路：入口 internal/api/sites.go；配置文件 data/sites.json；表：无
 package sites
 
 import (
