@@ -72,9 +72,9 @@ wails3/
 
 核心技术路线 **「Python 探索、Go 实现」**：
 
-- **`explore/`（历史只读，不维护）** —— 探索路径收纳：
-  - `explore/backend/`（Python/FastAPI）：早期验证玩法（B站音乐、DLNA、音箱、嗅探）
-  - `explore/frontend/`（Vue 前端）：htmx 重构前的旧界面
+- **`explore/`（历史只读，不维护）** —— 探索/历史归档，主次说明见 `explore/README.md`：
+  - `explore/legacy/python-backend/`（Python/FastAPI）：老 HomeCast 后端（B站音乐、DLNA、音箱、嗅探），不跑
+  - `explore/legacy/vue-frontend/`（Vue 前端）：htmx 重构前的旧界面，不跑
   - `explore/android/`（手搓 WebView 壳）：安卓壳早期实现，兜底参考
 - **`go/` 正式实现** —— 单二进制：htmx + Tailwind + SQLite（驱动 `github.com/ncruces/go-sqlite3`，纯 Go/WASM，规避安卓 seccomp），全部内嵌
 - **`wails3/` 统一壳** —— wails3 v3 固定 `v3.0.0-beta.25`，三端构建
