@@ -1,3 +1,5 @@
+// Package speaker 音箱域：小米音箱推送/本地模拟进度/自动连播（xiaomusic 方法论，零小米云轮询）。
+// 全链路：入口 internal/api/speaker.go · hx/speaker.go；前端 speaker_*.html ×4 + speaker.js；表：无
 package speaker
 
 import (

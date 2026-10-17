@@ -128,13 +128,42 @@ cd go && go run ./cmd/server
 
 ```
 homecast/
-├── go/          # 业务核心：cmd/server（入口）+ web（htmx/模板/静态）+ internal（api/service/store）
+├── go/          # 业务核心：cmd/server（入口）+ web（htmx/模板/静态）+ internal（api/域包/store）
 ├── wails3/      # 统一壳（三端）：main.go + 平台 build tag 文件 + widget/ 挂件多态 + 三端构建脚本
-├── explore/     # 历史只读：backend/（Python）/ frontend/（Vue）/ android/（手搓壳）
+├── explore/     # 历史只读：legacy/（Python+Vue 老版）/ android/（手搓壳），主次说明见 explore/README.md
 ├── docs/        # 排查/架构记录（troubleshooting 风格）
 ├── scripts/     # E2E 冒烟等
 └── README.md
 ```
+
+### 业务核心结构（`go/internal`）——按业务域垂直切片
+
+```
+go/internal/
+├── api/          # JSON API 入口（每业务一个文件，薄胶水：调域包 → 写 JSON）
+├── service/      # 业务域包（逻辑 + 测试 同包，表定义随业务）
+│   ├── music/       音乐（搜索/取流/播放）
+│   ├── speaker/     音箱（推送/本地进度/自动连播）   ← 域包名与协议包 internal/speaker 重名时引用处用别名 spk
+│   ├── lyric/       歌词（解析/搜索/偏移存储）
+│   ├── fav/         收藏
+│   ├── playlist/    歌单
+│   ├── cast/        DLNA 投屏
+│   ├── sites/       站点嗅探
+│   ├── widget/      挂件快照
+│   └── token/       代理 token（跨域共享）
+├── bilibili/    # B 站协议客户端（infra 性质）
+├── speaker/     # 小米音箱协议客户端（infra 性质）
+├── dlna/        # DLNA 协议（infra 性质）
+├── store/       # SQLite：只负责打开/建表执行/首启迁移，表定义归业务域（由装配层传入）
+└── hx/          # htmx 片段端点（每业务一个文件：取数 → 渲染模板）
+```
+
+**内聚纪律（写新功能照此办，防止回潮）**：
+
+1. 新业务逻辑进**自己的域包**（`internal/service/<域>/`），不进 api/store 大包；
+2. **SQL 读写跟着业务走**（在域包内），表定义（`XxxSchema` 常量）也在域包，`store.Migrate` 只负责按序执行；
+3. 域包**自带测试**（同包验证）；入口 = `api/<域>.go`（JSON）+ `hx/<域>.go`（htmx 片段）两处薄胶水；
+4. 域包文件头有**全链路地图注释**（入口/前端/表），找不到代码先看注释。
 
 ---
 

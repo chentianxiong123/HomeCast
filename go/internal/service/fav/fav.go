@@ -1,3 +1,5 @@
+// Package fav 收藏域：本地收藏（SQLite 持久化 + 旧 JSON 首启迁移）。
+// 全链路：入口 internal/api/fav.go · hx/fav.go；前端 fav_btn.html + content_favs.html；表：favs（FavSchema 本包）
 package fav
 
 import (

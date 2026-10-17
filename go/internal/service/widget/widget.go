@@ -1,3 +1,5 @@
+// Package widget 挂件域：桌面歌词挂件状态快照（desktop main 直读）。
+// 全链路：入口 internal/api/widget.go；消费方 wails3/widget/（GTK/Win32 显示层）；表：无
 package widget
 
 import (

@@ -1,4 +1,5 @@
-// Package cast 投屏服务（DLNA，goupnp 标准库控制）
+// Package cast 投屏域：DLNA 发现/投送/控制（goupnp 标准库）。
+// 全链路：入口 internal/api/cast.go · hx/cast.go；前端 cast_devices.html + cast-ui.js；表：无
 package cast
 
 import (
