@@ -14,7 +14,10 @@ func TestOpenMigrate(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := Migrate(db, dir); err != nil { // 目录里无 JSON → 迁移应跳过不报错
+	if err := Migrate(db, []string{
+		`CREATE TABLE IF NOT EXISTS favs (bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT, duration TEXT, duration_sec INTEGER, play_count INTEGER, created_at INTEGER DEFAULT 0)`,
+		`CREATE TABLE IF NOT EXISTS playlist (bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT, duration TEXT, duration_sec INTEGER, created_at INTEGER DEFAULT 0)`,
+	}, nil); err != nil { // 无 JSON → 迁移应跳过不报错
 		t.Fatalf("Migrate(无JSON): %v", err)
 	}
 
@@ -43,7 +46,7 @@ func TestOpenMigrate(t *testing.T) {
 	}
 
 	// 幂等：再次 Migrate 不报错
-	if err := Migrate(db, dir); err != nil {
+	if err := Migrate(db, []string{`CREATE TABLE IF NOT EXISTS favs (bvid TEXT PRIMARY KEY, title TEXT)`}, nil); err != nil {
 		t.Fatalf("Migrate(二次): %v", err)
 	}
 }
