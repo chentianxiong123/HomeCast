@@ -16,6 +16,14 @@ type FavSong struct {
 	PlayCount   int    `json:"play_count"`
 }
 
+// FavTable favs 表名
+const FavTable = "favs"
+
+// FavSchema favs 表定义（表结构归业务域；建表执行在 store.Migrate 统一跑）
+const FavSchema = `CREATE TABLE IF NOT EXISTS favs (
+	bvid TEXT PRIMARY KEY, title TEXT, artist TEXT, cover TEXT,
+	duration TEXT, duration_sec INTEGER, play_count INTEGER, created_at INTEGER DEFAULT 0)`
+
 // FavService 本地收藏（SQLite 持久化；首启迁移自旧 JSON，见 internal/store）
 type FavService struct {
 	mu sync.Mutex

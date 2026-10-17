@@ -22,7 +22,7 @@ func openTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := store.Migrate(db, t.TempDir()); err != nil {
+	if err := store.Migrate(db, []string{service.PlaylistSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db

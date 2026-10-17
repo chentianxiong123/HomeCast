@@ -20,7 +20,7 @@ func newTestFavHandler(t *testing.T) (*FavHandler, http.Handler) {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := store.Migrate(db, t.TempDir()); err != nil {
+	if err := store.Migrate(db, []string{service.FavSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	fav := &FavHandler{Fav: service.NewFavService(db)}
