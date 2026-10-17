@@ -1,3 +1,5 @@
+// Package lyric 歌词域：网易云词源（解析/搜索/偏移/优选存储）。
+// 全链路：入口 internal/api/lyric.go；前端 lyric.js + subtitle.js；表：lyric_sels（LyricSchema 本包）
 package lyric
 
 import (

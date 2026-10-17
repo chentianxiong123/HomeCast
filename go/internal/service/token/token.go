@@ -1,3 +1,5 @@
+// Package token 代理 token 域：临时 URL 化（音箱/DLNA 播放代理用），内存存储。
+// 全链路：使用方 internal/api/proxy.go · speaker 域 · cast 域；表：无
 package token
 
 import (
