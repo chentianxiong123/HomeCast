@@ -1,7 +1,8 @@
-package service
+package music
 
 import (
 	"encoding/json"
+	"reflect"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -103,5 +104,38 @@ func TestMusicServiceSearch(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("顺序[%d]=%s, want %s; got=%v", i, got[i], want[i], got)
 		}
+	}
+}
+// TestLyricsKeywords 分P标题选择（LyricKeywords 是 MusicService 方法，归 music 域测试）：
+// 播放固定第一P → 只取第一P part 清洗 + fallback；占位标题收敛 fallback
+func TestLyricsKeywords(t *testing.T) {
+	mk := func(pages ...string) *bilibili.VideoInfo {
+		info := &bilibili.VideoInfo{Title: "周杰伦50首精选"}
+		for _, p := range pages {
+			info.Pages = append(info.Pages, struct {
+				CID  json.RawMessage `json:"cid"`
+				Part string          `json:"part"`
+			}{Part: p})
+		}
+		return info
+	}
+	mkMusic := func(info *bilibili.VideoInfo) *MusicService {
+		m := &MusicService{Client: &bilibili.Client{}}
+		m.mu.Lock()
+		m.viewCache = map[string]viewCacheEntry{"BV1": {info: info, at: time.Now()}}
+		m.mu.Unlock()
+		return m
+	}
+	m := mkMusic(mk("001.周杰伦-晴天", "002.周杰伦-夜曲", "003.周杰伦-星晴"))
+	if got := m.LyricKeywords("BV1", "周杰伦50首精选"); !reflect.DeepEqual(got, []string{"周杰伦-晴天", "周杰伦50首精选"}) {
+		t.Errorf("LyricKeywords = %v", got)
+	}
+	m1 := mkMusic(mk("周杰伦50首精选", "晴天"))
+	if got := m1.LyricKeywords("BV1", "周杰伦50首精选"); !reflect.DeepEqual(got, []string{"周杰伦50首精选"}) {
+		t.Errorf("占位第一P = %v", got)
+	}
+	m3 := &MusicService{}
+	if got := m3.LyricKeywords("BV1", "【4K】晴天 无损"); !reflect.DeepEqual(got, []string{"晴天"}) {
+		t.Errorf("无 Client 回退 = %v", got)
 	}
 }

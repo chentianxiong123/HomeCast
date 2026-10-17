@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/widget"
 )
 
 // WidgetHandler 桌面歌词挂件状态端点
 type WidgetHandler struct {
-	State *service.WidgetState
+	State *widget.WidgetState
 }
 
 // Get GET /api/v1/widget/state

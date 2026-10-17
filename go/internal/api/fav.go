@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/fav"
 )
 
 // FavHandler 收藏夹端点（GET/POST/DELETE /api/v1/fav/*）
 type FavHandler struct {
-	Fav *service.FavService
+	Fav *fav.FavService
 }
 
 // List GET /api/v1/fav/list
@@ -19,7 +19,7 @@ func (h *FavHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Add POST /api/v1/fav/add  body: FavSong
 func (h *FavHandler) Add(w http.ResponseWriter, r *http.Request) {
-	var e service.FavSong
+	var e fav.FavSong
 	if err := json.NewDecoder(r.Body).Decode(&e); err != nil || e.BVID == "" {
 		errResp(w, http.StatusBadRequest, "invalid body: bvid required")
 		return

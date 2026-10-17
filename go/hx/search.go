@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"strings"
 
-	"homecast/internal/service"
+	"homecast/internal/service/music"
 )
 
 // searchView 搜索结果视图数据（页面看到什么，这里就是什么）
 type searchView struct {
 	Keyword string
 	Total   int
-	Items   []service.MusicItem
+	Items   []music.MusicItem
 }
 
 // searchPageData 搜索完整页数据：结果 HTML 预渲染注入 #results（直接访问 /hx/search?kw= 用）

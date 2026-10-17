@@ -1,4 +1,4 @@
-package service
+package sites
 
 import (
 	"crypto/md5"
@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"homecast/internal/service/cast"
 )
 
 // Site 嗅探站点（对齐 Python Site）
@@ -108,13 +109,13 @@ type episodesCache struct {
 	DetailURL     string      `json:"detail_url"`
 	DetailURLHash string      `json:"detail_url_hash"`
 	Title         string      `json:"title"`
-	EpisodesList  []Episode   `json:"episodes_list"`
+	EpisodesList  []cast.Episode   `json:"episodes_list"`
 	CachedAt      float64     `json:"cached_at"`
 	_             interface{} `json:"-"`
 }
 
 // CacheEpisodes 缓存详情页集数列表
-func (s *SitesService) CacheEpisodes(detailURL, title string, list []Episode) {
+func (s *SitesService) CacheEpisodes(detailURL, title string, list []cast.Episode) {
 	cache := s.loadCache()
 	hash := urlHash(detailURL)
 	cache[hash] = map[string]any{

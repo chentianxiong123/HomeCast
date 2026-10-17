@@ -11,7 +11,7 @@ import (
 
 	"github.com/lsongdev/miservice-go/miservice"
 
-	"homecast/internal/service"
+	spk "homecast/internal/service/speaker"
 	"homecast/internal/speaker"
 )
 
@@ -89,7 +89,7 @@ func (h *H) SpeakerPlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	duration, _ := strconv.ParseFloat(r.PostFormValue("duration"), 64)
-	res, err := h.Speaker.Play(bvid, did, 30280, service.PlayOpts{
+	res, err := h.Speaker.Play(bvid, did, 30280, spk.PlayOpts{
 		Title:    r.PostFormValue("title"),
 		Duration: duration,
 		NextBVID: r.PostFormValue("next_bvid"),

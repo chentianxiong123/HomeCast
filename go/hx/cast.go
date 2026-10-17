@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/cast"
 )
 
 // CastPage GET /hx/cast → 投屏页（设备列表 + 音箱区）
@@ -16,7 +16,7 @@ func (h *H) CastPage(w http.ResponseWriter, r *http.Request) {
 
 // castPageData 投屏页数据
 type castPageData struct {
-	Devices []service.DeviceDTO
+	Devices []cast.DeviceDTO
 }
 
 // Rescan POST /hx/cast/rescan → 重新发现设备，返回列表片段替换 #cast-list

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"homecast/internal/service"
+	spk "homecast/internal/service/speaker"
 	"homecast/internal/speaker"
 
 	"github.com/lsongdev/miservice-go/miservice"
@@ -15,7 +15,7 @@ import (
 
 // SpeakerHandler 音箱端点
 type SpeakerHandler struct {
-	Svc *service.SpeakerService
+	Svc *spk.SpeakerService
 	QR  *speaker.QRLogin
 }
 
@@ -155,7 +155,7 @@ func (h *SpeakerHandler) Play(w http.ResponseWriter, r *http.Request) {
 	if body.Quality == 0 {
 		body.Quality = 30280 // 192k
 	}
-	res, err := h.Svc.Play(body.BVID, body.DID, body.Quality, service.PlayOpts{
+	res, err := h.Svc.Play(body.BVID, body.DID, body.Quality, spk.PlayOpts{
 		Title:    body.Title,
 		Duration: body.Duration,
 		NextBVID: body.NextBVID,

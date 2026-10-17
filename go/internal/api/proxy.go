@@ -5,12 +5,12 @@ import (
 	"log"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/token"
 )
 
 // ProxyHandler token 化流转发（音箱/DLNA 播放用）
 type ProxyHandler struct {
-	Tokens *service.TokenStore
+	Tokens *token.TokenStore
 }
 
 // Video GET /api/v1/proxy/video/{token}

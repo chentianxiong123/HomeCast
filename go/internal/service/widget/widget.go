@@ -1,4 +1,4 @@
-package service
+package widget
 
 import (
 	"sync"

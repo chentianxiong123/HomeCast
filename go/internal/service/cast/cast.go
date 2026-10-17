@@ -1,5 +1,5 @@
 // Package cast 投屏服务（DLNA，goupnp 标准库控制）
-package service
+package cast
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/huin/goupnp/dcps/av1"
 
+	"homecast/internal/service/token"
 	"homecast/internal/bilibili"
 	"homecast/internal/dlna"
 )
@@ -48,14 +49,14 @@ type deviceController struct {
 // CastService 投屏服务
 type CastService struct {
 	client      *bilibili.Client
-	tokens      *TokenStore
+	tokens      *token.TokenStore
 	mu          sync.Mutex
 	devices     map[string]*dlna.Device
 	controllers map[string]*deviceController
 }
 
 // NewCastService 构造
-func NewCastService(client *bilibili.Client, tokens *TokenStore) *CastService {
+func NewCastService(client *bilibili.Client, tokens *token.TokenStore) *CastService {
 	return &CastService{
 		client:      client,
 		tokens:      tokens,

@@ -1,5 +1,5 @@
 // Package service 业务层（对齐 Python music_service / fav_service / lyric_service）
-package service
+package music
 
 import (
 	"sort"
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"homecast/internal/service/lyric"
 	"homecast/internal/bilibili"
 )
 
@@ -96,7 +97,7 @@ func (m *MusicService) LyricKeywords(bvid, fallback string) []string {
 	var out []string
 	seen := map[string]bool{}
 	add := func(s string) {
-		s = CleanSearchKeyword(s)
+		s = lyric.CleanSearchKeyword(s)
 		if s != "" && !seen[s] {
 			seen[s] = true
 			out = append(out, s)

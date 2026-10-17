@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"homecast/internal/bilibili"
-	"homecast/internal/service"
+	"homecast/internal/service/music"
 )
 
 // ok 统一响应 {code:0,message:"success",data:...}（前端拦截器依赖 code==0）
@@ -27,11 +27,11 @@ func errResp(w http.ResponseWriter, status int, msg string) {
 
 // MusicHandler 音乐端点集合
 type MusicHandler struct {
-	Music *service.MusicService
+	Music *music.MusicService
 }
 
 // NewMusicHandler 构造
-func NewMusicHandler(m *service.MusicService) *MusicHandler {
+func NewMusicHandler(m *music.MusicService) *MusicHandler {
 	return &MusicHandler{Music: m}
 }
 

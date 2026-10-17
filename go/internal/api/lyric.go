@@ -6,13 +6,14 @@ import (
 	"strconv"
 	"strings"
 
-	"homecast/internal/service"
+	"homecast/internal/service/lyric"
+	"homecast/internal/service/music"
 )
 
 // LyricHandler 歌词端点（网易云源）
 type LyricHandler struct {
-	Lyric *service.LyricStore
-	Music *service.MusicService // bvid → 分P标题作搜索关键词（B 站合集痛点；带 view 缓存）
+	Lyric *lyric.LyricStore
+	Music *music.MusicService // bvid → 分P标题作搜索关键词（B 站合集痛点；带 view 缓存）
 }
 
 // keywordsFor bvid 非空时优先分P标题列表（bili-music lyricSearchTitles 同款，逐个搜第一个命中），
@@ -21,7 +22,7 @@ func (h *LyricHandler) keywordsFor(bvid, keyword string) []string {
 	if h.Music != nil && bvid != "" {
 		return h.Music.LyricKeywords(bvid, keyword)
 	}
-	if k := service.CleanSearchKeyword(keyword); k != "" {
+	if k := lyric.CleanSearchKeyword(keyword); k != "" {
 		return []string{k}
 	}
 	return nil
@@ -44,7 +45,7 @@ func (h *LyricHandler) Get(w http.ResponseWriter, r *http.Request) {
 			sid = sel
 		}
 	}
-	res := service.GetLyricLines(keywords, sid)
+	res := lyric.GetLyricLines(keywords, sid)
 	if res == nil {
 		// 找不到歌词是正常业务，code=0 data=null（前端拦截器按 code!=0 弹错）
 		ok(w, nil)
@@ -108,7 +109,7 @@ func (h *LyricHandler) Select(w http.ResponseWriter, r *http.Request) {
 		errResp(w, http.StatusBadRequest, "bvid required")
 		return
 	}
-	h.Lyric.SetSelection(body.BVID, service.LyricSel{
+	h.Lyric.SetSelection(body.BVID, lyric.LyricSel{
 		BVID: body.BVID, SID: body.SID, Name: body.Name,
 		Artist: body.Artist, Cover: body.Cover, Duration: body.Duration,
 	})
@@ -149,5 +150,5 @@ func (h *LyricHandler) Candidates(w http.ResponseWriter, r *http.Request) {
 	if limit == 0 {
 		limit = 8
 	}
-	ok(w, service.SearchLyricCandidatesByTitles(keywords, limit))
+	ok(w, lyric.SearchLyricCandidatesByTitles(keywords, limit))
 }

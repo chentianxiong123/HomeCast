@@ -1,4 +1,4 @@
-package service
+package playlist
 
 import (
 	"path/filepath"

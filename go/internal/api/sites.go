@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"net/url"
 
-	"homecast/internal/service"
+	"homecast/internal/service/cast"
+	"homecast/internal/service/sites"
 )
 
 // SitesHandler 站点管理端点
 type SitesHandler struct {
-	Sites *service.SitesService
+	Sites *sites.SitesService
 }
 
 // List GET /api/v1/sites/list
@@ -32,7 +33,7 @@ func (h *SitesHandler) Add(w http.ResponseWriter, r *http.Request) {
 	if body.SiteType == "" {
 		body.SiteType = "video"
 	}
-	if err := h.Sites.Add(service.Site{Name: body.Name, URL: body.URL, SiteType: body.SiteType}); err != nil {
+	if err := h.Sites.Add(sites.Site{Name: body.Name, URL: body.URL, SiteType: body.SiteType}); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"code": 400, "message": err.Error(), "data": nil})
 		return
 	}
@@ -70,7 +71,7 @@ func (h *SitesHandler) CacheEpisodes(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DetailURL    string            `json:"detail_url"`
 		Title        string            `json:"title"`
-		EpisodesList []service.Episode `json:"episodes_list"`
+		EpisodesList []cast.Episode `json:"episodes_list"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.DetailURL == "" {
 		errResp(w, http.StatusBadRequest, "detail_url required")
