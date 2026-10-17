@@ -10,17 +10,20 @@ import (
 	"io/fs"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/cast"
+	"homecast/internal/service/fav"
+	"homecast/internal/service/music"
+	spk "homecast/internal/service/speaker"
 	"homecast/internal/speaker"
 	"homecast/web"
 )
 
 // H 功能上下文：只有各功能要用的数据句柄，无接口无抽象
 type H struct {
-	Music   *service.MusicService
-	Fav     *service.FavService
-	Cast    *service.CastService
-	Speaker *service.SpeakerService
+	Music   *music.MusicService
+	Fav     *fav.FavService
+	Cast    *cast.CastService
+	Speaker *spk.SpeakerService
 	QR      *speaker.QRLogin
 	Tpl     *template.Template
 }

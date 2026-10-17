@@ -4,12 +4,12 @@ import (
 	"log"
 	"net/http"
 
-	"homecast/internal/service"
+	"homecast/internal/service/playlist"
 )
 
 // PlaylistHandler 播放列表端点
 type PlaylistHandler struct {
-	Playlist *service.PlaylistService
+	Playlist *playlist.PlaylistService
 }
 
 // Get GET /api/v1/playlist

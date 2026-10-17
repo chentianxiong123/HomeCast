@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"homecast/internal/bilibili"
-	"homecast/internal/service"
+	"homecast/internal/service/music"
+	"homecast/internal/service/playlist"
 	"homecast/internal/store"
 )
 
@@ -22,7 +23,7 @@ func openTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if err := store.Migrate(db, []string{service.PlaylistSchema}, nil); err != nil {
+	if err := store.Migrate(db, []string{playlist.PlaylistSchema}, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db
@@ -57,7 +58,7 @@ func newFakeMusic(t *testing.T, viewBody, playurlBody string) *MusicHandler {
 	}))
 	t.Cleanup(srv.Close)
 	client := bilibili.NewClient(srv.URL, "TestUA/1.0", "https://ref.example.com", 5*time.Second)
-	return NewMusicHandler(&service.MusicService{Client: client})
+	return NewMusicHandler(&music.MusicService{Client: client})
 }
 
 func searchResp(searchJSON string) string {
@@ -136,7 +137,7 @@ func TestPlaylistEndpoints(t *testing.T) {
 	t.Cleanup(srv.Close)
 	db := openTestDB(t)
 	client := bilibili.NewClient(srv.URL, "TestUA", "https://ref", 5*time.Second)
-	pl := &PlaylistHandler{Playlist: service.NewPlaylistService(client, db)}
+	pl := &PlaylistHandler{Playlist: playlist.NewPlaylistService(client, db)}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/playlist", pl.Get)
