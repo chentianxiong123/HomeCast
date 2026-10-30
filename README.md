@@ -2,6 +2,7 @@
 
 <p align="center">
   <b>🏠 家庭影音平台 · B站音乐播放器</b>
+  <br><small>⚠️ 注：本项目实为 <b>HomeMusic</b>（B站音乐播放器）。"HomeCast"（视频投屏）现在由 <b>MyCast</b> 项目承担。</small>
 </p>
 
 <p align="center">
