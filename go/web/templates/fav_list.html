@@ -1,18 +1,18 @@
 {{/* 收藏列表片段（空态 or 歌曲行；Remove/Clear 返回此片段替换 #fav-list） */}}
 {{if not .Items}}
-<div class="text-center py-24 text-gray-500 dark:text-gray-400">
-  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
+<div class="text-center py-14 text-gray-500 dark:text-gray-400">
+  <svg class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
   <p class="text-lg font-medium">收藏夹还是空的</p>
   <p class="text-sm mt-1">听歌时点卡片上的 ♥ 收藏</p>
   <a href="/hx/search" hx-get="/hx/search" hx-select="#main" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-     class="inline-block mt-6 px-8 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-medium rounded-full shadow-md hover:brightness-105 transition-all">去搜索</a>
+     class="inline-block mt-6 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-medium rounded-full shadow-md hover:brightness-105 transition-all">去搜索</a>
 </div>
 {{else}}
 <div class="flex items-center justify-between mb-4">
   <h2 class="text-lg font-semibold text-gray-900 dark:text-white">收藏夹（{{len .Items}} 首）</h2>
   <div class="flex items-center space-x-3">
     <button onclick="hcBus.emit('play-fav-all')"
-            class="flex items-center space-x-1 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all">
+            class="flex items-center space-x-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       <span class="hidden sm:inline">播放全部</span>
     </button>
@@ -25,7 +25,7 @@
   <div class="group flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-2xl min-w-0 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 dark:border-gray-700" data-ctx-bvid="{{.BVID}}" data-ctx-title="{{shortTitle .Title}}" data-ctx-full-title="{{.Title}}" data-ctx-artist="{{.Artist}}" data-ctx-cover="{{coverURL .Cover}}" data-ctx-duration="{{.DurationSec}}">
     <div class="relative flex-shrink-0">
       <img src="{{coverURL .Cover}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer"
-           class="w-16 h-12 sm:w-20 sm:h-14 object-cover rounded-xl shadow-sm">
+           class="w-12 h-9 sm:w-20 sm:h-14 object-cover rounded-xl shadow-sm">
       <button class="hx-play absolute inset-0 bg-black/30 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
               data-bvid="{{.BVID}}" data-title="{{shortTitle .Title}}" data-full-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
               onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, fullTitle:this.dataset.fullTitle, artist:this.dataset.artist, cover:this.dataset.cover})" title="播放">
@@ -33,25 +33,25 @@
       </button>
     </div>
     <div class="flex-1 min-w-0">
-      <h3 class="hx-title text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors"
+      <h3 class="hx-title text-sm sm:text-lg font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-pink-400 transition-colors"
           data-short="{{shortTitle .Title}}" data-full="{{.Title}}" title="点击展开/收起完整标题">{{shortTitle .Title}}</h3>
       <div class="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
-        <span class="truncate max-w-[120px]">{{.Artist}}</span>
+        <span class="truncate max-w-[80px]">{{.Artist}}</span>
         <span>{{.Duration}}</span>
       </div>
     </div>
     <div class="flex items-center space-x-2 flex-shrink-0">
-      <button class="hx-play flex items-center space-x-1 px-3 sm:px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
+      <button class="hx-play flex items-center space-x-1 px-3 sm:px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white text-sm font-medium shadow-sm hover:brightness-105 transition-all"
               data-bvid="{{.BVID}}" data-title="{{shortTitle .Title}}" data-full-title="{{.Title}}" data-artist="{{.Artist}}" data-cover="{{coverURL .Cover}}"
               onclick="hcBus.emit('play', {bvid:this.dataset.bvid, title:this.dataset.title, fullTitle:this.dataset.fullTitle, artist:this.dataset.artist, cover:this.dataset.cover})">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         <span class="hidden sm:inline">播放</span>
       </button>
       <button hx-post="/hx/fav/remove/{{.BVID}}" hx-target="#fav-list" hx-swap="innerHTML" hx-confirm="确定取消收藏？"
-              class="w-9 h-9 rounded-full flex items-center justify-center text-pink-500 dark:text-pink-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="取消收藏">
+              class="w-8 h-8 rounded-full flex items-center justify-center text-pink-500 dark:text-pink-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="取消收藏">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
       </button>
-      <button class="ctx-more w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      <button class="ctx-more w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               onclick="this.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, clientX:event.clientX, clientY:event.clientY}))" title="更多操作">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
       </button>

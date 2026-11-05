@@ -1,8 +1,8 @@
 {{/* DLNA 设备列表片段（空态 or 设备卡片；投送按钮只广播，player 孤岛响应） */}}
 {{if not .Devices}}
-<div class="text-center py-20 text-gray-500 dark:text-gray-400">
-  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg>
-  <p class="text-lg font-medium">未发现投屏设备</p>
+<div class="text-center py-14 text-gray-500 dark:text-gray-400">
+  <svg class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-10 10h2a8 8 0 0 1 8-8z"/><path d="M12 6a6 6 0 0 0-6 6h2a4 4 0 0 1 4-4z"/><rect x="2" y="16" width="20" height="4" rx="1"/></svg>
+  <p class="text-base font-medium">未发现投屏设备</p>
   <p class="text-sm mt-1">确保电视与电脑在同一 WiFi，点右上角重新扫描</p>
 </div>
 {{else}}
