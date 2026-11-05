@@ -128,7 +128,7 @@ void wire_signals(void) {
 	gtk_widget_add_controller(g_draw, GTK_EVENT_CONTROLLER(click));
 
 	GtkGesture *drag = gtk_gesture_drag_new();
-	g_signal_connect(drag, "drag", G_CALLBACK(_drag_cb), NULL);
+	g_signal_connect(drag, "drag-update", G_CALLBACK(_drag_cb), NULL);
 	gtk_widget_add_controller(g_draw, GTK_EVENT_CONTROLLER(drag));
 
 	g_timeout_add(150, goTick, NULL);
@@ -150,6 +150,22 @@ void hc_get_pos(int *x, int *y) {
 	XTranslateCoordinates(_dpy(), _xid(), DefaultRootWindow(_dpy()), 0, 0, &rx, &ry, &c);
 	*x = rx; *y = ry;
 }
+// ── 重新居中控制条/锁（窗口拉宽时跟随中线）──
+void hc_recenter(int w) {
+	// ctrl 宽 = 24+44+44+28+22 + 4*6(spacing) = 184；锁 16 宽
+	int cw = 184;
+	int cx = (w - cw) / 2;
+	if (cx < 0) cx = 0;
+	if (g_ctrl)
+		gtk_fixed_put(GTK_FIXED(g_fixed), g_ctrl, (double)cx, (double)(116 - 24));
+	// 锁贴右边（不跟 ctrl 中线，贴右更合理）
+	if (g_lockbtn) {
+		int lx = w - 16 - 6;
+		if (lx < 0) lx = 6;
+		gtk_fixed_put(GTK_FIXED(g_fixed), g_lockbtn, (double)lx, (double)(116 - 16 - 6));
+	}
+}
+
 void hc_keep_above(void) {
 	Display *d = _dpy(); Window w = _xid();
 	Atom net = XInternAtom(d, "_NET_WM_STATE", False);

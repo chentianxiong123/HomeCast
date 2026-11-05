@@ -21,6 +21,7 @@
   let queue = []; // 播放队列（自动上下文），prev/next 队列走位
   let qidx = -1;
   let lastSaveAt = 0;
+  let lastWidgetReport = 0; // widget 上报节流（1s，独立于 5s 持久化）
   let playMode = localStorage.getItem('hc:mode') || 'order'; // order/loop/single/random
   let quality = parseInt(localStorage.getItem('hc:quality') || '192', 10); // 64/128/192
   if (el && el.qualityBtn) el.qualityBtn.textContent = quality + 'k'; // 按钮初始值跟随持久化音质
@@ -302,7 +303,8 @@
     const d = audio.duration || 1;
     el.prog.value = Math.round((audio.currentTime / d) * 1000);
     const now = Date.now();
-    if (now - lastSaveAt > 5000) { lastSaveAt = now; saveP(); reportWidget(); }
+    if (now - lastSaveAt > 5000) { lastSaveAt = now; saveP(); }
+    if (now - lastWidgetReport > 1000) { lastWidgetReport = now; reportWidget(); } // widget 独立 1s 上报（不捆绑 5s 持久化，对齐 web audio.currentTime 实时性）
   });
   audio.addEventListener('play', () => reportWidget());
   audio.addEventListener('pause', () => reportWidget());

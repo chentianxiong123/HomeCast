@@ -69,6 +69,7 @@ type state struct {
 	dragging bool
 	lastPoll time.Time
 	winW     int
+	lyGen    int // 歌词代际（fetchLyric 切歌时旧请求晚到丢弃，对齐 web loadGen）
 }
 
 var (
@@ -317,27 +318,27 @@ func tick() {
 			st.playing = playing2
 			st.mu.Unlock()
 			if key != "" {
-				go fetchLyric(joinTitle(title, artist), key)
+				st.mu.Lock()
+				st.lyGen++
+				gen := st.lyGen
+				st.mu.Unlock()
+				go fetchLyric(joinTitle(title, artist), key, gen)
 			}
 			queueDraw() // 切歌立即重绘（GTK4 draw_func 需要显式 queue）
 			st.mu.Lock()
 		} else {
 			st.playing = playing2
 			st.dur = dur
-			if !playing2 {
-				st.pos = ct // 暂停：以上报为准
-			} else if absF(ct-st.pos) > 1.5 {
-				st.pos = ct // 校准（seek）
-			}
+			// 对齐 web lyric.js：每帧直接用上报位置算行（"指哪打哪"，不本地推进）
+			st.pos = ct
 		}
 		playing = st.playing
 		st.mu.Unlock()
 	}
 
-	// 3. 本地平滑推进（播放中每 tick +150ms）
+	// 3. 每帧算当前行（对齐 web timeupdate→sync：ct+offset 直接指哪打哪）
 	if playing {
 		st.mu.Lock()
-		st.pos += float64(TickEvery) / 1000.0
 		idx := displayIdxLocked()
 		if idx != st.curIdx {
 			st.curIdx = idx
@@ -357,8 +358,19 @@ func paint(c Canvas) {
 	winW := st.winW
 	st.mu.Unlock()
 
-	// 宽度自适应：变化 >24px 才 resize（避免每帧抖动）
-	target := targetWidth(text)
+	c.Clear()
+	if text == "" {
+		return
+	}
+	// 宽度自适应：用实际 TextSize 测量（不估算，避免估算/实测不一致横跳）
+	w, h := c.TextSize(text, FontSize)
+	target := int(w) + 90 // 左右各 45px 边距
+	if target < MinW {
+		target = MinW
+	}
+	if target > MaxW {
+		target = MaxW
+	}
 	if abs(winW-target) > 24 {
 		st.mu.Lock()
 		st.winW = target
@@ -366,20 +378,13 @@ func paint(c Canvas) {
 		if disp != nil {
 			disp.Resize(target, WinH)
 		}
-		return // 下帧重绘
+		return // 下帧重绘（窗口宽已更新，下帧用新宽居中）
 	}
-
-	c.Clear()
-	if text == "" {
-		return
-	}
-	winWf := float64(winW)
-	w, h := c.TextSize(text, FontSize)
-	x := (winWf - w) / 2
+	x := (float64(winW) - w) / 2
 	if x < 0 {
 		x = 0
 	}
-	y0 := (WinH - h) / 2
+	y0 := (float64(WinH) - h) / 2
 	if y0 < 0 {
 		y0 = 0
 	}
@@ -447,11 +452,11 @@ func joinTitle(title, artist string) string {
 }
 
 // ── 歌词拉取（goroutine + 内嵌后端 HTTP） ──
-// 带 bvid：后端命中「已选歌词源」（歌词页切源上报）返回同一份歌词——两端同步
+// 对齐 web lyric.js：带 bvid（后端优先用「已选歌词源」——切源后两端同步同一份歌词）
+// + 代际保护（切歌时旧请求晚到丢弃，对齐 web loadGen）+ 本歌存档对齐偏移（meta 端点）
 
-func fetchLyric(keyword, key string) {
-	q := url.QueryEscape(keyword)
-	u := Backend + "/api/v1/music/lyric?keyword=" + q
+func fetchLyric(keyword, key string, gen int) {
+	u := Backend + "/api/v1/music/lyric?keyword=" + url.QueryEscape(keyword)
 	if key != "" {
 		u += "&bvid=" + url.QueryEscape(key)
 	}
@@ -464,7 +469,8 @@ func fetchLyric(keyword, key string) {
 	var out struct {
 		Code int `json:"code"`
 		Data *struct {
-			Lines [][2]any `json:"lines"`
+			Lines  [][2]any `json:"lines"`
+			Offset float64  `json:"offset"`
 		} `json:"data"`
 	}
 	if json.NewDecoder(resp.Body).Decode(&out) != nil || out.Data == nil {
@@ -488,11 +494,16 @@ func fetchLyric(keyword, key string) {
 		return
 	}
 	st.mu.Lock()
-	if st.songKey != key {
+	if st.songKey != key || gen != st.lyGen {
 		st.mu.Unlock()
-		return // 已切歌，丢弃
+		return // 已切歌/旧代际，丢弃（对齐 web stale()）
 	}
 	st.lines = lines
+	// 对齐偏移：后端返回本歌存档 offset（music.py _nudge_lyric 同款）；
+	// 只在本歌首次加载时应用（st.offset==0 才覆盖，不冲掉用户手动 ±0.5 调过的值）
+	if out.Data.Offset != 0 && st.offset == 0 {
+		st.offset = out.Data.Offset
+	}
 	st.curIdx = displayIdxLocked()
 	st.mu.Unlock()
 	queueDraw()

@@ -31,6 +31,7 @@ extern void hc_move(int, int);
 extern void hc_resize(int, int);
 extern void hc_get_pos(int*, int*);
 extern void hc_keep_above(void);
+extern void hc_recenter(int);
 extern void _init_cb(void);
 */
 import "C"
@@ -133,6 +134,8 @@ func (d *gtkDisplay) Move(x, y int) {
 func (d *gtkDisplay) Resize(w, h int) {
 	C.hc_resize(C.int(w), C.int(h))
 	C.gtk_widget_set_size_request(C.hc_draw(), C.gint(w), C.gint(h))
+	// 控制条/锁 重新居中（窗口拉宽后跟随中线，不贴左）
+	C.hc_recenter(C.int(w))
 }
 
 func (d *gtkDisplay) Size() (int, int) {
@@ -287,3 +290,4 @@ func goTick(user unsafe.Pointer) C.gboolean {
 	}
 	return 1
 }
+
