@@ -115,6 +115,8 @@ func Start(snapshot SnapshotProvider, backend string) error {
 		log.Printf("[widget] 位置超屏，已居中到 (%d,%d)", px, py)
 	}
 	disp.Tick(TickEvery, tick)
+	// 强制首绘：等 GTK 窗口 realized 后重绘（否则 draw_func 只在初始空跑一次）
+	time.AfterFunc(1200*time.Millisecond, func() { queueDraw() })
 	return nil
 }
 
@@ -317,6 +319,7 @@ func tick() {
 			if key != "" {
 				go fetchLyric(joinTitle(title, artist), key)
 			}
+			queueDraw() // 切歌立即重绘（GTK4 draw_func 需要显式 queue）
 			st.mu.Lock()
 		} else {
 			st.playing = playing2
