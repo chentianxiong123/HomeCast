@@ -18,8 +18,8 @@ tasks:
   build:
     summary: Builds the application for Windows
     cmds:
-      # Auto-detect CGO: if CGO_ENABLED=1, use Docker; otherwise use native Go cross-compile
-      - task: '{{if and (ne OS "windows") (eq .CGO_ENABLED "1")}}build:docker{{else}}build:native{{end}}'
+      # 项目 widget Win32 是 cgo + 本机 mingw 交叉，直接用 build:native（不走 Docker/Zig）
+      - task: build:native
         vars:
           ARCH: '{{.ARCH}}'
           DEV: '{{.DEV}}'
@@ -27,8 +27,8 @@ tasks:
           OBFUSCATED: '{{.OBFUSCATED}}'
           GARBLE_ARGS: '{{.GARBLE_ARGS}}'
     vars:
-      # Default to CGO_ENABLED=0 if not explicitly set
-      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+      # 项目 widget Win32 是 cgo，需 CGO_ENABLED=1
+      CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'
 
   build:native:
     summary: Builds the application using native Go cross-compilation
@@ -53,8 +53,10 @@ tasks:
       BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{end}}'
     env:
       GOOS: windows
-      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+      # 项目 widget Win32 是 cgo，需 CGO_ENABLED=1 + mingw 交叉编译器
+      CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'
       GOARCH: '{{.ARCH | default ARCH}}'
+      CC: x86_64-w64-mingw32-gcc
 
   build:docker:
     summary: Cross-compiles for Windows using Docker with Zig (for CGO builds on non-Windows)
