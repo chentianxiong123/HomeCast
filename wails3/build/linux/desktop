@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=HomeCast
+Comment=家庭音乐播放器（B站音乐 个人免费）
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/hcexp %u
+Terminal=false
+Type=Application
+Icon=hcexp
+Categories=Utility;
+StartupWMClass=hcexp
+
+ 

@@ -1,12 +1,20 @@
 # wails3 构建产物与依赖（可重新生成）
 bin/
-build/
-# build/linux/
-build/darwin/
-build/windows/
-build/ios/
-build/overlay.json
+.task/
 frontend/node_modules/
 frontend/dist/
-.task/
 frontend/bindings/
+# 官方 build 资产（Taskfile.yml / config.yml / 各平台 app 工程）提交 git；
+# 只忽略 generate 产出的二进制/生成物（与 wails3 官方 gitignore.tmpl 一致）：
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+build/ios/xcode/overlay.json
+build/ios/xcode/gen/
+build/android/overlay.json
+build/android/gen/
+# 安卓构建产物（gradle 中间 132M、交叉编译 so、gradle 缓存、本机 SDK 路径）
+build/android/build/
+build/android/app/build/
+build/android/.gradle/
+build/android/local.properties
+build/android/app/src/main/jniLibs/

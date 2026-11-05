@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=hcexp
+Exec=hcexp
+Icon=hcexp
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false

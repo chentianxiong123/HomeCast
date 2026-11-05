@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 阶段3：安卓走真实 HTTP，WebView/HttpURLConnection 直连本机 Go 后端 http://127.0.0.1:28976。
+     ⚠️ domain-config 的 <domain> 按域名匹配，不匹配 IP 字面量（127.0.0.1），
+     对回环明文仍会拦截（根因：白屏/黑屏，isBackendReady 探测永远失败）。
+     改用 base-config 放行明文——HomeCast 只连本地 127.0.0.1 + B站 https，无其他明文域名；
+     https 请求照常走 TLS（base-config 只是允许明文，不强制）。 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
