@@ -48,12 +48,16 @@ jobs:
       - name: wails3 模块 vet
         run: |
           cd wails3 && go vet -tags gtk3 ./...
-      - name: 构建
-        run: bash wails3/build-linux.sh
+      - name: 安装 wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 官方构建（Linux，gtk3 + go:embed）
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd wails3 && wails3 build -tags gtk3
       - uses: actions/upload-artifact@v4
         with:
           name: hcexp-linux
-          path: wails3/bin/hcexp-linux
+          path: wails3/bin/hcexp
           if-no-files-found: error
 
   # ── Windows 桌面构建（mingw 交叉编译，无需 Windows runner）──
@@ -73,10 +77,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64
-      - name: 构建
-        run: bash wails3/build-windows.sh
+      - name: 安装 wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 官方构建（Windows，mingw + CGO）
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd wails3 && wails3 build GOOS=windows
       - uses: actions/upload-artifact@v4
         with:
           name: hcexp-win
-          path: wails3/bin/hcexp-win.exe
+          path: wails3/bin/hcexp.exe
           if-no-files-found: error
