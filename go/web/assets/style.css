@@ -73,3 +73,40 @@
 
 /* 字幕条置顶：z 最高（不被 dock z-50 / 歌词面板 / 其他层覆盖） */
 #subtitle-bar { z-index: 100 !important; }
+
+/* ═══ 移动端（<640px，真机窄屏 ~393px）紧凑适配 ═══
+   项目断点模式：默认=移动，sm:(≥640)=桌面。这里只在移动端缩小布局，
+   桌面（≥640）完全不受影响。 */
+@media (max-width: 639px) {
+  /* 主内容区边距：py-6 px-4 → 更紧凑 */
+  #main { padding-left: 12px !important; padding-right: 12px !important; padding-top: 16px !important; }
+  /* 搜索结果/收藏 列表项间距缩小 */
+  #main .grid.gap-3 { gap: 8px !important; }
+  /* 列表项内边距：p-3 → 更紧 */
+  #main .group.flex.items-center { padding: 8px 10px !important; }
+  /* 播放按钮（列表项）文字隐藏时图标居中 */
+  /* 歌手/时长行：留出更多空间 */
+  #main .max-w-\[80px\] { max-width: 64px !important; }
+  /* dock 底部内边距 */
+  #player-dock .py-2\.5 { padding-top: 8px !important; padding-bottom: 8px !important; }
+  /* dock 控制区 gap 缩小 */
+  #player-dock .space-x-2 { column-gap: 6px !important; }
+  /* 歌词面板移动：候选栏更窄、进度行更紧 */
+  #lyric-panel .flex.gap-3 { gap: 8px !important; }
+}
+
+/* ═══ 真机适配：隐藏滚动条 + 防横向溢出 ═══
+   真机窄屏（~393px）内容易溢出，WebView 显示横/竖滚动条（容器 dpr 低没暴露）。
+   隐藏滚动条（WebView 侧已 setScrollBarEnabled(false) 兜底，这里全局 + 内层滚动区）。 */
+html, body { overflow-x: hidden; }
+body::-webkit-scrollbar, #main::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* 顶部移动搜索栏：真机窄屏下 header 内容不溢出、搜索框不满出。
+   header 内层是 max-w-7xl px-3，移动行 gap-3 + 汉堡 w-9 + 搜索框 w-full；
+   用 min-w-0 让搜索框可收缩，不撑破 393px 屏。 */
+@media (max-width: 639px) {
+  header .md\:hidden { min-width: 0; }
+  header form { min-width: 0; }
+}

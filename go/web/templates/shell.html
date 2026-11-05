@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>myMusic</title>
   <script>
     // 主题初始化（hc:theme = auto|light|dark；auto 跟随系统）。早于渲染执行避免闪烁；
@@ -63,11 +63,11 @@
       <!-- 移动端（<768px）：顶部 汉堡按钮 + 搜索框整行 -->
       <div class="md:hidden flex items-center h-14 px-3 gap-3">
         <button id="side-nav-btn" title="导航" aria-label="导航"
-                class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <form hx-get="/hx/search" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"
-              class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700/70 rounded-full px-3.5 h-9 w-full">
+              class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700/70 rounded-full px-3.5 h-8 w-full">
           <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="search" name="kw" placeholder="搜索音乐" enterkeyhint="search"
                  class="flex-1 min-w-0 bg-transparent text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none"
@@ -119,7 +119,7 @@
     <div class="absolute inset-0 bg-gray-950/55"></div>
     <div class="h-full max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex gap-3 sm:gap-4">
       <!-- 左：歌词候选栏（music.py 候选窗同款：自动搜当前歌名，点选即换源） -->
-      <div class="w-48 sm:w-64 flex-shrink-0 flex flex-col rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800 overflow-hidden">
+      <div class="w-40 sm:w-64 flex-shrink-0 flex flex-col rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800 overflow-hidden">
         <p class="text-xs text-gray-400 px-3 py-2 border-b border-gray-800 flex-shrink-0 truncate">
           <span class="text-pink-400 font-medium">歌词候选</span> <span id="ly-cand-title" class="text-gray-300"></span>
         </p>
@@ -131,7 +131,7 @@
       <div class="flex-1 min-w-0 flex flex-col">
         <div class="relative mb-6">
           <div class="flex items-center justify-center space-x-4 text-center">
-            <img id="ly-cover" src="" alt="" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-lg flex-shrink-0" referrerpolicy="no-referrer">
+            <img id="ly-cover" src="" alt="" class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-lg flex-shrink-0" referrerpolicy="no-referrer">
             <div class="text-left min-w-0">
               <p id="ly-title" class="text-lg font-bold text-white truncate"></p>
               <p id="ly-artist" class="text-sm text-gray-400 truncate mt-0.5"></p>
@@ -214,15 +214,15 @@
       <button id="d-quality" title="音质（点击切换 64/128/192k）"
               class="h-8 px-2.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">192k</button>
       <button id="d-mode" title="播放模式"
-              class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              class="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <button id="d-mute" title="静音"
-              class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              class="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>
       </button>
       <input id="d-vol" type="range" min="0" max="100" value="80"
-             class="w-24 h-1.5 accent-pink-500 cursor-pointer" title="音量">
+             class="w-20 h-1.5 accent-pink-500 cursor-pointer" title="音量">
 
     </div>
     <div class="w-full px-3 sm:px-4 pt-2">
@@ -234,13 +234,13 @@
       </div>
     </div>
 
-    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-5 py-2.5 sm:py-3">
       <div class="flex items-center justify-between gap-2 sm:gap-4">
         <!-- 歌曲信息 -->
         <div class="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
           <div class="relative flex-shrink-0 group">
             <img id="d-cover" src="" alt=""
-                 class="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:shadow-pink-500/20" referrerpolicy="no-referrer">
+                 class="w-10 h-10 sm:w-14 sm:h-14 object-cover rounded-xl shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:shadow-pink-500/20" referrerpolicy="no-referrer">
             <!-- 播放频谱（播放中跳动，纯 CSS 动画） -->
             <div id="d-eq" class="absolute inset-x-0 bottom-0 h-6 flex items-end justify-center gap-[2px] px-1 bg-black/30 rounded-b-xl" style="display:none">
               <span class="eq-bar w-[3px] rounded-full bg-pink-400"></span>
@@ -255,26 +255,26 @@
             </div>
           </div>
           <div class="min-w-0">
-            <p id="d-title" class="text-base font-semibold text-gray-900 dark:text-white truncate"></p>
-            <p id="d-artist" class="text-sm text-gray-500 dark:text-gray-400 truncate"></p>
+            <p id="d-title" class="text-sm font-semibold text-gray-900 dark:text-white truncate"></p>
+            <p id="d-artist" class="text-xs text-gray-500 dark:text-gray-400 truncate"></p>
           </div>
         </div>
 
         <!-- 控制按钮 -->
         <div class="flex items-center space-x-2 sm:space-x-4">
-          <button id="d-tick" title="字幕开关（横向歌词字幕条）" class="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button id="d-tick" title="字幕开关（横向歌词字幕条）" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h10M7 13.5h6"/></svg>
           </button>
           <button id="d-prev" title="上一首" disabled
-                  class="flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  class="flex w-10 h-10 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
           </button>
           <button id="d-toggle" title="播放/暂停"
-                  class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-lg hover:brightness-105 transition-all flex items-center justify-center flex-shrink-0">
+                  class="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-lg hover:brightness-105 transition-all flex items-center justify-center flex-shrink-0">
             <svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </button>
           <button id="d-next" title="下一首" disabled
-                  class="flex w-11 h-11 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  class="flex w-10 h-10 rounded-full items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
           </button>
         </div>

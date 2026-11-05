@@ -80,6 +80,9 @@ func main() {
 	// 桌面端：0.0.0.0 独立端口让局域网 DLNA/音箱/挂件能访问代理流；安卓 no-op
 	go listenBackend(h)
 
+	// 阶段3：安卓端也走真实 HTTP（MainActivity 加载 http://127.0.0.1:28976，见
+	// build/android/.../MainActivity.java BACKEND_URL），不再走 wails asset 桥。
+	// 因此不需要 Assets.Handler（桌面走绝对 URL 也不走 asset 桥）。asset 桥彻底退役。
 	app = application.New(application.Options{
 		Name:        "HomeCast",
 		Description: "家庭音乐播放器（B站音乐 · 个人免费）",
