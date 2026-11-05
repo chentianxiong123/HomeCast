@@ -98,3 +98,6 @@ reference/
 MiAir/
 nisheng/
 xiaomusic/
+
+# wails3 安卓壳的 npm/前端绑定目录（项目不用 npm/vite，纯 htmx；wails3 generate 产物，勿提交）
+wails3/frontend/
