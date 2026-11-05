@@ -31,7 +31,9 @@ extern void hc_move(int, int);
 extern void hc_resize(int, int);
 extern void hc_get_pos(int*, int*);
 extern void hc_keep_above(void);
-extern void hc_recenter(int);
+extern void hc_ctrl_fullwidth(int);
+extern void hc_bg_on(void);
+extern void hc_bg_off(void);
 extern void _init_cb(void);
 */
 import "C"
@@ -77,31 +79,39 @@ func (d *gtkDisplay) initGtk4(x, y int) error {
 	C.gtk_widget_set_size_request(da, C.gint(MinW), C.gint(WinH))
 	C.gtk_fixed_put((*C.GtkFixed)(unsafe.Pointer(fixed)), da, 0, 0)
 
-	// 底部控制条（照 GTK3 版）
+	// 底部控制条：外层全宽容器（宽度跟踪窗口，见 Resize），内层用中心盒居中按钮组
 	ctrl := C.gtk_box_new(C.GTK_ORIENTATION_HORIZONTAL, 6)
 	C.gtk_widget_set_name(ctrl, C.CString("hc-ctrl"))
-	C.gtk_widget_set_size_request(ctrl, 0, C.gint(CtrlH))
+	C.gtk_widget_set_size_request(ctrl, C.gint(MinW), C.gint(CtrlH)) // 初始全宽，Resize 时跟踪窗口宽
+	// 内层：中心盒（center-box），子按钮组水平居中于全宽 ctrl
+	center := C.gtk_center_box_new()
+	C.gtk_widget_set_hexpand(center, 1) // 关键：center 填满 ctrl 全宽，内部 btns 才居中
+	// 5 个按钮用横向 box 包一组作为 center 内容
+	btns := C.gtk_box_new(C.GTK_ORIENTATION_HORIZONTAL, 6)
+	C.gtk_center_box_set_center_widget((*C.GtkCenterBox)(unsafe.Pointer(center)), btns)
 	mkBtn := func(label string, w, kind int) {
 		b := C.gtk_button_new_with_label(C.CString(label))
 		C.gtk_widget_set_size_request(b, C.gint(w), C.gint(CtrlH))
 		C.gtk_widget_set_name(b, C.CString("hc-btn"))
 		C._hc_btn_connect(b, C.int(kind))
-		C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(ctrl)), b)
+		C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(btns)), b)
 	}
-	mkBtn("‖", 24, 1)
-	mkBtn("−0.5", 44, 2)
-	mkBtn("+0.5", 44, 3)
-	mkBtn("🔓", 28, 4)
-	mkBtn("×", 22, 5)
+	mkBtn("⏸", 30, 1)
+	mkBtn("−", 30, 2)
+	mkBtn("+", 30, 3)
+	mkBtn("🔓", 32, 4)
+	mkBtn("✕", 28, 5)
+	C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(ctrl)), center)
+	// 外层 ctrl 放左下角，宽度由 Resize 跟踪（全宽 → center-box 自动居中按钮组）
 	C.gtk_fixed_put((*C.GtkFixed)(unsafe.Pointer(fixed)), ctrl, 0, C.double(WinH-CtrlH))
 	C.gtk_widget_set_visible(ctrl, 0)
 
-	// 锁定态小锁
+	// 锁定态小锁（放大到 18，更醒目）
 	lockBtn := C.gtk_button_new_with_label(C.CString("🔒"))
-	C.gtk_widget_set_size_request(lockBtn, C.gint(16), C.gint(16))
+	C.gtk_widget_set_size_request(lockBtn, C.gint(18), C.gint(18))
 	C.gtk_widget_set_name(lockBtn, C.CString("hc-lock"))
 	C._hc_btn_connect(lockBtn, C.int(4))
-	C.gtk_fixed_put((*C.GtkFixed)(unsafe.Pointer(fixed)), lockBtn, 6, C.double(WinH-16-6))
+	C.gtk_fixed_put((*C.GtkFixed)(unsafe.Pointer(fixed)), lockBtn, 6, C.double(WinH-18-6))
 	C.gtk_widget_set_visible(lockBtn, 0)
 
 	C.hc_set_win(cwin)
@@ -113,6 +123,7 @@ func (d *gtkDisplay) initGtk4(x, y int) error {
 	C.wire_signals()
 	C.hc_keep_above()
 	C.hc_move(C.int(x), C.int(y))
+	C.hc_ctrl_fullwidth(C.int(MinW)) // 初始窗口宽 = MinW，控制条全宽（内层自动居中）
 	C.xshape_mask(0) // 初始穿透
 	st.mu.Lock()
 	st.winW = MinW
@@ -134,8 +145,8 @@ func (d *gtkDisplay) Move(x, y int) {
 func (d *gtkDisplay) Resize(w, h int) {
 	C.hc_resize(C.int(w), C.int(h))
 	C.gtk_widget_set_size_request(C.hc_draw(), C.gint(w), C.gint(h))
-	// 控制条/锁 重新居中（窗口拉宽后跟随中线，不贴左）
-	C.hc_recenter(C.int(w))
+	// ctrl 全宽跟踪窗口宽 → 内层 center 自动居中按钮组（不手动算 cx）
+	C.hc_ctrl_fullwidth(C.int(w))
 }
 
 func (d *gtkDisplay) Size() (int, int) {
@@ -176,12 +187,14 @@ func (d *gtkDisplay) ShowUI(locked bool) {
 		C.gtk_widget_set_visible(C.hc_ctrl(), 1)
 		C.gtk_widget_set_visible(C.hc_lockbtn(), 0)
 	}
+	C.hc_bg_on() // 一体背景显示（浅色半透明）
 	C.xshape_mask(1)
 }
 
 func (d *gtkDisplay) HideUI() {
 	C.gtk_widget_set_visible(C.hc_ctrl(), 0)
 	C.gtk_widget_set_visible(C.hc_lockbtn(), 0)
+	C.hc_bg_off() // 背景移除 → 真透明（只剩歌词文字）
 	C.xshape_mask(0)
 }
 
