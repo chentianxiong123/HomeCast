@@ -80,14 +80,6 @@ static void _release_cb(GtkGestureClick *g, int n, double x, double y, gpointer 
 	goOnButtonRelease();
 }
 
-static void _pan_cb(GtkGesturePan *g, double x, double y, gpointer u) {
-	(void)g; (void)x; (void)y; (void)u;
-	int px, py;
-	if (pointer_global(&px, &py)) {
-		goOnMotion(px, py);
-	}
-}
-
 // ── 自由拖动（GtkGestureDrag，双向；拖动用全局指针坐标）──
 static void _drag_cb(GtkGestureDrag *g, double x, double y, gpointer u) {
 	(void)g; (void)x; (void)y; (void)u;
@@ -97,17 +89,35 @@ static void _drag_cb(GtkGestureDrag *g, double x, double y, gpointer u) {
 	}
 }
 
-// ── CSS 样式（照 GTK3 版：window.background 透明 + 半透明按钮）──
+// ── CSS 样式（字幕 + 面板一体：窗口整面浅色半透明底，hover 时才显示）──
 void _hc_css(void) {
 	GtkCssProvider *p = gtk_css_provider_new();
 	const char *css =
 		"window, window.background { background-color: transparent; }"
 		"drawingarea { background-color: transparent; }"
-		"#hc-btn, #hc-lock { background: rgba(20,20,30,130); color: #d8d8e8;"
-		" border: none; border-radius: 4px; font-size: 11px; padding: 0px; min-height: 0px;"
-		" box-shadow: none; outline: none; }"
-		"#hc-btn:hover, #hc-lock:hover { background: rgba(255,255,255,70); color: #ffffff; }"
-		"#hc-ctrl { background: transparent; }";
+		// 一体背景层：hover（.hc-hover）时整窗浅色半透明卡片（非全透明）
+		"window.hc-hover {"
+		" background-color: rgba(20,20,32,140);"
+		" border-radius: 14px; }"
+		"window.hc-hover drawingarea { background-color: transparent; }"
+		// 控制条：面板融入一体背景（无单独卡片，透明底）
+		"#hc-ctrl { background: transparent; background-color: transparent;"
+		" border: none; box-shadow: none; padding: 2px 10px; margin: 0px; }"
+		// 按钮：透明底、大字号（16px）、精致圆角
+		"#hc-btn { background: transparent; color: #e8e8f4;"
+		" border: none; border-radius: 8px; font-size: 16px; padding: 3px 8px;"
+		" min-height: 18px; min-width: 18px; box-shadow: none; outline: none; margin: 0px;"
+		" font-family: 'Noto Sans', 'Cantarell', 'DejaVu Sans', sans-serif; }"
+		"#hc-btn label { margin: 0px; padding: 0px; color: #e8e8f4; font-size: 16px;"
+		" font-family: 'Noto Sans', 'Cantarell', 'DejaVu Sans', sans-serif; }"
+		"#hc-btn:hover { background: rgba(255,255,255,30); }"
+		"#hc-btn:hover label { color: #ffffff; }"
+		// 锁定态小锁
+		"#hc-lock { background: rgba(20,20,32,140); color: #e8e8f4;"
+		" border: 1px solid rgba(255,255,255,25); border-radius: 8px; font-size: 13px; padding: 2px 5px;"
+		" box-shadow: 0 1px 5px rgba(0,0,0,100); }"
+		"#hc-lock label { color: #e8e8f4; font-size: 13px; margin: 0px; padding: 0px; }"
+		"#hc-lock:hover { background: rgba(255,255,255,30); }";
 	gtk_css_provider_load_from_string(p, css);
 	GdkDisplay *disp = gdk_display_get_default();
 	if (disp == NULL) disp = gtk_widget_get_display(g_win);
@@ -115,6 +125,16 @@ void _hc_css(void) {
 		disp, GTK_STYLE_PROVIDER(p),
 		GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	g_object_unref(p);
+}
+
+// ── 一体背景显隐：hover 时给窗口加 .hc-hover 类（整面浅色半透明），离开移除（真透明）──
+void hc_bg_on(void) {
+	if (!g_win) return;
+	gtk_widget_add_css_class(g_win, "hc-hover");
+}
+void hc_bg_off(void) {
+	if (!g_win) return;
+	gtk_widget_remove_css_class(g_win, "hc-hover");
 }
 
 // ── wire_signals：draw_func + 手势 + tick（照 GTK3 版 g_timeout_add）──
@@ -150,19 +170,14 @@ void hc_get_pos(int *x, int *y) {
 	XTranslateCoordinates(_dpy(), _xid(), DefaultRootWindow(_dpy()), 0, 0, &rx, &ry, &c);
 	*x = rx; *y = ry;
 }
-// ── 重新居中控制条/锁（窗口拉宽时跟随中线）──
-void hc_recenter(int w) {
-	// ctrl 宽 = 24+44+44+28+22 + 4*6(spacing) = 184；锁 16 宽
-	int cw = 184;
-	int cx = (w - cw) / 2;
-	if (cx < 0) cx = 0;
+// ── ctrl 全宽跟踪窗口宽（内层 center 自动居中按钮组）──
+void hc_ctrl_fullwidth(int w) {
 	if (g_ctrl)
-		gtk_fixed_put(GTK_FIXED(g_fixed), g_ctrl, (double)cx, (double)(116 - 24));
-	// 锁贴右边（不跟 ctrl 中线，贴右更合理）
+		gtk_widget_set_size_request(g_ctrl, (gint)w, 24);
 	if (g_lockbtn) {
-		int lx = w - 16 - 6;
+		int lx = w - 18 - 6;
 		if (lx < 0) lx = 6;
-		gtk_fixed_put(GTK_FIXED(g_fixed), g_lockbtn, (double)lx, (double)(116 - 16 - 6));
+		gtk_fixed_move(GTK_FIXED(g_fixed), g_lockbtn, (double)lx, (double)(116 - 18 - 6));
 	}
 }
 

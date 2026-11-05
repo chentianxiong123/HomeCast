@@ -316,6 +316,7 @@ func tick() {
 			st.offset = 0
 			st.dur = dur
 			st.playing = playing2
+			st.winW = MinW // 切歌重置占位宽，fetchLyric 拉到后按最长行定死
 			st.mu.Unlock()
 			if key != "" {
 				st.mu.Lock()
@@ -352,6 +353,10 @@ func tick() {
 
 // ── 共享绘制（显示层 goOnDraw → paint(c Canvas)） ──
 
+// 共享绘制（显示层 goOnDraw → paint(c Canvas)）
+// 歌词居中基准：窗口宽在切歌时一次性定好（fixLyricWidth），播放中不变 →
+// 歌词始终围绕固定中线居中，不逐行左右晃动（对齐 web 字幕面板固定宽）
+
 func paint(c Canvas) {
 	st.mu.Lock()
 	text := displayTextLocked()
@@ -362,24 +367,7 @@ func paint(c Canvas) {
 	if text == "" {
 		return
 	}
-	// 宽度自适应：用实际 TextSize 测量（不估算，避免估算/实测不一致横跳）
 	w, h := c.TextSize(text, FontSize)
-	target := int(w) + 90 // 左右各 45px 边距
-	if target < MinW {
-		target = MinW
-	}
-	if target > MaxW {
-		target = MaxW
-	}
-	if abs(winW-target) > 24 {
-		st.mu.Lock()
-		st.winW = target
-		st.mu.Unlock()
-		if disp != nil {
-			disp.Resize(target, WinH)
-		}
-		return // 下帧重绘（窗口宽已更新，下帧用新宽居中）
-	}
 	x := (float64(winW) - w) / 2
 	if x < 0 {
 		x = 0
@@ -391,6 +379,27 @@ func paint(c Canvas) {
 	// 阴影 + 主字（白字黑阴影，对齐原版）
 	c.Text(x+2, y0+2, text, FontSize, 0, 0, 0, 0.78)
 	c.Text(x, y0, text, FontSize, 1, 1, 1, 1)
+}
+
+// fixLyricWidth 本歌窗口宽一次性定好（最长行 + 边距），切歌才变，播放中固定不晃
+func fixLyricWidth(lines []LyricLine) int {
+	if len(lines) == 0 {
+		return MinW
+	}
+	maxLen := 0
+	for _, l := range lines {
+		if n := len([]rune(l.Text)); n > maxLen {
+			maxLen = n
+		}
+	}
+	w := maxLen*30 + 120 // 30px/字估算 + 左右 60px 边距
+	if w < MinW {
+		w = MinW
+	}
+	if w > MaxW {
+		w = MaxW
+	}
+	return w
 }
 
 // displayTextLocked 需持锁调用
@@ -415,17 +424,6 @@ func displayIdxLocked() int {
 		}
 	}
 	return idx
-}
-
-func targetWidth(text string) int {
-	w := len([]rune(text))*32 + 90
-	if w < MinW {
-		w = MinW
-	}
-	if w > MaxW {
-		w = MaxW
-	}
-	return w
 }
 
 func abs(x int) int {
@@ -504,8 +502,14 @@ func fetchLyric(keyword, key string, gen int) {
 	if out.Data.Offset != 0 && st.offset == 0 {
 		st.offset = out.Data.Offset
 	}
+	// 本歌窗口宽一次性定好（最长行），播放中固定中线不晃
+	winW := fixLyricWidth(lines)
+	st.winW = winW
 	st.curIdx = displayIdxLocked()
 	st.mu.Unlock()
+	if disp != nil {
+		disp.Resize(winW, WinH) // 切歌时定宽（播放中不再 resize → 中线稳定）
+	}
 	queueDraw()
-	log.Printf("[widget] 歌词 %d 行 🎵%s", len(lines), keyword)
+	log.Printf("[widget] 歌词 %d 行 🎵%s 宽=%d", len(lines), keyword, winW)
 }
