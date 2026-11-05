@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.0.1"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.0.1",
+			"CompanyName": "HomeCast",
+			"FileDescription": "家庭音乐播放器（B站音乐 个人免费）",
+			"LegalCopyright": "(c) 2025, My Company",
+			"ProductName": "HomeCast",
+			"Comments": "Some Product Comments"
+		}
+	}
+}
