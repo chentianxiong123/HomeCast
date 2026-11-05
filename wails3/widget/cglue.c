@@ -1,43 +1,57 @@
-#ifndef _WIN32
-// C 实现层：GTK 挂件窗口的 C 侧代码（独立编译单元，避免 preamble 重复定义）
-// C 实现层：GTK 挂件窗口的 C 侧代码（独立编译单元，避免 preamble 重复定义）
+// cglue.c — GTK4 挂件 C 实现（照 GTK3 版逻辑：draw_func + 手势 + tick + 1bpp 穿透）
 #include <gtk/gtk.h>
-#include <gdk/gdkx.h>
+#include <gdk/x11/gdkx.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/shape.h>
 
-// Go 侧回调（//export 生成于 _cgo_export.c）
-extern gboolean goOnDraw(GtkWidget *w, cairo_t *cr, gpointer user);
-extern gboolean goOnButtonPress(GtkWidget *w, GdkEventButton *e, gpointer u);
-extern gboolean goOnButtonRelease(GtkWidget *w, GdkEventButton *e, gpointer u);
-extern gboolean goOnMotion(GtkWidget *w, GdkEventMotion *e, gpointer u);
+// Go 侧回调（display_linux.go //export）
+extern void goOnDraw(cairo_t *cr, int width, int height, gpointer user);
+extern void goOnButtonPress(double x, double y, int button);
+extern void goOnButtonRelease(void);
+extern void goOnMotion(double x, double y);
+extern gboolean goTick(gpointer user);
 extern void goOnPauseClick(void);
 extern void goOnMinusClick(void);
 extern void goOnPlusClick(void);
 extern void goOnLockClick(void);
 extern void goOnCloseClick(void);
-extern gboolean goTick(gpointer user);
+extern void goInit(void);
+extern int pointer_global(int *x, int *y);
+
+// X11 底层前向声明（定义在下方）
+void hc_get_pos(int *x, int *y);
 
 static GtkWidget *g_win = NULL;
 static GtkWidget *g_fixed = NULL;
 static GtkWidget *g_ctrl = NULL;
 static GtkWidget *g_lockbtn = NULL;
-static GdkWindow *g_win_gdk = NULL;
+static GtkWidget *g_draw = NULL;
 
-GtkWidget* hc_win(void)       { return g_win; }
-GtkWidget* hc_ctrl(void)      { return g_ctrl; }
-GtkWidget* hc_lockbtn(void)   { return g_lockbtn; }
-GtkWidget* hc_fixed(void)     { return g_fixed; }
-GdkWindow* hc_win_gdk(void)   { return g_win_gdk; }
+GtkWidget* hc_win(void)     { return g_win; }
+GtkWidget* hc_ctrl(void)    { return g_ctrl; }
+GtkWidget* hc_lockbtn(void) { return g_lockbtn; }
+GtkWidget* hc_fixed(void)   { return g_fixed; }
+GtkWidget* hc_draw(void)    { return g_draw; }
 void hc_set_win(GtkWidget *w)     { g_win = w; }
 void hc_set_ctrl(GtkWidget *w)    { g_ctrl = w; }
 void hc_set_lockbtn(GtkWidget *w) { g_lockbtn = w; }
 void hc_set_fixed(GtkWidget *w)   { g_fixed = w; }
-void hc_set_win_gdk(GdkWindow *w) { g_win_gdk = w; }
+void hc_set_draw_area(GtkWidget *w) { g_draw = w; }
 
+// GTK4 严格主线程：Init 经 g_idle_add 调度到主循环
+static gboolean _init_idle(gpointer user) { (void)user; goInit(); return G_SOURCE_REMOVE; }
+void _init_cb(void) { g_idle_add(_init_idle, NULL); }
+
+// ── draw_func → goOnDraw ──
+static void _draw_cb(GtkDrawingArea *da, cairo_t *cr, int width, int height, gpointer user) {
+	(void)da; (void)user;
+	goOnDraw(cr, width, height, user);
+}
+
+// ── 按钮回调 → Go 动作（照 GTK3 版） ──
 static void _hc_btn_cb(GtkWidget *b, gpointer d) {
-	int kind = GPOINTER_TO_INT(d);
-	switch (kind) {
+	(void)b;
+	switch (GPOINTER_TO_INT(d)) {
 	case 1: goOnPauseClick(); break;
 	case 2: goOnMinusClick(); break;
 	case 3: goOnPlusClick(); break;
@@ -50,48 +64,126 @@ void _hc_btn_connect(GtkWidget *b, int kind) {
 	g_signal_connect(b, "clicked", G_CALLBACK(_hc_btn_cb), GINT_TO_POINTER(kind));
 }
 
+// ── 按下/释放/拖动：全局坐标（X11 XQueryPointer，和 CursorInside 同源）──
+static void _press_cb(GtkGestureClick *g, int n, double x, double y, gpointer u) {
+	(void)n; (void)u;
+	int px, py;
+	if (!pointer_global(&px, &py)) {
+		int gx, gy; hc_get_pos(&gx, &gy); px = (int)x + gx; py = (int)y + gy;
+	}
+	int btn = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g));
+	goOnButtonPress(px, py, btn);
+}
+
+static void _release_cb(GtkGestureClick *g, int n, double x, double y, gpointer u) {
+	(void)g; (void)n; (void)x; (void)y; (void)u;
+	goOnButtonRelease();
+}
+
+static void _pan_cb(GtkGesturePan *g, double x, double y, gpointer u) {
+	(void)g; (void)x; (void)y; (void)u;
+	int px, py;
+	if (pointer_global(&px, &py)) {
+		goOnMotion(px, py);
+	}
+}
+
+// ── 自由拖动（GtkGestureDrag，双向；拖动用全局指针坐标）──
+static void _drag_cb(GtkGestureDrag *g, double x, double y, gpointer u) {
+	(void)g; (void)x; (void)y; (void)u;
+	int px, py;
+	if (pointer_global(&px, &py)) {
+		goOnMotion(px, py);
+	}
+}
+
+// ── CSS 样式（照 GTK3 版：window.background 透明 + 半透明按钮）──
 void _hc_css(void) {
 	GtkCssProvider *p = gtk_css_provider_new();
 	const char *css =
+		"window, window.background { background-color: transparent; }"
+		"drawingarea { background-color: transparent; }"
 		"#hc-btn, #hc-lock { background: rgba(20,20,30,130); color: #d8d8e8;"
 		" border: none; border-radius: 4px; font-size: 11px; padding: 0px; min-height: 0px;"
 		" box-shadow: none; outline: none; }"
 		"#hc-btn:hover, #hc-lock:hover { background: rgba(255,255,255,70); color: #ffffff; }"
 		"#hc-ctrl { background: transparent; }";
-	gtk_css_provider_load_from_data(p, css, -1, NULL);
-	GdkScreen *s = gdk_screen_get_default();
-	gtk_style_context_add_provider_for_screen(s, GTK_STYLE_PROVIDER(p),
+	gtk_css_provider_load_from_string(p, css);
+	GdkDisplay *disp = gdk_display_get_default();
+	if (disp == NULL) disp = gtk_widget_get_display(g_win);
+	gtk_style_context_add_provider_for_display(
+		disp, GTK_STYLE_PROVIDER(p),
 		GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	g_object_unref(p);
 }
 
+// ── wire_signals：draw_func + 手势 + tick（照 GTK3 版 g_timeout_add）──
 void wire_signals(void) {
-	g_signal_connect(g_win, "draw", G_CALLBACK(goOnDraw), NULL);
-	g_signal_connect(g_win, "button-press-event", G_CALLBACK(goOnButtonPress), NULL);
-	g_signal_connect(g_win, "button-release-event", G_CALLBACK(goOnButtonRelease), NULL);
-	g_signal_connect(g_win, "motion-notify-event", G_CALLBACK(goOnMotion), NULL);
+	gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(g_draw), _draw_cb, NULL, NULL);
+
+	GtkGesture *click = gtk_gesture_click_new();
+	gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 0);
+	g_signal_connect(click, "pressed", G_CALLBACK(_press_cb), NULL);
+	g_signal_connect(click, "released", G_CALLBACK(_release_cb), NULL);
+	gtk_widget_add_controller(g_draw, GTK_EVENT_CONTROLLER(click));
+
+	GtkGesture *drag = gtk_gesture_drag_new();
+	g_signal_connect(drag, "drag", G_CALLBACK(_drag_cb), NULL);
+	gtk_widget_add_controller(g_draw, GTK_EVENT_CONTROLLER(drag));
+
 	g_timeout_add(150, goTick, NULL);
 }
 
-// X11 真穿透：输入区域用 1bpp pixmap（block=0 全穿透，1 整窗可点）
+// ── X11 底层：move/resize/get_pos/keep_above（GTK4 移除了 gtk_window_move 等）──
+static GdkSurface* _surf(void) { return gtk_native_get_surface(GTK_NATIVE(g_win)); }
+static Display* _dpy(void) { return GDK_DISPLAY_XDISPLAY(gdk_surface_get_display(_surf())); }
+static Window _xid(void) { return gdk_x11_surface_get_xid(GDK_X11_SURFACE(_surf())); }
+
+void hc_move(int x, int y) {
+	Display *d = _dpy(); XMoveWindow(d, _xid(), x, y); XFlush(d);
+}
+void hc_resize(int w, int h) {
+	Display *d = _dpy(); XResizeWindow(d, _xid(), (unsigned)w, (unsigned)h); XFlush(d);
+}
+void hc_get_pos(int *x, int *y) {
+	Window c; int rx, ry;
+	XTranslateCoordinates(_dpy(), _xid(), DefaultRootWindow(_dpy()), 0, 0, &rx, &ry, &c);
+	*x = rx; *y = ry;
+}
+void hc_keep_above(void) {
+	Display *d = _dpy(); Window w = _xid();
+	Atom net = XInternAtom(d, "_NET_WM_STATE", False);
+	Atom above = XInternAtom(d, "_NET_WM_STATE_ABOVE", False);
+	Atom skip = XInternAtom(d, "_NET_WM_STATE_SKIP_TASKBAR", False);
+	XEvent e; memset(&e, 0, sizeof(e));
+	e.xclient.type = ClientMessage; e.xclient.window = w; e.xclient.message_type = net;
+	e.xclient.format = 32; e.xclient.data.l[0] = 1; e.xclient.data.l[1] = above;
+	e.xclient.data.l[2] = skip;
+	XSendEvent(d, DefaultRootWindow(d), False, SubstructureRedirectMask|SubstructureNotifyMask, &e);
+	XFlush(d);
+}
+
+// ── X11 真穿透：输入区域用 1bpp pixmap（照 GTK3 版；block=0 全穿透，1 整窗可点）──
 void xshape_mask(int block) {
-	Display *dpy = XOpenDisplay(NULL);
-	if (!dpy || !g_win_gdk) return;
-	Window xid = gdk_x11_window_get_xid(g_win_gdk);
-	int w = block ? gdk_window_get_width(g_win_gdk) : 1;
-	int h = block ? gdk_window_get_height(g_win_gdk) : 1;
-	Pixmap pm = XCreatePixmap(dpy, xid, w, h, 1);
+	GdkSurface *surf = _surf();
+	if (!surf) return;
+	Display *dpy = _dpy();
+	Window xid = _xid();
+	int w = gtk_widget_get_width(g_win);
+	int h = gtk_widget_get_height(g_win);
+	int sw = block ? w : 1;
+	int sh = block ? h : 1;
+	Pixmap pm = XCreatePixmap(dpy, xid, sw, sh, 1);
 	GC gc = XCreateGC(dpy, pm, 0, NULL);
 	XSetForeground(dpy, gc, block ? 1 : 0);
-	XFillRectangle(dpy, pm, gc, 0, 0, w, h);
+	XFillRectangle(dpy, pm, gc, 0, 0, sw, sh);
 	XShapeCombineMask(dpy, xid, ShapeInput, 0, 0, pm, ShapeSet);
 	XFlush(dpy);
 	XFreeGC(dpy, gc);
 	XFreePixmap(dpy, pm);
-	XCloseDisplay(dpy);
 }
 
-// 鼠标全局坐标（穿透态也有效）
+// ── 鼠标全局坐标（穿透态也有效；照 GTK3 版）──
 int pointer_global(int *x, int *y) {
 	Display *dpy = XOpenDisplay(NULL);
 	if (!dpy) return 0;
@@ -101,4 +193,3 @@ int pointer_global(int *x, int *y) {
 	XCloseDisplay(dpy);
 	return ok;
 }
-#endif // _WIN32
