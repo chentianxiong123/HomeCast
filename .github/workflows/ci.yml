@@ -44,12 +44,12 @@ jobs:
       - name: 安装 GTK3 / WebKitGTK / appindicator 依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libgtk-4-dev libwebkit2gtk-6.0-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
       - name: wails3 模块 vet
         run: |
           cd wails3 && go vet -tags gtk3 ./...
       - name: 安装 wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
       - name: 官方构建（Linux，gtk3 + go:embed）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -76,9 +76,9 @@ jobs:
       - name: 安装 mingw-w64
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64 libgtk-4-dev libwebkit2gtk-6.0-dev
+          sudo apt-get install -y gcc-mingw-w64-x86-64 libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: 安装 wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
       - name: 官方构建（Windows，mingw + CGO）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
