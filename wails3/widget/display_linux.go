@@ -40,6 +40,7 @@ extern void _init_cb(void);
 import "C"
 
 import (
+	"time"
 	"fmt"
 	"log"
 	"unsafe"
@@ -123,6 +124,9 @@ func (d *gtkDisplay) initGtk4(x, y int) error {
 	C.gtk_widget_set_visible(cwin, 1)
 	C.wire_signals()
 	C.hc_keep_above()
+	// KDE/kwin 需窗口完全 map 后重发 _NET_WM_STATE（Alt+Tab 不显示挂件）
+	time.AfterFunc(800*time.Millisecond, func() { C.hc_keep_above() })
+	time.AfterFunc(2000*time.Millisecond, func() { C.hc_keep_above() })
 	C.hc_move(C.int(x), C.int(y))
 	C.hc_ctrl_fullwidth(C.int(MinW)) // 初始窗口宽 = MinW，控制条全宽（内层自动居中）
 	C.xshape_mask(0) // 初始穿透
