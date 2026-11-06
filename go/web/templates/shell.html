@@ -115,9 +115,9 @@
     <div id="ly-bg-cover" class="absolute inset-0 bg-cover bg-center blur-2xl scale-110 opacity-45"></div>
     <div id="ly-bg-solid" class="absolute inset-0 bg-gray-950"></div>
     <div class="absolute inset-0 bg-gray-950/55"></div>
-    <div class="h-full max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex gap-3 sm:gap-4">
+    <div class="h-full max-w-6xl mx-auto px-2 sm:px-6 py-4 sm:py-8 flex gap-2 sm:gap-4">
       <!-- 左：歌词候选栏（music.py 候选窗同款：自动搜当前歌名，点选即换源） -->
-      <div class="w-40 sm:w-64 flex-shrink-0 flex flex-col rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800 overflow-hidden">
+      <div class="w-28 sm:w-64 flex-shrink-0 flex flex-col rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800 overflow-hidden">
         <p class="text-xs text-gray-400 px-3 py-2 border-b border-gray-800 flex-shrink-0 truncate">
           <span class="text-pink-400 font-medium">歌词候选</span> <span id="ly-cand-title" class="text-gray-300"></span>
         </p>
@@ -127,7 +127,7 @@
       </div>
       <!-- 中：歌曲信息 + 歌词列表 + 进度条 -->
       <div class="flex-1 min-w-0 flex flex-col">
-        <div class="relative mb-6">
+        <div class="relative mb-3 sm:mb-6">
           <div class="flex items-center justify-center space-x-4 text-center">
             <img id="ly-cover" src="" alt="" class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-lg flex-shrink-0" referrerpolicy="no-referrer">
             <div class="text-left min-w-0">
@@ -143,7 +143,7 @@
         <!-- 竖向 KTV 歌词列表（实底、撑满中部） -->
         <div id="ly-lines" class="flex-1 overflow-y-auto rounded-xl bg-gray-900/70 backdrop-blur-md border border-gray-800 px-2"></div>
         <!-- 底部进度条（可拖 + 当前/总时长） -->
-        <div class="mt-4 flex items-center space-x-3">
+        <div class="mt-2 sm:mt-4 flex items-center space-x-2 sm:space-x-3">
           <span id="ly-cur" class="text-xs text-gray-400 font-mono tabular-nums flex-shrink-0">0:00</span>
           <input id="ly-progress" type="range" min="0" max="1000" step="1" value="0"
                  class="flex-1 w-full h-1.5 accent-pink-500 cursor-pointer">
@@ -151,30 +151,30 @@
         </div>
       </div>
       <!-- 右：工具列（字号 +- / 歌词对齐 ±0.5s / 歌曲操作） -->
-      <div class="w-12 sm:w-14 flex-shrink-0 flex flex-col items-center gap-2 pt-1">
+      <div class="w-10 sm:w-14 flex-shrink-0 flex flex-col items-center gap-2 pt-1">
         <div class="flex flex-col items-center gap-2 p-1.5 rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800">
-          <button id="ly-big" title="字号增大" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-big" title="字号增大" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
           </button>
           <span id="ly-size" class="w-11 text-center text-xs text-gray-400 font-mono">3/5</span>
-          <button id="ly-small" title="字号减小" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-small" title="字号减小" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
           </button>
         </div>
         <div class="flex flex-col items-center gap-2 p-1.5 rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800">
-          <button id="ly-nudge-up" title="歌词对齐 +0.5s（歌词提前）" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-nudge-up" title="歌词对齐 +0.5s（歌词提前）" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>
           </button>
           <span id="ly-nudge-val" title="点击归零" class="w-11 text-center text-[10px] text-gray-400 font-mono cursor-pointer hover:text-pink-300 transition-colors">0.0s</span>
-          <button id="ly-nudge-down" title="歌词对齐 -0.5s（歌词延后）" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-nudge-down" title="歌词对齐 -0.5s（歌词延后）" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
           </button>
         </div>
         <div class="flex flex-col items-center gap-2 p-1.5 rounded-2xl bg-gray-900/70 backdrop-blur-md border border-gray-800">
-          <button id="ly-fav" title="收藏/取消收藏" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-fav" title="收藏/取消收藏" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>
           </button>
-          <button id="ly-copy" title="复制链接" class="w-8 h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
+          <button id="ly-copy" title="复制链接" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 flex items-center justify-center transition-colors">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h12v12H8zM16 8V4H4v12h4"/></svg>
           </button>
         </div>

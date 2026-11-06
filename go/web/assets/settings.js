@@ -85,9 +85,9 @@
       // 音质
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">音质</p>' +
-      '<div class="flex space-x-2">' +
+      '<div class="flex flex-wrap gap-2 space-x-0">' +
       [64, 128, 192].map((q) =>
-        '<button class="set-q px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+        '<button class="set-q px-3 py-1.5 rounded-full text-sm font-medium transition-colors ' +
         (parseInt(quality, 10) === q ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
         '" data-q="' + q + '">' + q + 'k</button>').join('') +
       '</div></div>' +
@@ -96,9 +96,9 @@
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">播放模式</p>' +
       '<p class="text-sm text-gray-500 dark:text-gray-400 mb-2">当前：<span class="text-pink-400 font-medium">' + (MODE_NAMES[mode] || '顺序播放') + '</span>（点按钮切换）</p>' +
-      '<div class="flex space-x-2">' +
+      '<div class="flex flex-wrap gap-2 space-x-0">' +
       MODES.map((m) =>
-        '<button class="set-mode px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+        '<button class="set-mode px-3 py-1.5 rounded-full text-sm font-medium transition-colors ' +
         (mode === m ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
         '" data-m="' + m + '">' + MODE_NAMES[m] + '</button>').join('') +
       '</div></div>' +
@@ -106,9 +106,9 @@
       // 歌词字号
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">歌词字号</p>' +
-      '<div class="flex space-x-2">' +
+      '<div class="flex flex-wrap gap-2 space-x-0">' +
       LY_SIZES.map((v, i) =>
-        '<button class="set-ly px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+        '<button class="set-ly px-3 py-1.5 rounded-full text-sm font-medium transition-colors ' +
         (lyIdx === i ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
         '" data-i="' + i + '">' + v + 'px</button>').join('') +
       '</div></div>' +
@@ -116,11 +116,11 @@
       // 歌词背景模式
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-2">歌词背景</p>' +
-      '<div class="flex space-x-2">' +
-      '<button class="set-lybg px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+      '<div class="flex flex-wrap gap-2 space-x-0">' +
+      '<button class="set-lybg px-3 py-1.5 rounded-full text-sm font-medium transition-colors ' +
       (lybg === 'cover' ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
       '" data-v="cover">封面模糊</button>' +
-      '<button class="set-lybg px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+      '<button class="set-lybg px-3 py-1.5 rounded-full text-sm font-medium transition-colors ' +
       (lybg === 'solid' ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
       '" data-v="solid">纯色</button>' +
       '</div></div>' +
@@ -140,9 +140,9 @@
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-1">字幕字号（横向字幕条）</p>' +
       '<p class="text-xs text-gray-500 dark:text-gray-400 mb-2">当前字号：' + SUB_SIZES[subIdx] + 'px · 拖动字幕条可移动位置</p>' +
-      '<div class="flex space-x-2">' +
+      '<div class="flex flex-wrap gap-2 space-x-0">' +
       SUB_SIZES.map((v, i) =>
-        '<button class="set-sub px-4 py-1.5 rounded-full text-sm font-medium transition-colors ' +
+        '<button class="set-sub px-3 py-1.5 rounded-full text-sm font-medium transition-colors ' +
         (subIdx === i ? 'bg-gradient-to-r from-pink-500 to-violet-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300') +
         '" data-i="' + i + '">' + v + 'px</button>').join('') +
       '</div></div>' +
