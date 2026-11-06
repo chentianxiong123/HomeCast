@@ -40,7 +40,32 @@
     panel.classList.remove('ly-hidden');
     void panel.offsetWidth; // 强制 reflow
     panel.classList.add('ly-show');
+    closeDrawers(); // 打开时抽屉默认收起（歌词全宽）
   }
+
+  // ── 移动端抽屉：候选/工具按需展开（歌词区默认全宽；sm: 桌面三栏不动） ──
+  const drawerCand = document.getElementById('ly-cand-drawer');
+  const drawerTool = document.getElementById('ly-tool-drawer');
+  const btnCand = document.getElementById('ly-drawer-cand');
+  const btnTool = document.getElementById('ly-drawer-tool');
+  function toggleDrawer(el) {
+    if (!el) return;
+    const wasOpen = el.classList.contains('ly-drawer-open');
+    // 开一个时收另一个（候选/工具互斥）
+    if (drawerCand) drawerCand.classList.remove('ly-drawer-open');
+    if (drawerTool) drawerTool.classList.remove('ly-drawer-open');
+    if (!wasOpen) el.classList.add('ly-drawer-open');
+  }
+  function closeDrawers() {
+    if (drawerCand) drawerCand.classList.remove('ly-drawer-open');
+    if (drawerTool) drawerTool.classList.remove('ly-drawer-open');
+  }
+  if (btnCand && drawerCand) btnCand.addEventListener('click', (e) => { e.stopPropagation(); toggleDrawer(drawerCand); });
+  if (btnTool && drawerTool) btnTool.addEventListener('click', (e) => { e.stopPropagation(); toggleDrawer(drawerTool); });
+  // 点抽屉外区域收起
+  if (panel) panel.addEventListener('click', (e) => {
+    if (!e.target.closest('.ly-drawer') && !e.target.closest('#ly-drawer-cand') && !e.target.closest('#ly-drawer-tool')) closeDrawers();
+  });
   function hide() { // 先过渡收起，300ms 后再隐藏（不遮挡 dock）
     panel.classList.remove('ly-show');
     setTimeout(() => { if (!panel.classList.contains('ly-show')) panel.classList.add('ly-hidden'); }, 300);
