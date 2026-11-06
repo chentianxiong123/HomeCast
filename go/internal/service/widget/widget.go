@@ -15,6 +15,7 @@ type WidgetState struct {
 	CurrentTime float64 `json:"current_time"`
 	Duration    float64 `json:"duration"`
 	Playing     bool    `json:"playing"`
+	toggleReq   bool    // ⏸ 控制意图：挂件按钮置位，前端轮询消费（下行）
 }
 
 // NewWidgetState 构造
@@ -37,4 +38,20 @@ func (w *WidgetState) Get() (bvid, title, artist string, currentTime, duration f
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.BVID, w.Title, w.Artist, w.CurrentTime, w.Duration, w.Playing
+}
+
+// RequestToggle 挂件 ⏸ 按钮：置控制意图（前端轮询消费）
+func (w *WidgetState) RequestToggle() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.toggleReq = true
+}
+
+// ConsumeToggle 前端轮询下行指令：返回并清除 ⏸ 意图
+func (w *WidgetState) ConsumeToggle() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	v := w.toggleReq
+	w.toggleReq = false
+	return v
 }

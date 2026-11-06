@@ -157,7 +157,21 @@ func savePos(x, y int) {
 // PlayerCtl 事件桥已退役（前端 htmx 不监听 wails 事件）；±0.5s 仍走本地 offset 显示微调。
 
 func onPauseClick() {
-	// 播放/暂停同步回前端：待 hx 端点挂接（现前端无 wails 事件监听，删死路径）
+	// 播放/暂停：经后端控制意图中转 → 前端轮询 /api/v1/widget/command 消费
+	// （挂件是独立窗口，要控制 WebView 里的 audio 只能走 HTTP；延迟 = 前端 1s 轮询）
+	if Backend == "" {
+		return
+	}
+	go func() {
+		req, err := http.NewRequest(http.MethodPost, Backend+"/api/v1/widget/toggle", nil)
+		if err != nil {
+			return
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
 }
 
 func onMinusClick() {

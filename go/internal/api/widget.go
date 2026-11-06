@@ -38,3 +38,14 @@ func (h *WidgetHandler) Set(w http.ResponseWriter, r *http.Request) {
 	h.State.Set(body.BVID, body.Title, body.Artist, body.CurrentTime, body.Duration, body.Playing)
 	ok(w, true)
 }
+
+// Toggle POST /api/v1/widget/toggle —— 挂件 ⏸ 按钮请求切换播放/暂停
+func (h *WidgetHandler) Toggle(w http.ResponseWriter, r *http.Request) {
+	h.State.RequestToggle()
+	ok(w, true)
+}
+
+// Command GET /api/v1/widget/command —— 前端轮询下行指令（⏸ 意图消费）
+func (h *WidgetHandler) Command(w http.ResponseWriter, r *http.Request) {
+	ok(w, map[string]any{"toggle": h.State.ConsumeToggle()})
+}
