@@ -21,7 +21,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,18 +43,10 @@ const (
 // SnapshotProvider 播放状态快照（desktop main 提供，直读后端内存）
 type SnapshotProvider func() (bvid, title, artist string, currentTime, duration float64, playing bool)
 
-// LyricLine 歌词行
-type LyricLine struct {
-	Sec  float64
-	Text string
-}
-
 type state struct {
 	mu sync.Mutex
 
-	lines   []LyricLine
-	curIdx  int
-	pos     float64 // 当前时间（校准值 + 本地推进）
+	currentLine string // 后端 SSE 算好的当前行（多平台统一：显示层纯渲染）
 	offset  float64 // 用户微调
 	dur     float64
 	playing bool
@@ -70,7 +61,6 @@ type state struct {
 	dragDY   int
 	dragging bool
 	winW     int
-	lyGen    int // 歌词代际（fetchLyric 切歌时旧请求晚到丢弃，对齐 web loadGen）
 }
 
 var (
@@ -88,7 +78,6 @@ func Start(snapshot SnapshotProvider, backend string) error {
 	Backend = backend
 	home, _ := os.UserHomeDir()
 	posPath = filepath.Join(home, ".config", "homecast", "widget.json")
-	st.curIdx = -1
 	st.winW = MinW
 
 	x, y := loadPos()
@@ -317,23 +306,8 @@ func tick() {
 		}
 	}
 
-	// 2. 播放状态由 SSE 推送（listenEvents → applyState），本循环只负责按当前 pos 算行
-	st.mu.Lock()
-	playing := st.playing
-	st.mu.Unlock()
-
-	// 3. 每帧算当前行（对齐 web timeupdate→sync：ct+offset 直接指哪打哪）
-	if playing {
-		st.mu.Lock()
-		idx := displayIdxLocked()
-		if idx != st.curIdx {
-			st.curIdx = idx
-			st.mu.Unlock()
-			queueDraw()
-			return
-		}
-		st.mu.Unlock()
-	}
+	// 2. 播放状态由 SSE 推送（listenEvents → applyState），本循环只做悬停/拖拽；
+	// 歌词行由后端 SSE 算好（applyState 更新 currentLine → queueDraw），这里不再本地定位。
 }
 
 // ── 共享绘制（显示层 goOnDraw → paint(c Canvas)） ──
@@ -366,31 +340,12 @@ func paint(c Canvas) {
 	c.Text(x, y0, text, FontSize, 1, 1, 1, 1)
 }
 
-// fixLyricWidth 本歌窗口宽一次性定好（最长行 + 边距），切歌才变，播放中固定不晃
-func fixLyricWidth(lines []LyricLine) int {
-	if len(lines) == 0 {
-		return MinW
-	}
-	maxLen := 0
-	for _, l := range lines {
-		if n := len([]rune(l.Text)); n > maxLen {
-			maxLen = n
-		}
-	}
-	w := maxLen*30 + 120 // 30px/字估算 + 左右 60px 边距
-	if w < MinW {
-		w = MinW
-	}
-	if w > MaxW {
-		w = MaxW
-	}
-	return w
-}
 
 // displayTextLocked 需持锁调用
 func displayTextLocked() string {
-	if len(st.lines) > 0 && st.curIdx >= 0 && st.curIdx < len(st.lines) {
-		return st.lines[st.curIdx].Text
+	// 多平台统一：显示层纯渲染（逻辑住后端），直接用 SSE 算好的当前行
+	if st.currentLine != "" {
+		return st.currentLine
 	}
 	if st.title != "" {
 		return st.title
@@ -398,18 +353,7 @@ func displayTextLocked() string {
 	return ""
 }
 
-func displayIdxLocked() int {
-	t := st.pos + st.offset
-	idx := -1
-	for k := range st.lines {
-		if st.lines[k].Sec <= t {
-			idx = k
-		} else {
-			break
-		}
-	}
-	return idx
-}
+
 
 func abs(x int) int {
 	if x < 0 {
@@ -438,96 +382,23 @@ func joinTitle(title, artist string) string {
 // 对齐 web lyric.js：带 bvid（后端优先用「已选歌词源」——切源后两端同步同一份歌词）
 // + 代际保护（切歌时旧请求晚到丢弃，对齐 web loadGen）+ 本歌存档对齐偏移（meta 端点）
 
-func fetchLyric(keyword, key string, gen int) {
-	u := Backend + "/api/v1/music/lyric?keyword=" + url.QueryEscape(keyword)
-	if key != "" {
-		u += "&bvid=" + url.QueryEscape(key)
-	}
-	resp, err := http.Get(u)
-	if err != nil {
-		log.Printf("[widget] 歌词请求失败: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-	var out struct {
-		Code int `json:"code"`
-		Data *struct {
-			Lines  [][2]any `json:"lines"`
-			Offset float64  `json:"offset"`
-		} `json:"data"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&out) != nil || out.Data == nil {
-		return
-	}
-	lines := make([]LyricLine, 0, len(out.Data.Lines))
-	for _, l := range out.Data.Lines {
-		var line LyricLine
-		if len(l) < 2 {
-			continue
-		}
-		if f, ok := l[0].(float64); ok {
-			line.Sec = f
-		}
-		if s, ok := l[1].(string); ok {
-			line.Text = s
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) == 0 {
-		return
-	}
+// applyState SSE 推送的播放状态落地（多平台统一：显示层纯渲染，不本地定位）
+// 逻辑一份住后端（PickLine）；这里只用 SSE 算好的 line。切歌清行，同歌更新 line。
+func applyState(bvid, title, artist, line string, ct, dur float64, playing bool) {
 	st.mu.Lock()
-	if st.songKey != key || gen != st.lyGen {
-		st.mu.Unlock()
-		return // 已切歌/旧代际，丢弃（对齐 web stale()）
-	}
-	st.lines = lines
-	// 对齐偏移：后端返回本歌存档 offset（music.py _nudge_lyric 同款）；
-	// 只在本歌首次加载时应用（st.offset==0 才覆盖，不冲掉用户手动 ±0.5 调过的值）
-	if out.Data.Offset != 0 && st.offset == 0 {
-		st.offset = out.Data.Offset
-	}
-	// 本歌窗口宽一次性定好（最长行），播放中固定中线不晃
-	winW := fixLyricWidth(lines)
-	st.winW = winW
-	st.curIdx = displayIdxLocked()
-	st.mu.Unlock()
-	if disp != nil {
-		disp.Resize(winW, WinH) // 切歌时定宽（播放中不再 resize → 中线稳定）
-	}
-	queueDraw()
-	log.Printf("[widget] 歌词 %d 行 🎵%s 宽=%d", len(lines), keyword, winW)
-}
-// applyState SSE 推送的播放状态落地：切歌 → 清行重拉；同歌 → 校准 pos/dur/playing
-// 对齐 web lyric.js：pos 直接用上报位置（"指哪打哪"，逐字由挂件按 ct 算行）
-func applyState(bvid, title, artist string, ct, dur float64, playing bool) {
-	key := bvid
-	st.mu.Lock()
-	if st.songKey != key {
-		st.songKey = key
+	if st.songKey != bvid {
+		st.songKey = bvid
 		st.title = joinTitle(title, artist)
-		st.lines = nil
-		st.curIdx = -1
-		st.pos = 0
-		st.offset = 0
+		st.currentLine = ""
 		st.dur = dur
 		st.playing = playing
 		st.winW = MinW
-		st.mu.Unlock()
-		if key != "" {
-			st.mu.Lock()
-			st.lyGen++
-			gen := st.lyGen
-			st.mu.Unlock()
-			go fetchLyric(joinTitle(title, artist), key, gen)
-		}
-		queueDraw() // 切歌立即重绘（GTK4 draw_func 需显式 queue）
-		return
 	}
 	st.playing = playing
 	st.dur = dur
-	st.pos = ct
+	st.currentLine = line // 后端算好的当前行（唯一逻辑产物）
 	st.mu.Unlock()
+	queueDraw() // 状态变了立即重绘（GTK4 draw_func 需显式 queue）
 }
 
 // listenEvents 订阅后端 SSE（/api/v1/widget/events），事件到达即刷新歌词状态。
@@ -554,10 +425,10 @@ func listenEvents() {
 			time.Sleep(StatePoll * time.Millisecond)
 			continue
 		}
-		// 先拉一次当前快照，避免等首个事件前空白
+		// 先拉一次当前快照，避免等首个事件前空白（line 空，SSE 后续带真值）
 		if prov != nil {
 			b, t, a, ct, dur, pl := prov()
-			applyState(b, t, a, ct, dur, pl)
+			applyState(b, t, a, "", ct, dur, pl)
 		}
 		readSSE(resp.Body)
 		resp.Body.Close()
@@ -585,9 +456,10 @@ func readSSE(r io.Reader) {
 					CurrentTime float64 `json:"current_time"`
 					Duration    float64 `json:"duration"`
 					Playing     bool    `json:"playing"`
+					Line        string  `json:"line"`
 				}
 				if json.Unmarshal([]byte(data), &p) == nil {
-					applyState(p.BVID, p.Title, p.Artist, p.CurrentTime, p.Duration, p.Playing)
+					applyState(p.BVID, p.Title, p.Artist, p.Line, p.CurrentTime, p.Duration, p.Playing)
 				}
 			}
 			event = ""
