@@ -1,9 +1,9 @@
 // Package widget 桌面歌词挂件——多态显示层
 //
 // 核心状态机/歌词拉取/交互逻辑平台无关（widget.go），显示层按平台实现：
-//   - linux:   display_linux.go   （cgo + GTK3 + X11 穿透）
+//   - linux:   display_linux.go   （cgo + GTK4 + X11 穿透，GTK3 在 wails v3.1.0 下启动即崩）
 //   - windows: display_windows.go （Win32 透明穿透窗口，待真 Windows 环境补）
-//   - android: 悬浮窗 Service（wails3 壳 Java 层，待补）
+//   - android: 悬浮窗 Service（wails3 壳 Java 层，未开发；widget_android.go 当前 no-op）
 package widget
 
 // Canvas 平台无关绘制指令（linux=cairo/pango，windows=GDI 待实现）

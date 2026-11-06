@@ -11,7 +11,7 @@
 // 数据流：前端 WebView 上报 /widget/state → 后端内存 → 本窗口轮询快照；
 // 歌词走内嵌后端 /music/lyric?bvid= （已选源优先，与歌词页同步）。
 //
-// 显示层多态（Display 接口）：linux=GTK3(display_linux.go)、windows=Win32(待)、
+// 显示层多态（Display 接口）：linux=GTK4(display_linux.go)、windows=Win32(控制条待补)、
 // 安卓=悬浮窗 Service(待)——核心逻辑全在这个文件，显示层只填空。
 package widget
 
