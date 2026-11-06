@@ -241,6 +241,15 @@
     });
   }
 
+  // 桌面壳判定：wails 在 load 后注入 hcEnv（本脚本 load 前执行 → 初始化可能误判），
+  // 延迟检测，注入完成则重渲染（禁用网页字幕开关，不并存）
+  setTimeout(() => {
+    if (window.hcEnv === 'desktop' && !envDesktop) {
+      envDesktop = true;
+      render();
+    }
+  }, 300);
+
   render();
   }
   document.addEventListener('htmx:afterSwap', init);
