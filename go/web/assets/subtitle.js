@@ -9,8 +9,16 @@
   const audio = document.getElementById('audio');
   if (!bar || !audio) return;
 
-  const envDesktop = window.hcEnv === 'desktop';
+  // 桌面壳判定：wails 在 WindowLoadFinished（load 后）才注入 window.hcEnv，
+  // 而本脚本在 load 前执行 → 初始化可能误判为网页。延迟等注入完成再更新（杜绝竞态）。
+  let envDesktop = window.hcEnv === 'desktop';
   let enabled = envDesktop ? false : localStorage.getItem('hc:subtitle') !== '0';
+  setTimeout(() => {
+    if (window.hcEnv === 'desktop' && !envDesktop) {
+      envDesktop = true;
+      setEnabled(false); // 桌面壳由 GTK 挂件承担：强制关 web 字幕条（不共存）
+    }
+  }, 300);
   let lines = [];   // [[sec, line, dur?], ...]
   let lastIdx = -1;
   let loadGen = 0; // 换歌竞态保护（music.py bvid 校验同款；旧请求晚到丢弃）
