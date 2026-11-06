@@ -105,6 +105,18 @@
   #player-dock .space-x-2 { column-gap: 6px !important; }
   /* 歌词面板移动：候选栏更窄、进度行更紧 */
   #lyric-panel .flex.gap-3 { gap: 8px !important; }
+  /* 移动端歌词面板：候选栏最窄（只够点选）、工具列紧凑、歌词区撑满 */
+  #lyric-panel > div > div.w-28 { width: 88px !important; } /* 候选栏 88px（可点选标题） */
+  #lyric-panel > div > div.w-28 .text-xs { font-size: 11px !important; } /* 候选项字小 */
+  #lyric-panel > div > div.w-28 p.px-3 { padding-left: 6px !important; padding-right: 6px !important; }
+  #lyric-panel > div > div.w-10 { width: 40px !important; } /* 工具列 40px */
+  #lyric-panel > div > div.w-10 .gap-2 { gap: 4px !important; }
+  /* 歌词区撑满 + 小屏可读 */
+  #ly-lines { min-height: 0; }
+  /* 歌曲信息移动端紧凑：封面 44px、标题小 */
+  #lyric-panel img.w-12 { width: 44px !important; height: 44px !important; }
+  #ly-title { font-size: 16px !important; }
+  #ly-artist, #ly-source { font-size: 11px !important; }
 }
 
 /* ═══ 真机适配：隐藏滚动条 + 防横向溢出 ═══
