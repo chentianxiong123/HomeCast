@@ -70,7 +70,9 @@ func New() http.Handler {
 	speakerQR := speaker.NewQRLogin()
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speakerQR}
 	sitesHandler := &api.SitesHandler{Sites: sites.NewSitesService("")}
-	widgetState := widget.NewWidgetState()
+	widgetState := widget.NewWidgetState() // 先建 state（source 需引用 state 取 title）
+	lyricSrc := newLyricSource(lyricHandler, widgetState) // source 引用 handler+state
+	widgetState.SetLineSrc(lyricSrc)                       // 注入 source（避免循环依赖）
 	widgetStateGlobal = widgetState
 	widgetHandler := &api.WidgetHandler{State: widgetState}
 
