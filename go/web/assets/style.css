@@ -117,6 +117,19 @@
   #lyric-panel img.w-12 { width: 44px !important; height: 44px !important; }
   #ly-title { font-size: 16px !important; }
   #ly-artist, #ly-source { font-size: 11px !important; }
+  /* 移动端歌词页：候选/工具默认隐藏（抽屉），歌词区全宽；点按钮滑出 */
+  #lyric-panel .ly-drawer { display: none; } /* 默认收起 */
+  #lyric-panel .ly-drawer.ly-drawer-open { display: flex !important; } /* 点开 */
+  /* 候选抽屉：左侧滑出（绝对定位覆盖） */
+  #ly-cand-drawer { position: absolute; left: 8px; top: 48px; bottom: 8px; width: 200px !important; z-index: 20; }
+  #ly-tool-drawer { position: absolute; right: 8px; top: 48px; bottom: 8px; width: 56px !important; z-index: 20; }
+  /* 歌词区全宽（抽屉收起时） */
+  #lyric-panel > div > div.flex-1 { width: 100%; }
+  /* 移动端歌词面板背景遮罩（抽屉打开时点外收起） */
+}
+/* 桌面（≥640px）：候选/工具三栏原样，抽屉按钮隐藏 */
+@media (min-width: 640px) {
+  #lyric-panel .ly-drawer { display: flex !important; }
 }
 
 /* ═══ 真机适配：隐藏滚动条 + 防横向溢出 ═══
