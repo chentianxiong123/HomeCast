@@ -33,6 +33,8 @@ type Display interface {
 	// ShowUI 悬停浮现控制条（locked=true 只出小锁）；HideUI 收起
 	ShowUI(locked bool)
 	HideUI()
+	// SetVisible 整个挂件窗口显示/隐藏（下面面板 #d-tick → /api/v1/widget/lyric-visible）
+	SetVisible(on bool)
 	// Tick 周期调度核心循环（delayMs 毫秒后执行一次并自动续期）
 	Tick(delayMs int, f func())
 	// MainLoop 阻塞事件循环；Quit 退出

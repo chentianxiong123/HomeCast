@@ -126,6 +126,8 @@ func (d *winDisplay) QueueDraw() {
 // ShowUI/HideUI：Windows 版穿透窗收不到鼠标事件，控制条暂缺（TODO 锁定/拖动后续）
 func (d *winDisplay) ShowUI(locked bool) {}
 func (d *winDisplay) HideUI()           {}
+// SetVisible Windows 版（TODO 挂件窗口显示/隐藏）
+func (d *winDisplay) SetVisible(on bool) {}
 
 func (d *winDisplay) Tick(delayMs int, f func()) {
 	coreTick = f

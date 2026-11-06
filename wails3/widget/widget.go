@@ -129,6 +129,13 @@ func MainLoop() {
 	}
 }
 
+// SetVisible 桌面挂件整个窗口显示/隐藏（下面面板 #d-tick → POST /api/v1/widget/lyric-visible）
+func SetVisible(on bool) {
+	if disp != nil {
+		disp.SetVisible(on)
+	}
+}
+
 // ── 位置记忆 ──
 
 func loadPos() (int, int) {

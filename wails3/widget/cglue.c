@@ -30,6 +30,13 @@ static GtkWidget *g_draw = NULL;
 GtkWidget* hc_win(void)     { return g_win; }
 GtkWidget* hc_ctrl(void)    { return g_ctrl; }
 GtkWidget* hc_lockbtn(void) { return g_lockbtn; }
+
+// 桌面挂件整个窗口显示/隐藏（下面面板 #d-tick → POST /api/v1/widget/lyric-visible）
+void hc_set_visible(int on) {
+    if (!g_win) return;
+    if (on) gtk_widget_show(g_win);
+    else    gtk_widget_hide(g_win);
+}
 GtkWidget* hc_fixed(void)   { return g_fixed; }
 GtkWidget* hc_draw(void)    { return g_draw; }
 void hc_set_win(GtkWidget *w)     { g_win = w; }
