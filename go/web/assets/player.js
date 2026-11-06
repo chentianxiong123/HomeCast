@@ -313,7 +313,7 @@
     el.prog.value = Math.round((audio.currentTime / d) * 1000);
     const now = Date.now();
     if (now - lastSaveAt > 5000) { lastSaveAt = now; saveP(); }
-    if (now - lastWidgetReport > 1000) { lastWidgetReport = now; reportWidget(); } // widget 独立 1s 上报（不捆绑 5s 持久化，对齐 web audio.currentTime 实时性）
+    if (now - lastWidgetReport > 250) { lastWidgetReport = now; reportWidget(); } // widget 250ms 上报（~4Hz，对齐 web timeupdate 实时性；桌面/安卓歌词挂件 SSE 跟得上 web，不卡顿）
   });
   audio.addEventListener('play', () => reportWidget());
   audio.addEventListener('pause', () => reportWidget());
