@@ -73,6 +73,9 @@
 
 /* 字幕条置顶：z 最高（不被 dock z-50 / 歌词面板 / 其他层覆盖） */
 #subtitle-bar { z-index: 100 !important; }
+/* 关闭时强制隐藏：hidden 属性会被 Tailwind .flex(display:flex) 作者样式覆盖，
+   导致 bar.hidden=true 但字幕条仍渲染（"能开不能关"根因）→ 用 !important 兜底 */
+#subtitle-bar[hidden] { display: none !important; }
 
 /* ═══ 移动端（<640px，真机窄屏 ~393px）紧凑适配 ═══
    项目断点模式：默认=移动，sm:(≥640)=桌面。这里只在移动端缩小布局，
