@@ -14,7 +14,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,6 +74,26 @@ func backendPort() string {
 	return server.Port
 }
 
+// musicIcon 生成一个 🎵 音符 PNG 图标（16x16，紫色底 + 白色音符点），
+// 替换 wails 默认应用 logo；application.Options.Icon 用于任务栏/about。
+func musicIcon() []byte {
+	const s = 16
+	img := image.NewRGBA(image.Rect(0, 0, s, s))
+	// 紫色圆角底
+	for y := 0; y < s; y++ {
+		for x := 0; x < s; x++ {
+			img.Set(x, y, color.RGBA{0x88, 0x33, 0x99, 255})
+		}
+	}
+	// 白色音符：竖杆 + 两个符头（简单像素音符）
+	for y := 2; y < 11; y++ { img.Set(6, y, color.RGBA{255, 255, 255, 255}) }
+	for y := 9; y < 13; y++ { for x := 3; x < 6; x++ { img.Set(x, y, color.RGBA{255, 255, 255, 255}) } }
+	for y := 6; y < 10; y++ { for x := 9; x < 12; x++ { img.Set(x, y, color.RGBA{255, 255, 255, 255}) } }
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
 func main() {
 	ensureHome() // 必须在 main()（nativeInit 之后，JNI bridge 可用时）调用；init() 里拿不到 StoragePath
 	httpLog = filepath.Join(hcDataPath(), "hc-http.log")
@@ -86,6 +110,7 @@ func main() {
 	app = application.New(application.Options{
 		Name:        "HomeCast",
 		Description: "家庭音乐播放器（B站音乐 · 个人免费）",
+		Icon:        musicIcon(), // 🎵 应用图标（替换 wails 默认 logo）
 	})
 
 	// WebviewWindowOptions.JS：页面加载完成后由 wails 官方注入（替代原 injectHcEnv 中间件）。
