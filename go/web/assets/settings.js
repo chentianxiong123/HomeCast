@@ -73,7 +73,9 @@
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<div class="flex items-center justify-between">' +
       '<div><p class="font-medium text-gray-900 dark:text-white">安卓悬浮歌词</p>' +
-      '<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">系统悬浮窗显示当前歌词行，可拖动；关闭后需重新开启</p></div>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" id="androlyric-status">' +
+        (window.AndroidLyric.canDraw ? (window.AndroidLyric.canDraw() ? '✅ 悬浮窗权限已授权' : '⚠️ 未授权悬浮窗权限，开启时会引导授权') : '') +
+      '</p></div>' +
       '<label class="relative inline-flex items-center cursor-pointer">' +
       '<input type="checkbox" class="sr-only peer" id="set-androlyric" ' + (andLyricOn ? 'checked' : '') + '>' +
       '<div class="w-11 h-6 bg-gray-600 peer-checked:bg-pink-500 rounded-full transition-colors"></div>' +
@@ -199,6 +201,10 @@
         else { try { window.AndroidLyric.hide(); } catch (e) {} }
       }
     });
+    // 重开 app 恢复：开关为 on 时自动启动悬浮窗（否则只在 change 触发，重启后不出现）
+    if (andLyricOn && window.AndroidLyric) {
+      try { window.AndroidLyric.show(); } catch (e) {}
+    }
     // 当前主题状态文本（无黑盒：显示生效状态）
     const ts = document.getElementById('theme-state');
     if (ts) ts.textContent = { auto: '跟随系统', light: '明亮', dark: '暗黑' }[S('hc:theme', 'auto')] || '';
