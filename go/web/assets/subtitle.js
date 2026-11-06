@@ -75,6 +75,7 @@
     xBtn.style.opacity = '0';
   }
   function setEnabled(v) {
+    if (envDesktop) { enabled = false; hideBar(); return; } // 桌面壳由 GTK 挂件承担，禁网页字幕（杜绝双字幕并存）
     enabled = v;
     try { localStorage.setItem('hc:subtitle', v ? '1' : '0'); } catch (e) {}
     v ? showBar() : hideBar();
@@ -178,6 +179,6 @@
   });
 
   if (tickBtn) tickBtn.addEventListener('click', () => setEnabled(!enabled));
-  hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });
+  hcBus.on('subtitle-toggle', (d) => { if (envDesktop) return; if (d) setEnabled(!!d.on); });
   if (enabled) showBar();
 })();
