@@ -3,11 +3,20 @@
 package widget
 
 import (
+	"encoding/json"
 	"sync"
 )
 
+// sseMsg SSE 广播载荷：name=事件名（toggle/lyric-state），data=JSON payload
+// 用户理念：歌词状态走 SSE 推送（废轮询），挂件订阅即时消费；逐字由挂件本地平滑。
+type SSEMsg struct {
+	Name string
+	Data string
+}
+
 // WidgetState 桌面歌词挂件的播放状态（前端 WebView 上报，挂件同进程读取）
 // ⏸ 控制用 SSE 推送（非轮询）：挂件按钮 → BroadcastToggle → 前端 EventSource 即时消费
+// 歌词状态用 SSE 推送：Set → BroadcastLyricState → 挂件订阅即时更新（去 900ms 轮询）
 type WidgetState struct {
 	mu          sync.Mutex
 	BVID        string  `json:"bvid"`
@@ -16,17 +25,17 @@ type WidgetState struct {
 	CurrentTime float64 `json:"current_time"`
 	Duration    float64 `json:"duration"`
 	Playing     bool    `json:"playing"`
-	subs        map[chan struct{}]struct{} // SSE 订阅者（前端控制通道）
+	subs        map[chan SSEMsg]struct{} // SSE 订阅者（事件名+payload）
 }
 
 // NewWidgetState 构造
 func NewWidgetState() *WidgetState {
-	return &WidgetState{subs: make(map[chan struct{}]struct{})}
+	return &WidgetState{subs: make(map[chan SSEMsg]struct{})}
 }
 
-// Subscribe 注册 SSE 订阅者（返回 channel，BroadcastToggle 时收到信号）
-func (w *WidgetState) Subscribe() chan struct{} {
-	ch := make(chan struct{}, 1)
+// Subscribe 注册 SSE 订阅者（返回 channel，广播时收到事件名+payload）
+func (w *WidgetState) Subscribe() chan SSEMsg {
+	ch := make(chan SSEMsg, 8)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.subs[ch] = struct{}{}
@@ -34,34 +43,51 @@ func (w *WidgetState) Subscribe() chan struct{} {
 }
 
 // Unsubscribe 注销订阅者
-func (w *WidgetState) Unsubscribe(ch chan struct{}) {
+func (w *WidgetState) Unsubscribe(ch chan SSEMsg) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	delete(w.subs, ch)
 }
 
-// BroadcastToggle 挂件 ⏸ 按钮：向所有 SSE 订阅者即时推送（非阻塞）
-func (w *WidgetState) BroadcastToggle() {
+// broadcast 向所有 SSE 订阅者即时推送（非阻塞）
+func (w *WidgetState) broadcast(m SSEMsg) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for ch := range w.subs {
 		select {
-		case ch <- struct{}{}:
+		case ch <- m:
 		default: // 通道满则丢弃（前端未及时消费，避免阻塞广播）
 		}
 	}
 }
 
-// Set 更新（前端每 ~1s 上报校准）
+// BroadcastToggle 挂件 ⏸ 按钮：向所有 SSE 订阅者即时推送（非阻塞）
+func (w *WidgetState) BroadcastToggle() {
+	w.broadcast(SSEMsg{Name: "toggle", Data: "{}"})
+}
+
+// BroadcastLyricState 歌词状态变化（Set 时触发）：推送最新快照给挂件订阅者
+func (w *WidgetState) BroadcastLyricState() {
+	bvid, title, artist, ct, dur, playing := w.Get()
+	payload := map[string]any{
+		"bvid": bvid, "title": title, "artist": artist,
+		"current_time": ct, "duration": dur, "playing": playing,
+	}
+	b, _ := json.Marshal(payload)
+	w.broadcast(SSEMsg{Name: "lyric-state", Data: string(b)})
+}
+
+// Set 更新（前端每 ~1s 上报校准）→ 触发 SSE 推送（挂件即时更新，去轮询）
 func (w *WidgetState) Set(bvid, title, artist string, currentTime, duration float64, playing bool) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.BVID = bvid
 	w.Title = title
 	w.Artist = artist
 	w.CurrentTime = currentTime
 	w.Duration = duration
 	w.Playing = playing
+	w.mu.Unlock()
+	w.BroadcastLyricState()
 }
 
 // Get 快照

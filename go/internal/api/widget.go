@@ -65,15 +65,15 @@ func (h *WidgetHandler) Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fl.Flush()
-	// 心跳（防中间层超时断开）+ toggle 推送
+	// 心跳（防中间层超时断开）+ 推送（toggle / lyric-state 事件名+payload）
 	hb := time.NewTicker(15 * time.Second)
 	defer hb.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-ch:
-			if _, err := w.Write([]byte("event: toggle\ndata: {}\n\n")); err != nil {
+		case m := <-ch:
+			if _, err := w.Write([]byte("event: " + m.Name + "\ndata: " + m.Data + "\n\n")); err != nil {
 				return
 			}
 			fl.Flush()
