@@ -11,7 +11,14 @@
 
   // 网页字幕条：默认关（hc:subtitle === '1' 才开），用户可开关，立即生效。
   // 桌面歌词由桌面挂件优先承担，web 字幕条默认不干扰（用户想开可开，不永久禁用）。
-  let enabled = localStorage.getItem('hc:subtitle') === '1';
+  // 安卓：下面板 #d-tick UI 跟安卓悬浮窗挂钩（hc:androlyric），不是网页字幕条。
+  const isAndroid = typeof window.AndroidLyric !== 'undefined';
+  let enabled = isAndroid
+    ? localStorage.getItem('hc:androlyric') === '1'  // 安卓：#d-tick 高亮跟悬浮窗
+    : localStorage.getItem('hc:subtitle') === '1';    // web/桌面：网页字幕条
+  if (isAndroid && enabled && window.AndroidLyric) {
+    try { window.AndroidLyric.show(); } catch (e) {} // 自动恢复悬浮窗（不依赖设置页）
+  }
   let lines = [];   // [[sec, line, dur?], ...]
   let lastIdx = -1;
   let loadGen = 0; // 换歌竞态保护（music.py bvid 校验同款；旧请求晚到丢弃）
@@ -203,5 +210,9 @@
     setEnabled(!enabled); // web：web 字幕条
   });
   hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });
-  if (enabled) showBar();
+  // 安卓：#d-tick 高亮跟悬浮窗（hc:androlyric），不显示网页字幕条（悬浮窗承担）
+  if (enabled) {
+    if (isAndroid) { if (tickBtn) tickBtn.classList.add('d-tick-on'); }
+    else showBar();
+  }
 })();
