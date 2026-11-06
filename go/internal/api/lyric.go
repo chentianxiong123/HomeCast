@@ -14,6 +14,9 @@ import (
 type LyricHandler struct {
 	Lyric *lyric.LyricStore
 	Music *music.MusicService // bvid → 分P标题作搜索关键词（B 站合集痛点；带 view 缓存）
+	// OnOffsetChange 对齐偏移变更回调（offset 改了 → 挂件/显示层需重新定位广播；
+	// 由 server 注入，handler 不依赖 widget 域，保持解耦）
+	OnOffsetChange func()
 }
 
 // keywordsFor bvid 非空时优先分P标题列表（bili-music lyricSearchTitles 同款，逐个搜第一个命中），
@@ -135,6 +138,9 @@ func (h *LyricHandler) Offset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Lyric.SetOffset(bvid, offset)
+	if h.OnOffsetChange != nil {
+		h.OnOffsetChange() // offset 变了 → 触发挂件重新定位（SSE 广播带新 line）
+	}
 	ok(w, true)
 }
 

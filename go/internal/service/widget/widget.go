@@ -88,6 +88,16 @@ func (w *WidgetState) SetLineSrc(src LyricSource) {
 	w.mu.Unlock()
 }
 
+// InvalidateLines 清行缓存：offset/歌词源变更后强制下次 currentLine 重拉（用新 offset 算行）
+func (w *WidgetState) InvalidateLines() {
+	w.mu.Lock()
+	w.cacheBvid = ""
+	w.cacheLines = nil
+	w.cacheOK = false
+	w.pendingBvid = ""
+	w.mu.Unlock()
+}
+
 // Subscribe 注册 SSE 订阅者（返回 channel，广播时收到事件名+payload）
 func (w *WidgetState) Subscribe() chan SSEMsg {
 	ch := make(chan SSEMsg, 8)
@@ -124,18 +134,18 @@ func (w *WidgetState) BroadcastToggle() {
 // currentLine 位置→当前行 唯一逻辑（住后端）：ct+offset 对齐 t，找 sec<=t 最后一行；
 // 无歌词/无行返回空（显示层退回标题）。
 // 歌词行缓存：切歌（bvid 变）才异步预拉一次（低频、不阻塞 SSE），逐帧只用缓存定位。
-func (w *WidgetState) currentLine(bvid string, ct float64) string {
+func (w *WidgetState) currentLine2(bvid string, ct float64) (string, float64) {
 	if bvid == "" {
-		return ""
+		return "", 0
 	}
 	w.ensureLines(bvid)
 	w.mu.Lock()
 	lines, off, ok := w.cacheLines, w.cacheOff, w.cacheOK
 	w.mu.Unlock()
 	if !ok {
-		return ""
+		return "", off
 	}
-	return pickLineAny(lines, ct+off)
+	return pickLineAny(lines, ct+off), off
 }
 
 // ensureLines 确保 bvid 的行缓存：切歌才异步拉源（不阻塞调用方/SSE），拉到后广播刷新。
@@ -205,12 +215,12 @@ func PickLine(lines [][3]any, t float64) string { return pickLineAny(lines, t) }
 // 带后端算好的当前行 line（多平台统一：显示层只渲染 line，不本地定位）。
 func (w *WidgetState) BroadcastLyricState() {
 	bvid, title, artist, ct, dur, playing := w.Get()
-	line := w.currentLine(bvid, ct)
-	log.Printf("[widget] BroadcastLyricState bvid=%s ct=%.1f line=%q lines=%d", bvid, ct, line, len(w.cacheLines))
+	line, offset := w.currentLine2(bvid, ct)
+	log.Printf("[widget] BroadcastLyricState bvid=%s ct=%.1f line=%q offset=%.1f", bvid, ct, line, offset)
 	payload := map[string]any{
 		"bvid": bvid, "title": title, "artist": artist,
 		"current_time": ct, "duration": dur, "playing": playing,
-		"line": line,
+		"line": line, "offset": offset,
 	}
 	b, _ := json.Marshal(payload)
 	w.broadcast(SSEMsg{Name: "lyric-state", Data: string(b)})
@@ -234,4 +244,11 @@ func (w *WidgetState) Get() (bvid, title, artist string, currentTime, duration f
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.BVID, w.Title, w.Artist, w.CurrentTime, w.Duration, w.Playing
+}
+
+
+// currentLine 兼容包装（单测/外部只取 line）
+func (w *WidgetState) currentLine(bvid string, ct float64) string {
+	line, _ := w.currentLine2(bvid, ct)
+	return line
 }

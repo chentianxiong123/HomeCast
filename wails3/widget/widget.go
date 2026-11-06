@@ -18,6 +18,7 @@ package widget
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -173,17 +174,41 @@ func onPauseClick() {
 }
 
 func onMinusClick() {
-	st.mu.Lock()
-	st.offset -= 0.5
-	st.mu.Unlock()
-	queueDraw()
+	postOffset(-0.5)
 }
 
 func onPlusClick() {
+	postOffset(0.5)
+}
+
+// postOffset 用户 ±0.5s 微调：改后端持久化 offset（逻辑住后端：PickLine 用 ct+offset 算行），
+// 后端 OnOffsetChange → 清缓存重拉 → SSE 广播带新 line → 显示层刷新。桌面/安卓/ web 同源。
+func postOffset(d float64) {
 	st.mu.Lock()
-	st.offset += 0.5
+	st.offset += d
+	cur := st.offset
 	st.mu.Unlock()
-	queueDraw()
+	if Backend == "" {
+		return
+	}
+	st.mu.Lock()
+	bvid := st.songKey
+	st.mu.Unlock()
+	if bvid == "" {
+		return
+	}
+	go func() {
+		body := strings.NewReader(`{"bvid":"` + bvid + `","offset":` + fmt.Sprintf("%.1f", cur) + `}`)
+		req, err := http.NewRequest(http.MethodPost, Backend+"/api/v1/lyric/offset", body)
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
 }
 
 func onLockClick() {

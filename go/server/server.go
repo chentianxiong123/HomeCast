@@ -61,6 +61,13 @@ func New() http.Handler {
 	musicHandler := api.NewMusicHandler(musicSvc)
 	favHandler := &api.FavHandler{Fav: fav.NewFavService(db)}
 	lyricHandler := &api.LyricHandler{Lyric: lyric.NewLyricStore(db), Music: musicSvc}
+	// offset 变更 → 挂件重定位广播（闭包引用 widgetStateGlobal，server 建完再赋值）
+	lyricHandler.OnOffsetChange = func() {
+		if widgetStateGlobal != nil {
+			widgetStateGlobal.InvalidateLines() // 清缓存，下次 currentLine 重拉用新 offset
+			widgetStateGlobal.BroadcastLyricState()
+		}
+	}
 	playlistHandler := &api.PlaylistHandler{Playlist: playlist.NewPlaylistService(client, db)}
 	tokenStore := token.NewTokenStore()
 	castSvc := cast.NewCastService(client, tokenStore)
