@@ -36,13 +36,12 @@ import java.nio.charset.StandardCharsets;
  *
  * 独立 Java Service（wails3 官方安卓无悬浮窗 API，只有单 WebView 窗口）。
  * - TYPE_APPLICATION_OVERLAY 悬浮窗 + TextView 显示当前歌词行
- * - 轮询后端真实 HTTP（http://127.0.0.1:28976，与 WebView 同源）：
- *   · /api/v1/widget/state 拿 bvid/current_time/playing（500ms，对齐桌面挂件 reportWidget 节流）
+ * - SSE 订阅后端真实 HTTP（http://127.0.0.1:28976，与 WebView 同源）：
+ *   · /api/v1/widget/events 拿 event: lyric-state + data 快照（bvid/ct/playing/title/artist）
  *   · /api/v1/music/lyric?bvid= 拿行 [[t,text,dur],...]（仅 bvid 变化时拉取，缓存）
  * - 拖动持久化（SharedPreferences），startForeground 通知保持进程
  *
- * ⚠️ 歌词进度同步必须高频（逐字），这与桌面 GTK 挂件一致（歌词同步非控制意图，
- * 控制走 SSE 推送；用户"废轮询"指控制意图，非歌词渲染同步）。
+ * 歌词进度（逐字）由挂件本地按 ct 算行；状态（切歌/播放/标题）走 SSE 即时推送（废轮询）。
  */
 public class LyricOverlayService extends android.app.Service {
     private static final String TAG = "LyricOverlay";
@@ -73,7 +72,7 @@ public class LyricOverlayService extends android.app.Service {
         createOverlayView();
         startForegroundCompat();
         running = true;
-        pollThread = new Thread(this::pollLoop, "hc-lyric-poll");
+        pollThread = new Thread(this::sseLoop, "hc-lyric-sse");
         pollThread.start();
         Log.i(TAG, "LyricOverlayService created");
     }
@@ -189,39 +188,69 @@ public class LyricOverlayService extends android.app.Service {
         return null;
     }
 
-    // ---- 轮询：widget/state（进度）+ music/lyric（行） ----
-    private void pollLoop() {
+    // ---- SSE 订阅：/api/v1/widget/events（去轮询，用户理念"废轮询要推送"） ----
+    // 事件 event: lyric-state + data(JSON 快照) → applyState（切歌拉行 / 同歌更新当前行）
+    private void sseLoop() {
         while (running) {
             try {
-                JSONObject state = getJson("/api/v1/widget/state");
-                if (state != null && state.optJSONObject("data") != null) {
-                    JSONObject d = state.optJSONObject("data");
-                    String bvid = d.optString("bvid", "");
-                    double ct = d.optDouble("current_time", 0);
-                    double dur = d.optDouble("duration", 0);
-                    boolean playing = d.optBoolean("playing", false);
-                    String title = d.optString("title", "");
-                    String artist = d.optString("artist", "");
+                HttpURLConnection conn = (HttpURLConnection) new URL(API + "/api/v1/widget/events").openConnection();
+                conn.setRequestProperty("Accept", "text/event-stream");
+                conn.setConnectTimeout(3000);
+                conn.setReadTimeout(0); // 长连接，不超时（SSE 流）
+                conn.setDoInput(true);
+                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
 
-                    if (bvid != null && !bvid.isEmpty() && !bvid.equals(cachedBvid)) {
-                        fetchLyric(bvid);
+                // 连接后先拉一次快照，避免等首个事件前空白
+                try {
+                    JSONObject state = getJson("/api/v1/widget/state");
+                    if (state != null && state.optJSONObject("data") != null) {
+                        applyState(state.optJSONObject("data"));
                     }
-                    String line = pickLine(ct);
-                    if (line == null || line.isEmpty()) {
-                        line = title.isEmpty() ? "HomeCast 歌词" : title + " - " + artist;
+                } catch (Exception ignore) {}
+
+                String event = "";
+                String line;
+                while (running && (line = br.readLine()) != null) {
+                    if (line.startsWith("event:")) {
+                        event = line.substring(6).trim();
+                    } else if (line.startsWith("data:")) {
+                        String data = line.substring(5).trim();
+                        if ("lyric-state".equals(event) && !data.isEmpty()) {
+                            applyState(new JSONObject(data));
+                        }
+                        event = "";
+                    } else if (line.isEmpty()) {
+                        event = "";
                     }
-                    final String finalLine = line;
-                    ui.post(() -> lyricView.setText(finalLine));
                 }
+                br.close();
+                conn.disconnect();
             } catch (Exception e) {
-                Log.d(TAG, "poll error: " + e.getClass().getSimpleName());
+                Log.d(TAG, "sse error: " + e.getClass().getSimpleName());
             }
             try {
-                Thread.sleep(POLL_MS);
+                Thread.sleep(POLL_MS); // 断线重连间隔（非轮询）
             } catch (InterruptedException ie) {
                 break;
             }
         }
+    }
+
+    // SSE lyric-state 落地：bvid 变 → 拉歌词行；同歌 → 按 ct 更新当前行
+    private void applyState(JSONObject d) {
+        String bvid = d.optString("bvid", "");
+        double ct = d.optDouble("current_time", 0);
+        String title = d.optString("title", "");
+        String artist = d.optString("artist", "");
+        if (bvid != null && !bvid.isEmpty() && !bvid.equals(cachedBvid)) {
+            fetchLyric(bvid);
+        }
+        String line = pickLine(ct);
+        if (line == null || line.isEmpty()) {
+            line = title.isEmpty() ? "HomeCast 歌词" : title + " - " + artist;
+        }
+        final String finalLine = line;
+        ui.post(() -> lyricView.setText(finalLine));
     }
 
     private void fetchLyric(String bvid) {
