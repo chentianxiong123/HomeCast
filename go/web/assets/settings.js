@@ -29,7 +29,7 @@
   }
 
   function render() {
-    const subOn = envDesktop ? false : S('hc:subtitle', '1') !== '0';
+    const subOn = S('hc:subtitle', '0') === '1';
     const quality = S('hc:quality', '192');
     const mode = S('hc:mode', 'order');
     const lyIdx = Math.max(0, LY_SIZES.indexOf(parseInt(S('hc:lysize', '18'), 10)));
@@ -60,9 +60,9 @@
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<div class="flex items-center justify-between">' +
       '<div><p class="font-medium text-gray-900 dark:text-white">网页字幕条</p>' +
-      '<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">' + (envDesktop ? '桌面壳由桌面歌词挂件承担，网页字幕不可用（不并存）' : '可拖动字幕条移动位置') + '</p></div>' +
-      '<label class="relative inline-flex items-center cursor-pointer' + (envDesktop ? ' opacity-40 cursor-not-allowed' : '') + '">' +
-      '<input type="checkbox" class="sr-only peer" id="set-sub" ' + (subOn ? 'checked' : '') + (envDesktop ? ' disabled' : '') + '>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">默认关，可打开；桌面端歌词由桌面挂件优先承担</p></div>' +
+      '<label class="relative inline-flex items-center cursor-pointer">' +
+      '<input type="checkbox" class="sr-only peer" id="set-sub" ' + (subOn ? 'checked' : '') + '>' +
       '<div class="w-11 h-6 bg-gray-600 peer-checked:bg-pink-500 rounded-full transition-colors"></div>' +
       '<div class="dot absolute w-4 h-4 bg-white rounded-full left-1 transition-transform peer-checked:translate-x-5 pointer-events-none"></div>' +
       '</label></div></div>' +
@@ -176,7 +176,7 @@
 
     // 绑定
     const sub = document.getElementById('set-sub');
-    if (sub) sub.addEventListener('change', () => { if (envDesktop) return; hcBus.emit('subtitle-toggle', { on: sub.checked }); });
+    if (sub) sub.addEventListener('change', () => hcBus.emit('subtitle-toggle', { on: sub.checked }));
     // 当前主题状态文本（无黑盒：显示生效状态）
     const ts = document.getElementById('theme-state');
     if (ts) ts.textContent = { auto: '跟随系统', light: '明亮', dark: '暗黑' }[S('hc:theme', 'auto')] || '';
@@ -240,15 +240,6 @@
       render();
     });
   }
-
-  // 桌面壳判定：wails 在 load 后注入 hcEnv（本脚本 load 前执行 → 初始化可能误判），
-  // 延迟检测，注入完成则重渲染（禁用网页字幕开关，不并存）
-  setTimeout(() => {
-    if (window.hcEnv === 'desktop' && !envDesktop) {
-      envDesktop = true;
-      render();
-    }
-  }, 300);
 
   render();
   }
