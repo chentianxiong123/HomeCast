@@ -9,16 +9,9 @@
   const audio = document.getElementById('audio');
   if (!bar || !audio) return;
 
-  // 桌面壳判定：wails 在 WindowLoadFinished（load 后）才注入 window.hcEnv，
-  // 而本脚本在 load 前执行 → 初始化可能误判为网页。延迟等注入完成再更新（杜绝竞态）。
-  let envDesktop = window.hcEnv === 'desktop';
-  let enabled = envDesktop ? false : localStorage.getItem('hc:subtitle') !== '0';
-  setTimeout(() => {
-    if (window.hcEnv === 'desktop' && !envDesktop) {
-      envDesktop = true;
-      setEnabled(false); // 桌面壳由 GTK 挂件承担：强制关 web 字幕条（不共存）
-    }
-  }, 300);
+  // 网页字幕条：默认关（hc:subtitle === '1' 才开），用户可开关，立即生效。
+  // 桌面歌词由桌面挂件优先承担，web 字幕条默认不干扰（用户想开可开，不永久禁用）。
+  let enabled = localStorage.getItem('hc:subtitle') === '1';
   let lines = [];   // [[sec, line, dur?], ...]
   let lastIdx = -1;
   let loadGen = 0; // 换歌竞态保护（music.py bvid 校验同款；旧请求晚到丢弃）
@@ -83,7 +76,6 @@
     xBtn.style.opacity = '0';
   }
   function setEnabled(v) {
-    if (envDesktop) { enabled = false; hideBar(); return; } // 桌面壳由 GTK 挂件承担，禁网页字幕（杜绝双字幕并存）
     enabled = v;
     try { localStorage.setItem('hc:subtitle', v ? '1' : '0'); } catch (e) {}
     v ? showBar() : hideBar();
@@ -187,6 +179,6 @@
   });
 
   if (tickBtn) tickBtn.addEventListener('click', () => setEnabled(!enabled));
-  hcBus.on('subtitle-toggle', (d) => { if (envDesktop) return; if (d) setEnabled(!!d.on); });
+  hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });
   if (enabled) showBar();
 })();
