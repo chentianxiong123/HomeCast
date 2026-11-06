@@ -67,6 +67,13 @@ public class LyricOverlayService extends android.app.Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        // 幂等：Service 已建过悬浮窗则不重建（防刷出一大堆窗口；Android 单例但进程重建会重复）
+        if (rootView != null) {
+            Log.w(TAG, "onCreate: 悬浮窗已存在，跳过重建（幂等）");
+            startForegroundCompat();
+            running = true;
+            return;
+        }
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         createOverlayView();
@@ -127,6 +134,8 @@ public class LyricOverlayService extends android.app.Service {
         params.y = prefs.getInt("y", 200);
 
         rootView = root;
+        // 幂等：先移除已挂的同视图，防重复 addView（IllegalStateException）
+        try { if (rootView != null) windowManager.removeView(rootView); } catch (Exception ignored) {}
         windowManager.addView(root, params);
         attachDrag(root);
     }
@@ -237,7 +246,7 @@ public class LyricOverlayService extends android.app.Service {
         running = false;
         if (pollThread != null) pollThread.interrupt();
         try {
-            if (lyricView != null) windowManager.removeView(lyricView);
+            if (rootView != null) windowManager.removeView(rootView);
         } catch (Exception ignored) {
         }
         super.onDestroy();
