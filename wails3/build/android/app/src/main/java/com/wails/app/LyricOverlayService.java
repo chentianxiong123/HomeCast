@@ -20,6 +20,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.json.JSONArray;
@@ -58,6 +59,9 @@ public class LyricOverlayService extends android.app.Service {
     private Thread pollThread;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
+    private android.view.View rootView;
+    private String currentBvid = "";
+    private double currentOffset = 0;
 
 
     @Override
@@ -85,6 +89,28 @@ public class LyricOverlayService extends android.app.Service {
         lyricView.setPadding(dp(14), dp(8), dp(14), dp(8));
         lyricView.setBackground(drawRoundedBorder());
 
+        // 控制条（特殊接口适配：安卓 UI；逻辑仍走后端 /widget/toggle、/lyric/offset）
+        LinearLayout ctrl = new LinearLayout(this);
+        ctrl.setOrientation(LinearLayout.HORIZONTAL);
+        ctrl.setGravity(Gravity.CENTER);
+        TextView btnPause = ctrlBtn("⏸");
+        TextView btnMinus = ctrlBtn("−");
+        TextView btnPlus = ctrlBtn("+");
+        btnPause.setOnClickListener(v -> postJson("/api/v1/widget/toggle", "{}"));
+        btnMinus.setOnClickListener(v -> postOffset(-0.5));
+        btnPlus.setOnClickListener(v -> postOffset(0.5));
+        ctrl.addView(btnMinus);
+        ctrl.addView(btnPause);
+        ctrl.addView(btnPlus);
+
+        // 总布局：歌词行 + 控制条（垂直）
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.addView(lyricView);
+        root.addView(ctrl);
+        root.setPadding(dp(4), dp(4), dp(4), dp(4));
+
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
@@ -100,8 +126,47 @@ public class LyricOverlayService extends android.app.Service {
         params.x = prefs.getInt("x", 40);
         params.y = prefs.getInt("y", 200);
 
-        windowManager.addView(lyricView, params);
-        attachDrag();
+        rootView = root;
+        windowManager.addView(root, params);
+        attachDrag(root);
+    }
+
+    // 控制条小按钮（白字半透明，视觉对齐桌面挂件）
+    private TextView ctrlBtn(String text) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextSize(18);
+        b.setTextColor(Color.WHITE);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(12), dp(4), dp(12), dp(4));
+        b.setBackground(drawRoundedBorder());
+        return b;
+    }
+
+    // 发后端意图（控制条按钮）；offset 特殊走 /api/v1/lyric/offset（body JSON）
+    private void postJson(String path, String body) {
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(API + path).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                conn.getOutputStream().write(body.getBytes("UTF-8"));
+                conn.getResponseCode();
+                conn.disconnect();
+            } catch (Exception e) {
+                Log.d(TAG, "postJson error: " + e.getClass().getSimpleName());
+            }
+        }).start();
+    }
+
+    // ±0.5s 微调：用当前 bvid + 新 offset 发后端（逻辑住后端 PickLine）
+    private void postOffset(double d) {
+        String bvid = currentBvid;
+        if (bvid == null || bvid.isEmpty()) return;
+        double off = currentOffset + d;
+        currentOffset = off;
+        postJson("/api/v1/lyric/offset", "{\"bvid\":\"" + bvid + "\",\"offset\":" + off + "}");
     }
 
     private android.graphics.drawable.Drawable drawRoundedBorder() {
@@ -112,9 +177,9 @@ public class LyricOverlayService extends android.app.Service {
         return g;
     }
 
-    private void attachDrag() {
+    private void attachDrag(View target) {
         final float[] down = new float[2];
-        lyricView.setOnTouchListener((View v, MotionEvent ev) -> {
+        target.setOnTouchListener((View v, MotionEvent ev) -> {
             switch (ev.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     down[0] = ev.getRawX() - params.x;
@@ -123,7 +188,7 @@ public class LyricOverlayService extends android.app.Service {
                 case MotionEvent.ACTION_MOVE:
                     params.x = (int) (ev.getRawX() - down[0]);
                     params.y = (int) (ev.getRawY() - down[1]);
-                    windowManager.updateViewLayout(lyricView, params);
+                    windowManager.updateViewLayout(rootView, params);
                     return true;
                 case MotionEvent.ACTION_UP:
                     prefs.edit().putInt("x", params.x).putInt("y", params.y).apply();
@@ -239,6 +304,8 @@ public class LyricOverlayService extends android.app.Service {
         String line = d.optString("line", "");
         String title = d.optString("title", "");
         String artist = d.optString("artist", "");
+        currentBvid = d.optString("bvid", "");
+        currentOffset = d.optDouble("offset", currentOffset);
         if (line == null || line.isEmpty()) {
             line = title.isEmpty() ? "HomeCast 歌词" : title + " - " + artist;
         }
