@@ -30,6 +30,7 @@
 
   function render() {
     const subOn = S('hc:subtitle', '0') === '1';
+    const andLyricOn = S('hc:androlyric', '0') === '1';
     const quality = S('hc:quality', '192');
     const mode = S('hc:mode', 'order');
     const lyIdx = Math.max(0, LY_SIZES.indexOf(parseInt(S('hc:lysize', '18'), 10)));
@@ -66,6 +67,18 @@
       '<div class="w-11 h-6 bg-gray-600 peer-checked:bg-pink-500 rounded-full transition-colors"></div>' +
       '<div class="dot absolute w-4 h-4 bg-white rounded-full left-1 transition-transform peer-checked:translate-x-5 pointer-events-none"></div>' +
       '</label></div></div>' +
+
+      // 安卓悬浮歌词（仅安卓：window.AndroidLyric 存在才渲染；纯系统壳 API）
+      (window.AndroidLyric ?
+      '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
+      '<div class="flex items-center justify-between">' +
+      '<div><p class="font-medium text-gray-900 dark:text-white">安卓悬浮歌词</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">系统悬浮窗显示当前歌词行，可拖动；关闭后需重新开启</p></div>' +
+      '<label class="relative inline-flex items-center cursor-pointer">' +
+      '<input type="checkbox" class="sr-only peer" id="set-androlyric" ' + (andLyricOn ? 'checked' : '') + '>' +
+      '<div class="w-11 h-6 bg-gray-600 peer-checked:bg-pink-500 rounded-full transition-colors"></div>' +
+      '<div class="dot absolute w-4 h-4 bg-white rounded-full left-1 transition-transform peer-checked:translate-x-5 pointer-events-none"></div>' +
+      '</label></div></div>' : '') +
 
       // 音质
       '<div class="card p-5 mb-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
@@ -177,6 +190,15 @@
     // 绑定
     const sub = document.getElementById('set-sub');
     if (sub) sub.addEventListener('change', () => hcBus.emit('subtitle-toggle', { on: sub.checked }));
+    // 安卓悬浮歌词开关：纯系统壳 API，JS bridge 直调 Java（不涉 Go 业务通信）
+    const andLyric = document.getElementById('set-androlyric');
+    if (andLyric) andLyric.addEventListener('change', () => {
+      W('hc:androlyric', andLyric.checked ? '1' : '0');
+      if (window.AndroidLyric) {
+        if (andLyric.checked) { try { window.AndroidLyric.show(); } catch (e) {} }
+        else { try { window.AndroidLyric.hide(); } catch (e) {} }
+      }
+    });
     // 当前主题状态文本（无黑盒：显示生效状态）
     const ts = document.getElementById('theme-state');
     if (ts) ts.textContent = { auto: '跟随系统', light: '明亮', dark: '暗黑' }[S('hc:theme', 'auto')] || '';
