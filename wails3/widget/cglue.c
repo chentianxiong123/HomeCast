@@ -95,29 +95,30 @@ void _hc_css(void) {
 	const char *css =
 		"window, window.background { background-color: transparent; }"
 		"drawingarea { background-color: transparent; }"
-		// 一体背景层：hover（.hc-hover）时整窗白色半透明毛玻璃（非全透明）
+		// 一体背景：悬浮（.hc-hover）时**保持透明**，只加 1px 描边（ring）标识悬浮态
 		"window.hc-hover {"
-		" background-color: rgba(255,255,255,150);"
-		" border-radius: 14px; }"
+		" background-color: transparent;"
+		" border-radius: 14px;"
+		" box-shadow: 0 0 0 1px rgba(255,255,255,110); }"  // 悬浮描边，不填充
 		"window.hc-hover drawingarea { background-color: transparent; }"
-		// 控制条：面板融入一体背景（无单独卡片，透明底）
+		// 控制条：面板融入一体背景（透明底，无卡片）
 		"#hc-ctrl { background: transparent; background-color: transparent;"
 		" border: none; box-shadow: none; padding: 2px 10px; margin: 0px; }"
-		// 按钮：透明底、大字号（16px）、深色文字（白底上可读）
-		"#hc-btn { background: transparent; color: #333;"
+		// 按钮：透明底、大字号（16px）、白字（透明背景上可读）
+		"#hc-btn { background: transparent; color: #e8e8f4;"
 		" border: none; border-radius: 8px; font-size: 16px; padding: 3px 8px;"
 		" min-height: 18px; min-width: 18px; box-shadow: none; outline: none; margin: 0px;"
 		" font-family: 'Noto Sans', 'Cantarell', 'DejaVu Sans', sans-serif; }"
-		"#hc-btn label { margin: 0px; padding: 0px; color: #333; font-size: 16px;"
+		"#hc-btn label { margin: 0px; padding: 0px; color: #e8e8f4; font-size: 16px;"
 		" font-family: 'Noto Sans', 'Cantarell', 'DejaVu Sans', sans-serif; }"
-		"#hc-btn:hover { background: rgba(0,0,0,15); }"
-		"#hc-btn:hover label { color: #000; }"
-		// 锁定态小锁（白透明底，深色字）
-		"#hc-lock { background: rgba(255,255,255,150); color: #333;"
-		" border: 1px solid rgba(0,0,0,25); border-radius: 8px; font-size: 13px; padding: 2px 5px;"
-		" box-shadow: 0 1px 5px rgba(0,0,0,60); }"
-		"#hc-lock label { color: #333; font-size: 13px; margin: 0px; padding: 0px; }"
-		"#hc-lock:hover { background: rgba(0,0,0,15); }";
+		"#hc-btn:hover { background: rgba(255,255,255,35); }"
+		"#hc-btn:hover label { color: #ffffff; }"
+		// 锁定态小锁：半透明深底 + 白字 + 浅描边（常显控件需可读）
+		"#hc-lock { background: rgba(16,16,24,120); color: #e8e8f4;"
+		" border: 1px solid rgba(255,255,255,40); border-radius: 8px; font-size: 13px; padding: 2px 5px;"
+		" box-shadow: 0 1px 5px rgba(0,0,0,80); }"
+		"#hc-lock label { color: #e8e8f4; font-size: 13px; margin: 0px; padding: 0px; }"
+		"#hc-lock:hover { background: rgba(255,255,255,35); }";
 	gtk_css_provider_load_from_string(p, css);
 	GdkDisplay *disp = gdk_display_get_default();
 	if (disp == NULL) disp = gtk_widget_get_display(g_win);
