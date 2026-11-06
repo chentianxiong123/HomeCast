@@ -272,6 +272,20 @@
     }).catch(() => {});
   }
 
+  // ---- widget 下行指令轮询（挂件 ⏸ 按钮 → 后端意图 → 前端消费 toggle） ----
+  let lastCmdPoll = 0;
+  async function pollWidgetCommand() {
+    if (!song) return;
+    const now = Date.now();
+    if (now - lastCmdPoll < 1000) return; // 独立 1s 节流
+    lastCmdPoll = now;
+    try {
+      const r = await fetch('/api/v1/widget/command');
+      const j = await r.json();
+      if (j && j.data && j.data.toggle) toggle();
+    } catch (e) {}
+  }
+
   // ---- audio 事件 → 状态机 ----
   audio.addEventListener('play', () => setState('playing'));
   audio.addEventListener('pause', () => { setState(audio.ended ? 'ended' : 'paused'); if (el.eq) el.eq.style.display = 'none'; });
@@ -305,6 +319,7 @@
     const now = Date.now();
     if (now - lastSaveAt > 5000) { lastSaveAt = now; saveP(); }
     if (now - lastWidgetReport > 1000) { lastWidgetReport = now; reportWidget(); } // widget 独立 1s 上报（不捆绑 5s 持久化，对齐 web audio.currentTime 实时性）
+    pollWidgetCommand(); // 下行指令轮询（挂件按钮 ⏸ 消费，内部 1s 节流）
   });
   audio.addEventListener('play', () => reportWidget());
   audio.addEventListener('pause', () => reportWidget());
