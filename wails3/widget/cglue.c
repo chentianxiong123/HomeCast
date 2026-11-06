@@ -195,10 +195,11 @@ void hc_keep_above(void) {
 	Atom net = XInternAtom(d, "_NET_WM_STATE", False);
 	Atom above = XInternAtom(d, "_NET_WM_STATE_ABOVE", False);
 	Atom skip = XInternAtom(d, "_NET_WM_STATE_SKIP_TASKBAR", False);
+	Atom pager = XInternAtom(d, "_NET_WM_STATE_SKIP_PAGER", False);
 	XEvent e; memset(&e, 0, sizeof(e));
 	e.xclient.type = ClientMessage; e.xclient.window = w; e.xclient.message_type = net;
 	e.xclient.format = 32; e.xclient.data.l[0] = 1; e.xclient.data.l[1] = above;
-	e.xclient.data.l[2] = skip;
+	e.xclient.data.l[2] = skip; e.xclient.data.l[3] = pager;
 	XSendEvent(d, DefaultRootWindow(d), False, SubstructureRedirectMask|SubstructureNotifyMask, &e);
 	XFlush(d);
 }
