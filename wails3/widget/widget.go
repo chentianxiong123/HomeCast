@@ -8,7 +8,7 @@
 //   - 位置记忆 ~/.config/homecast/widget.json；整窗可拖
 //   - 播放进度本地平滑推进 + 状态校准
 //
-// 数据流：前端 WebView 上报 /widget/state → 后端内存 → 本窗口轮询快照；
+// 数据流：前端 WebView 上报 /widget/state → 后端内存 → 本窗口 SSE 订阅推送（去轮询）；
 // 歌词走内嵌后端 /music/lyric?bvid= （已选源优先，与歌词页同步）。
 //
 // 显示层多态（Display 接口）：linux=GTK4(display_linux.go)、windows=Win32(控制条待补)、
@@ -16,7 +16,9 @@
 package widget
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -34,7 +36,7 @@ const (
 	MinW      = 240
 	MaxW      = 1500
 	HoverMs   = 1200 // 悬停浮现控制条的时长
-	StatePoll = 900  // ms
+	StatePoll = 900  // ms（SSE 断开重连间隔）
 	FontSize  = 30.0
 	TickEvery = 150 // ms，主循环周期
 )
@@ -67,7 +69,6 @@ type state struct {
 	dragDX   int
 	dragDY   int
 	dragging bool
-	lastPoll time.Time
 	winW     int
 	lyGen    int // 歌词代际（fetchLyric 切歌时旧请求晚到丢弃，对齐 web loadGen）
 }
@@ -116,6 +117,7 @@ func Start(snapshot SnapshotProvider, backend string) error {
 		log.Printf("[widget] 位置超屏，已居中到 (%d,%d)", px, py)
 	}
 	disp.Tick(TickEvery, tick)
+	go listenEvents() // SSE 订阅：状态/切歌即时推送（去 900ms 轮询）
 	// 强制首绘：等 GTK 窗口 realized 后重绘（否则 draw_func 只在初始空跑一次）
 	time.AfterFunc(1200*time.Millisecond, func() { queueDraw() })
 	return nil
@@ -315,48 +317,10 @@ func tick() {
 		}
 	}
 
-	// 2. 状态同步（节流）+ 歌词切换 + 平滑推进
+	// 2. 播放状态由 SSE 推送（listenEvents → applyState），本循环只负责按当前 pos 算行
 	st.mu.Lock()
-	pollDue := time.Since(st.lastPoll).Milliseconds() >= StatePoll
 	playing := st.playing
 	st.mu.Unlock()
-	if pollDue {
-		st.lastPoll = time.Now()
-		bvid, title, artist, ct, dur, playing2 := "", "", "", 0.0, 0.0, false
-		if prov != nil {
-			bvid, title, artist, ct, dur, playing2 = prov()
-		}
-		key := bvid
-		st.mu.Lock()
-		if st.songKey != key {
-			st.songKey = key
-			st.title = joinTitle(title, artist)
-			st.lines = nil
-			st.curIdx = -1
-			st.pos = 0
-			st.offset = 0
-			st.dur = dur
-			st.playing = playing2
-			st.winW = MinW // 切歌重置占位宽，fetchLyric 拉到后按最长行定死
-			st.mu.Unlock()
-			if key != "" {
-				st.mu.Lock()
-				st.lyGen++
-				gen := st.lyGen
-				st.mu.Unlock()
-				go fetchLyric(joinTitle(title, artist), key, gen)
-			}
-			queueDraw() // 切歌立即重绘（GTK4 draw_func 需要显式 queue）
-			st.mu.Lock()
-		} else {
-			st.playing = playing2
-			st.dur = dur
-			// 对齐 web lyric.js：每帧直接用上报位置算行（"指哪打哪"，不本地推进）
-			st.pos = ct
-		}
-		playing = st.playing
-		st.mu.Unlock()
-	}
 
 	// 3. 每帧算当前行（对齐 web timeupdate→sync：ct+offset 直接指哪打哪）
 	if playing {
@@ -533,4 +497,102 @@ func fetchLyric(keyword, key string, gen int) {
 	}
 	queueDraw()
 	log.Printf("[widget] 歌词 %d 行 🎵%s 宽=%d", len(lines), keyword, winW)
+}
+// applyState SSE 推送的播放状态落地：切歌 → 清行重拉；同歌 → 校准 pos/dur/playing
+// 对齐 web lyric.js：pos 直接用上报位置（"指哪打哪"，逐字由挂件按 ct 算行）
+func applyState(bvid, title, artist string, ct, dur float64, playing bool) {
+	key := bvid
+	st.mu.Lock()
+	if st.songKey != key {
+		st.songKey = key
+		st.title = joinTitle(title, artist)
+		st.lines = nil
+		st.curIdx = -1
+		st.pos = 0
+		st.offset = 0
+		st.dur = dur
+		st.playing = playing
+		st.winW = MinW
+		st.mu.Unlock()
+		if key != "" {
+			st.mu.Lock()
+			st.lyGen++
+			gen := st.lyGen
+			st.mu.Unlock()
+			go fetchLyric(joinTitle(title, artist), key, gen)
+		}
+		queueDraw() // 切歌立即重绘（GTK4 draw_func 需显式 queue）
+		return
+	}
+	st.playing = playing
+	st.dur = dur
+	st.pos = ct
+	st.mu.Unlock()
+}
+
+// listenEvents 订阅后端 SSE（/api/v1/widget/events），事件到达即刷新歌词状态。
+// 断线按 StatePoll 间隔重连；这是挂件唯一的播放状态来源（不再轮询快照）。
+func listenEvents() {
+	for {
+		if Backend == "" {
+			time.Sleep(StatePoll * time.Millisecond)
+			continue
+		}
+		req, err := http.NewRequest("GET", Backend+"/api/v1/widget/events", nil)
+		if err != nil {
+			time.Sleep(StatePoll * time.Millisecond)
+			continue
+		}
+		req.Header.Set("Accept", "text/event-stream")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			time.Sleep(StatePoll * time.Millisecond)
+			continue
+		}
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			time.Sleep(StatePoll * time.Millisecond)
+			continue
+		}
+		// 先拉一次当前快照，避免等首个事件前空白
+		if prov != nil {
+			b, t, a, ct, dur, pl := prov()
+			applyState(b, t, a, ct, dur, pl)
+		}
+		readSSE(resp.Body)
+		resp.Body.Close()
+		time.Sleep(StatePoll * time.Millisecond) // 断开后重连
+	}
+}
+
+// readSSE 解析 event:/data: 行，遇 lyric-state 即 applyState
+func readSSE(r io.Reader) {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64*1024), 1024*1024)
+	var event string
+	for sc.Scan() {
+		line := sc.Text()
+		switch {
+		case strings.HasPrefix(line, "event:"):
+			event = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "data:"):
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if event == "lyric-state" && data != "" {
+				var p struct {
+					BVID        string  `json:"bvid"`
+					Title       string  `json:"title"`
+					Artist      string  `json:"artist"`
+					CurrentTime float64 `json:"current_time"`
+					Duration    float64 `json:"duration"`
+					Playing     bool    `json:"playing"`
+				}
+				if json.Unmarshal([]byte(data), &p) == nil {
+					applyState(p.BVID, p.Title, p.Artist, p.CurrentTime, p.Duration, p.Playing)
+				}
+			}
+			event = ""
+		case line == "":
+			event = ""
+		}
+	}
 }
