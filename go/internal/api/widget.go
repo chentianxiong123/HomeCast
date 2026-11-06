@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"homecast/internal/service/widget"
 )
@@ -40,12 +41,47 @@ func (h *WidgetHandler) Set(w http.ResponseWriter, r *http.Request) {
 }
 
 // Toggle POST /api/v1/widget/toggle —— 挂件 ⏸ 按钮请求切换播放/暂停
+// 经 SSE 即时推送给前端（非轮询），前端 EventSource 收到后调 audio.toggle()
 func (h *WidgetHandler) Toggle(w http.ResponseWriter, r *http.Request) {
-	h.State.RequestToggle()
+	h.State.BroadcastToggle()
 	ok(w, true)
 }
 
-// Command GET /api/v1/widget/command —— 前端轮询下行指令（⏸ 意图消费）
-func (h *WidgetHandler) Command(w http.ResponseWriter, r *http.Request) {
-	ok(w, map[string]any{"toggle": h.State.ConsumeToggle()})
+// Events GET /api/v1/widget/events —— SSE 下行控制流（挂件按钮 → 前端即时消费）
+// 事件：event: toggle （前端收到即切换播放/暂停）；15s 心跳保活
+func (h *WidgetHandler) Events(w http.ResponseWriter, r *http.Request) {
+	fl, ok := w.(http.Flusher)
+	if !ok {
+		errResp(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	ch := h.State.Subscribe()
+	defer h.State.Unsubscribe(ch)
+	// 初始握手，确认连接建立
+	if _, err := w.Write([]byte(": connected\n\n")); err != nil {
+		return
+	}
+	fl.Flush()
+	// 心跳（防中间层超时断开）+ toggle 推送
+	hb := time.NewTicker(15 * time.Second)
+	defer hb.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ch:
+			if _, err := w.Write([]byte("event: toggle\ndata: {}\n\n")); err != nil {
+				return
+			}
+			fl.Flush()
+		case <-hb.C:
+			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
+				return
+			}
+			fl.Flush()
+		}
+	}
 }
