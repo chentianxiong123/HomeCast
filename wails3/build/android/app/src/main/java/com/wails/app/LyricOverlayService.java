@@ -59,10 +59,6 @@ public class LyricOverlayService extends android.app.Service {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
 
-    // 歌词缓存：bvid 变化才重拉
-    private String cachedBvid;
-    private JSONArray cachedLines = new JSONArray();
-    private long lastLyricFetch = 0;
 
     @Override
     public void onCreate() {
@@ -237,57 +233,17 @@ public class LyricOverlayService extends android.app.Service {
     }
 
     // SSE lyric-state 落地：bvid 变 → 拉歌词行；同歌 → 按 ct 更新当前行
+    // applyState SSE lyric-state 落地（多平台统一：显示层纯渲染，不本地定位）
+    // 逻辑一份住后端（PickLine），这里只用 SSE 算好的 line；无 line 退回标题。
     private void applyState(JSONObject d) {
-        String bvid = d.optString("bvid", "");
-        double ct = d.optDouble("current_time", 0);
+        String line = d.optString("line", "");
         String title = d.optString("title", "");
         String artist = d.optString("artist", "");
-        if (bvid != null && !bvid.isEmpty() && !bvid.equals(cachedBvid)) {
-            fetchLyric(bvid);
-        }
-        String line = pickLine(ct);
         if (line == null || line.isEmpty()) {
             line = title.isEmpty() ? "HomeCast 歌词" : title + " - " + artist;
         }
         final String finalLine = line;
         ui.post(() -> lyricView.setText(finalLine));
-    }
-
-    private void fetchLyric(String bvid) {
-        try {
-            JSONObject ly = getJson("/api/v1/music/lyric?bvid=" + java.net.URLEncoder.encode(bvid, "UTF-8"));
-            if (ly != null && ly.optJSONObject("data") != null) {
-                JSONObject d = ly.optJSONObject("data");
-                JSONArray lines = d.optJSONArray("lines");
-                if (lines != null) {
-                    cachedLines = lines;
-                    cachedBvid = bvid;
-                }
-            }
-        } catch (Exception e) {
-            Log.d(TAG, "fetchLyric error: " + e.getClass().getSimpleName());
-        }
-    }
-
-    // 根据 ct 找当前行：lines = [[t,text,dur],...]，取 t <= ct 的最后一行
-    private String pickLine(double ct) {
-        try {
-            String best = null;
-            for (int i = 0; i < cachedLines.length(); i++) {
-                JSONArray row = cachedLines.optJSONArray(i);
-                if (row == null || row.length() < 2) continue;
-                double t = row.optDouble(0, -1);
-                if (t <= ct + 0.05) {
-                    String text = row.optString(1, "");
-                    if (text != null && !text.isEmpty()) best = text;
-                } else {
-                    break;
-                }
-            }
-            return best;
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     // ---- 后端 HTTP（cleartext 127.0.0.1 已放行 network_security_config） ----
