@@ -17,6 +17,7 @@ extern GtkWidget* hc_ctrl(void);
 extern GtkWidget* hc_lockbtn(void);
 extern GtkWidget* hc_fixed(void);
 extern void hc_set_win(GtkWidget*);
+extern void hc_set_visible(int);
 extern void hc_set_ctrl(GtkWidget*);
 extern void hc_set_lockbtn(GtkWidget*);
 extern void hc_set_fixed(GtkWidget*);
@@ -196,6 +197,15 @@ func (d *gtkDisplay) HideUI() {
 	C.gtk_widget_set_visible(C.hc_lockbtn(), 0)
 	C.hc_bg_off() // 背景移除 → 真透明（只剩歌词文字）
 	C.xshape_mask(0)
+}
+
+// SetVisible 整个挂件窗口显示/隐藏（下面面板 #d-tick 控制外部歌词）
+func (d *gtkDisplay) SetVisible(on bool) {
+	if on {
+		C.hc_set_visible(1)
+	} else {
+		C.hc_set_visible(0)
+	}
 }
 
 // Tick Linux 由 cglue.c 的 g_timeout_add(150, goTick) 驱动，无需额外注册

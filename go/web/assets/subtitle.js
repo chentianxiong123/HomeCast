@@ -178,7 +178,30 @@
     progEl.style.width = pct + '%';
   });
 
-  if (tickBtn) tickBtn.addEventListener('click', () => setEnabled(!enabled));
+  if (tickBtn) tickBtn.addEventListener('click', () => {
+    // 下面面板字幕开关 = 控制「外部歌词」（平台对应），web 才控制 web 字幕条。
+    // 安卓 → 悬浮窗；桌面 → 挂件；web → web 字幕条。
+    if (window.AndroidLyric) { // 安卓：切换悬浮窗
+      const on = localStorage.getItem('hc:androlyric') === '1';
+      const nv = !on;
+      try { localStorage.setItem('hc:androlyric', nv ? '1' : '0'); } catch (e) {}
+      try { if (nv) window.AndroidLyric.show(); else window.AndroidLyric.hide(); } catch (e) {}
+      tickBtn.classList.toggle('d-tick-on', nv);
+      return;
+    }
+    if (window.hcEnv === 'desktop') { // 桌面：切换 GTK 挂件可见性（POST 后端）
+      const nv = !tickBtn.classList.contains('d-tick-on');
+      tickBtn.classList.toggle('d-tick-on', nv);
+      try {
+        fetch('/api/v1/widget/lyric-visible', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ on: nv }),
+        }).catch(() => {});
+      } catch (e) {}
+      return;
+    }
+    setEnabled(!enabled); // web：web 字幕条
+  });
   hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });
   if (enabled) showBar();
 })();

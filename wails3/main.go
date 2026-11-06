@@ -106,7 +106,7 @@ func main() {
 	httpLog = filepath.Join(hcDataPath(), "hc-http.log")
 	os.WriteFile(httpLog, []byte("HOME="+os.Getenv("HOME")+"\n"), 0644)
 
-	h := server.New()
+	h := wrapWidgetRoute(server.New())
 
 	// 桌面端：0.0.0.0 独立端口让局域网 DLNA/音箱/挂件能访问代理流；安卓 no-op
 	go listenBackend(h)
