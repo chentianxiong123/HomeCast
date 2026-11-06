@@ -22,6 +22,8 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.util.Log;
+import android.provider.Settings;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -64,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int PHOTO_CAPTURE_REQUEST = 7002;
     private static final int VIDEO_CAPTURE_REQUEST = 7003;
     private static final int CAMERA_PERMISSION_REQUEST = 7010;
+    private static final int OVERLAY_PERMISSION_REQUEST = 7011;
     private File pendingCaptureFile;
     private boolean pendingCaptureIsVideo;
 
@@ -112,6 +115,10 @@ public class MainActivity extends AppCompatActivity {
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
         webView.setOverScrollMode(android.view.View.OVER_SCROLL_NEVER);
+
+        // 安卓悬浮窗歌词：JS bridge（window.AndroidLyric）暴露给前端设置页开关。
+        // 纯系统壳 API（启动 Service/授权），不涉 Go 业务通信（前后端仍走真实 HTTP）。
+        webView.addJavascriptInterface(new LyricBridge(), "AndroidLyric");
 
         // Enable debugging in debug builds
         if (DEBUG) {
@@ -235,6 +242,13 @@ public class MainActivity extends AppCompatActivity {
                 launchCameraCapture(pendingCaptureIsVideo);
             } else {
                 bridge.emitEvent("common:capture", "{\"error\":\"camera permission denied\"}");
+            }
+            return;
+        }
+        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
+            // 用户从授权页返回：已授权则自动启动悬浮窗
+            if (canDrawOverlays()) {
+                startLyricOverlay();
             }
             return;
         }
@@ -522,6 +536,60 @@ public class MainActivity extends AppCompatActivity {
                 webView.evaluateJavascript(js, null);
             }
         });
+    }
+
+    // ---- 安卓悬浮窗歌词（LyricOverlayService） ----
+    // 纯系统壳 API：前端设置页开关经 JS bridge 调这里，检查授权后启动/停止悬浮窗 Service。
+
+    /** JS bridge：前端 window.AndroidLyric.show()/hide()/canDraw()。 */
+    public class LyricBridge {
+        @JavascriptInterface public void show() {
+            runOnUiThread(() -> startLyricOverlay());
+        }
+        @JavascriptInterface public void hide() {
+            runOnUiThread(() -> stopLyricOverlay());
+        }
+        @JavascriptInterface public boolean canDraw() {
+            return canDrawOverlays();
+        }
+    }
+
+    // 悬浮窗授权可用（API 23+ 需 canDrawOverlays；API<23 直接允许）
+    private boolean canDrawOverlays() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        return Settings.canDrawOverlays(this);
+    }
+
+    // 启动悬浮窗歌词：未授权先引导（ACTION_MANAGE_OVERLAY_PERMISSION），授权后自动启动
+    private void startLyricOverlay() {
+        if (!canDrawOverlays()) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(i, OVERLAY_PERMISSION_REQUEST);
+            } catch (Exception e) {
+                Log.e(TAG, "overlay permission intent failed", e);
+            }
+            return;
+        }
+        Intent s = new Intent(this, LyricOverlayService.class);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(s);
+            } else {
+                startService(s);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "start LyricOverlayService failed", e);
+        }
+    }
+
+    private void stopLyricOverlay() {
+        try {
+            stopService(new Intent(this, LyricOverlayService.class));
+        } catch (Exception e) {
+            Log.e(TAG, "stop LyricOverlayService failed", e);
+        }
     }
 
     // ---- System events ---------------------------------------------------
