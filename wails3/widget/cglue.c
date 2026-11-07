@@ -1,4 +1,7 @@
+//go:build linux
+
 // cglue.c — GTK4 挂件 C 实现（照 GTK3 版逻辑：draw_func + 手势 + tick + 1bpp 穿透）
+// Linux 专属（GTK4 + X11）；Windows 用 display_windows.go（GDI，不编本文件）
 #include <gtk/gtk.h>
 #include <gdk/x11/gdkx.h>
 #include <X11/Xlib.h>

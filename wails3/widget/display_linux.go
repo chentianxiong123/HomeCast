@@ -203,6 +203,12 @@ func (d *gtkDisplay) HideUI() {
 	C.xshape_mask(0)
 }
 
+// DrawCtrl Linux：GTK widget 已负责控制条绘制（cglue.c hc_ctrl），canvas no-op
+func (d *gtkDisplay) DrawCtrl(shown, locked bool) {}
+
+// HitTest Linux：GTK widget 已接管按钮事件（_hc_btn_cb），canvas 命中返回 0
+func (d *gtkDisplay) HitTest(x, y float64) int { return 0 }
+
 // SetVisible 整个挂件窗口显示/隐藏（下面面板 #d-tick 控制外部歌词）
 func (d *gtkDisplay) SetVisible(on bool) {
 	if on {

@@ -123,9 +123,31 @@ func (d *winDisplay) QueueDraw() {
 	C.InvalidateRect(hwndWin, nil, 0) // FALSE：不擦背景，防闪烁
 }
 
-// ShowUI/HideUI：Windows 版穿透窗收不到鼠标事件，控制条暂缺（TODO 锁定/拖动后续）
-func (d *winDisplay) ShowUI(locked bool) {}
-func (d *winDisplay) HideUI()           {}
+// 穿透切换：ShowUI 取消 WS_EX_TRANSPARENT（接收鼠标，控制条可点/可拖）；HideUI 恢复穿透
+func setClickable(on bool) {
+	if hwndWin == 0 {
+		return
+	}
+	ex := C.GetWindowLongPtr(hwndWin, C.GWL_EXSTYLE)
+	if on {
+		ex &^= C.WS_EX_TRANSPARENT
+	} else {
+		ex |= C.WS_EX_TRANSPARENT
+	}
+	C.SetWindowLongPtr(hwndWin, C.GWL_EXSTYLE, ex)
+}
+
+// ShowUI 悬停浮现控制条（locked=true 只出小锁）：取消穿透接收鼠标，重绘画控制条
+func (d *winDisplay) ShowUI(locked bool) {
+	setClickable(true)
+	C.InvalidateRect(hwndWin, nil, 0)
+}
+
+// HideUI 收起控制条：恢复穿透（鼠标穿透，只显示歌词）
+func (d *winDisplay) HideUI() {
+	setClickable(false)
+	C.InvalidateRect(hwndWin, nil, 0)
+}
 // SetVisible Windows 版（TODO 挂件窗口显示/隐藏）
 func (d *winDisplay) SetVisible(on bool) {}
 
@@ -197,6 +219,82 @@ func (c *winCanvas) Text(x, y float64, text string, size float64, r, g, b, a flo
 	C.free(unsafe.Pointer(cs))
 	C.SelectObject(c.dc, old)
 	C.DeleteObject(C.HGDIOBJ(unsafe.Pointer(f)))
+}
+
+// ── 控制条（GDI 手绘，同 Linux 视觉/顺序/位置：⏸−+🔓✕ 底部居中） ──
+
+// ctrlKind 按钮 kind（1⏸ 2− 3+ 4🔓 5✕）
+var ctrlKind = []string{"", "⏸", "−", "+", "🔓", "✕"}
+var ctrlKindW = []int{0, 30, 30, 30, 32, 28}
+
+// ctrlRects 计算 5 按钮矩形（窗口内坐标，底部居中；paint 绘制与 HitTest 共用）
+func ctrlRects() [5]struct{ x, y, w, h int } {
+	var out [5]struct{ x, y, w, h int }
+	rc := C.RECT{}
+	C.GetClientRect(hwndWin, &rc)
+	winW := int(rc.right)
+	// 总宽 = 5 按钮宽 + 4 间隙(6) + 两端 padding(10)
+	total := 0
+	for i := 1; i <= 5; i++ {
+		total += ctrlKindW[i]
+	}
+	total += 4 * 6
+	x0 := (winW - total) / 2
+	y0 := WinH - CtrlH
+	cx := x0
+	for i := 1; i <= 5; i++ {
+		w := ctrlKindW[i]
+		out[i-1] = struct{ x, y, w, h int }{cx, y0, w, CtrlH}
+		cx += w + 6
+	}
+	return out
+}
+
+// DrawCtrl 绘制控制条按钮（GDI 文字，透明底白字；同 Linux #hc-btn 视觉）
+func (d *winDisplay) DrawCtrl(shown, locked bool) {
+	if !shown {
+		return
+	}
+	if locked {
+		// 锁定态：只出小锁按钮（对齐 Linux hc_lockbtn 语义）
+		drawCtrlButton(4, true)
+		return
+	}
+	for k := 1; k <= 5; k++ {
+		drawCtrlButton(k, false)
+	}
+}
+
+// drawCtrlButton 画单个按钮（GDI 文字；hover 反馈由绘制层简化——透明底白字）
+func drawCtrlButton(kind int, force bool) {
+	rects := ctrlRects()
+	if kind < 1 || kind > 5 {
+		return
+	}
+	r := rects[kind-1]
+	// 用共享 paint 的 Canvas 画文字（GDI TextOut），颜色 #e8e8f4
+	dc := C.GetDC(hwndWin)
+	if dc == nil {
+		return
+	}
+	c := &winCanvas{dc: dc}
+	// 文字垂直居中（CtrlH=24，字体 16）
+	c.Text(float64(r.x+4), float64(r.y+4), ctrlKind[kind], 16, 0.91, 0.91, 0.96, 1)
+	C.ReleaseDC(hwndWin, dc)
+}
+
+// HitTest 按钮命中（handlePress 传屏幕坐标 → 转窗口内坐标 → 命中 kind；0=未命中）
+func (d *winDisplay) HitTest(x, y float64) int {
+	gx, gy := d.Pos()
+	lx, ly := int(x)-gx, int(y)-gy
+	rects := ctrlRects()
+	for i := 0; i < 5; i++ {
+		r := rects[i]
+		if lx >= r.x && lx <= r.x+r.w && ly >= r.y && ly <= r.y+r.h {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // ── 窗口过程（//export，单窗口） ──

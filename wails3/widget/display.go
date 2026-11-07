@@ -33,6 +33,12 @@ type Display interface {
 	// ShowUI 悬停浮现控制条（locked=true 只出小锁）；HideUI 收起
 	ShowUI(locked bool)
 	HideUI()
+	// DrawCtrl 绘制控制条按钮（paint 调；linux=GTK widget 已负责→no-op，
+	// windows=GDI 手绘 5 按钮 ⏸−+🔓✕，同 Linux 视觉/顺序/位置）
+	DrawCtrl(shown, locked bool)
+	// HitTest 控制条按钮命中（handlePress 调）：返回按钮 kind（1⏸ 2− 3+ 4🔓 5✕），
+	// 未命中返回 0。linux=GTK widget 已接管→0；windows=GDI 手绘坐标检测。
+	HitTest(x, y float64) int
 	// SetVisible 整个挂件窗口显示/隐藏（下面面板 #d-tick → /api/v1/widget/lyric-visible）
 	SetVisible(on bool)
 	// Tick 周期调度核心循环（delayMs 毫秒后执行一次并自动续期）
