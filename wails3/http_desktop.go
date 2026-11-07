@@ -1,8 +1,8 @@
-//go:build !android
+//go:build !android && !ios
 
 package main
 
-// 桌面端（Linux/Windows）后端监听：0.0.0.0 让局域网 DLNA / 小米音箱 / 挂件能访问代理流
+// 桌面端（Linux/Windows/macOS）后端监听：0.0.0.0 让局域网 DLNA / 小米音箱 / 挂件能访问代理流
 // （迁移后这是唯一 HTTP 服务，WebView 也走它：http://127.0.0.1:端口）
 
 import (

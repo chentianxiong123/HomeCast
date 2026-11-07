@@ -1,6 +1,4 @@
-//go:build darwin
-
-// macOS 显示层：Cocoa/AppKit（NSWindow 无边框置顶透明 + ignoresMouseEvents 穿透）。
+//go:build darwin && !ios
 // 照 Linux(cglue.c)/Windows(GDI) 模式：ObjC 核心 darwin_display.m → Go 回调。
 // 视觉/行为一致：悬停浮现控制条（⏸−+🔓✕ 底部居中，共享表 ctrlBtnTable）、
 // 锁定态只出小锁、拖拽、关闭。

@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin && !ios
 
 // 桌面挂件显示/隐藏路由（Linux GTK4）：下面面板 #d-tick → POST /api/v1/widget/lyric-visible {on}
 // 平台分离（解耦）：只有 linux 才 import widget 包（cgo GTK）；安卓/其他平台 no-op。
