@@ -213,6 +213,11 @@
     setEnabled(!enabled); // web：web 字幕条
   });
   hcBus.on('subtitle-toggle', (d) => { if (d) setEnabled(!!d.on); });
+  // 悬浮窗 ✕ 关闭（安卓）：同步 #d-tick 高亮 + hc:androlyric=0（MainActivity 调）
+  hcBus.on('androlyric-off', () => {
+    try { localStorage.setItem('hc:androlyric', '0'); } catch (e) {}
+    if (tickBtn) tickBtn.classList.remove('d-tick-on');
+  });
   // 安卓：#d-tick 高亮跟悬浮窗（hc:androlyric），不显示网页字幕条（悬浮窗承担）
   if (enabled) {
     if (isAndroid) { if (tickBtn) tickBtn.classList.add('d-tick-on'); }
