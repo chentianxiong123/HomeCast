@@ -41,19 +41,19 @@ jobs:
           cache-dependency-path: |
             go/go.sum
             wails3/go.sum
-      - name: 安装 GTK3 / WebKitGTK / appindicator 依赖
+      - name: 安装 GTK4 / WebKitGTK / appindicator 依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+          sudo apt-get install -y libgtk-4-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
       - name: wails3 模块 vet
         run: |
-          cd wails3 && go vet -tags gtk3 ./...
+          cd wails3 && go vet ./...
       - name: 安装 wails3 CLI
-        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
-      - name: 官方构建（Linux，gtk3 + go:embed）
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 官方构建（Linux，gtk4 + go:embed）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          cd wails3 && wails3 build -tags gtk3
+          cd wails3 && wails3 build
       - uses: actions/upload-artifact@v4
         with:
           name: hcexp-linux
@@ -76,9 +76,9 @@ jobs:
       - name: 安装 mingw-w64
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64 libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y gcc-mingw-w64-x86-64
       - name: 安装 wails3 CLI
-        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
       - name: 官方构建（Windows，mingw + CGO）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -88,3 +88,19 @@ jobs:
           name: hcexp-win
           path: wails3/bin/hcexp.exe
           if-no-files-found: error
+
+  # ── 安卓 Java 编译检查（防 Java 回归；Go .so 预编译进 jniLibs，Java 独立）──
+  build-android:
+    name: 安卓 Java 编译检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: 安卓 Java 编译（LyricOverlayService/MainActivity 等）
+        run: |
+          cd wails3/build/android
+          ./gradlew :app:compileReleaseJavaWithJavac --no-daemon
