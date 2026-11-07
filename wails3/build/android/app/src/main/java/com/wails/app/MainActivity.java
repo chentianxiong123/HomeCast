@@ -573,6 +573,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Intent s = new Intent(this, LyricOverlayService.class);
+        // ✕ 关闭回调：停悬浮窗 + 前端同步（window.AndroidLyric.hide → hc:androlyric=0 + #d-tick 关）
+        LyricOverlayService.onCloseRequest = () -> {
+            runOnUiThread(() -> {
+                stopLyricOverlay();
+                // 前端同步：hc:androlyric=0 + #d-tick 关高亮（✕ 关窗后 UI 一致）
+                try { webView.evaluateJavascript("window.hcBus && window.hcBus.emit('androlyric-off');", null); } catch (Exception e) {}
+            });
+        };
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(s);

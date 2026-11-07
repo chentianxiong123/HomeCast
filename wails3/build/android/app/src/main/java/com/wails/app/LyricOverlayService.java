@@ -51,6 +51,8 @@ public class LyricOverlayService extends android.app.Service {
     private static final int NOTIFICATION_ID = 0x4C79; // "Ly"
     private static final String PREFS = "hc_lyric_overlay";
     private static final long POLL_MS = 500;
+    /** ✕ 关闭回调：MainActivity 设置（同步前端 #d-tick/hc:androlyric + stopSelf）。 */
+    public static Runnable onCloseRequest;
 
     private WindowManager windowManager;
     private TextView lyricView;
@@ -61,6 +63,8 @@ public class LyricOverlayService extends android.app.Service {
     private SharedPreferences prefs;
     private android.view.View rootView;
     private TextView btnPause; // 播放/暂停按钮（applyState 按 playing 切 ⏸/▶️）
+    private android.graphics.drawable.Drawable rootBg; // 整体框背景（聚焦出框用）
+    private LinearLayout ctrl; // 控制条（⑤ 平时隐藏，一抓出框才露）
     private String currentBvid = "";
     private double currentOffset = 0;
 
@@ -88,7 +92,7 @@ public class LyricOverlayService extends android.app.Service {
     private void createOverlayView() {
         lyricView = new TextView(this);
         lyricView.setText("HomeCast 歌词");
-        lyricView.setTextSize(20);
+        lyricView.setTextSize(22);
         lyricView.setTextColor(Color.WHITE);
         lyricView.setShadowLayer(3, 0, 1, Color.argb(200, 0, 0, 0));
         lyricView.setTypeface(Typeface.DEFAULT_BOLD);
@@ -98,18 +102,27 @@ public class LyricOverlayService extends android.app.Service {
         // 整体一个框：歌词不再独立描边（root 统一圆角背景 + 描边）
 
         // 控制条（特殊接口适配：安卓 UI；逻辑仍走后端 /widget/toggle、/lyric/offset）
-        LinearLayout ctrl = new LinearLayout(this);
+        ctrl = new LinearLayout(this);
         ctrl.setOrientation(LinearLayout.HORIZONTAL);
         ctrl.setGravity(Gravity.CENTER);
+        // ⑤ 平时只歌词（控制条隐藏），一抓出框才露 − ⏸ + ✕
+        ctrl.setVisibility(View.GONE);
         btnPause = ctrlBtn("⏸"); // 字段：applyState 按 playing 切 ⏸/▶️
         TextView btnMinus = ctrlBtn("−");
         TextView btnPlus = ctrlBtn("+");
+        TextView btnClose = ctrlBtn("✕"); // 关闭悬浮窗（用户：还少 ✕）
         btnPause.setOnClickListener(v -> postJson("/api/v1/widget/toggle", "{}"));
         btnMinus.setOnClickListener(v -> postOffset(-0.5));
         btnPlus.setOnClickListener(v -> postOffset(0.5));
+        btnClose.setOnClickListener(v -> {
+            // ✕：停悬浮窗（stopSelf）+ 回调 MainActivity 同步前端（hc:androlyric=0 + #d-tick）
+            if (onCloseRequest != null) onCloseRequest.run();
+            else stopSelf();
+        });
         ctrl.addView(btnMinus);
         ctrl.addView(btnPause);
         ctrl.addView(btnPlus);
+        ctrl.addView(btnClose);
 
         // 总布局：歌词行 + 控制条（垂直）
         LinearLayout root = new LinearLayout(this);
@@ -118,8 +131,10 @@ public class LyricOverlayService extends android.app.Service {
         root.addView(lyricView);
         root.addView(ctrl);
         root.setPadding(dp(6), dp(6), dp(6), dp(6));
-        // 整体一个框：桌面挂件同款——圆角 + 半透明深底 + 白描边（歌词+控制条在内）
-        root.setBackground(drawRoundedBorder());
+        // 整体一个框：平时纯透明（不点击不出框），聚焦（触摸/拖动）才出框
+        // 桌面挂件同款圆角 + 半透明深底 + 白描边（歌词+控制条在内）
+        rootBg = drawRoundedBorder();
+        root.setBackground(null); // 默认透明（未聚焦）
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -147,11 +162,22 @@ public class LyricOverlayService extends android.app.Service {
     private TextView ctrlBtn(String text) {
         TextView b = new TextView(this);
         b.setText(text);
-        b.setTextSize(18);
+        b.setTextSize(20);
         b.setTextColor(Color.WHITE);
         b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(12), dp(4), dp(12), dp(4));
-        b.setBackground(drawRoundedBorder());
+        // ① 按钮大一点、触控区足（≥40dp）：padding 14,7
+        b.setPadding(dp(14), dp(7), dp(14), dp(7));
+        // ⑥ 点击反馈：按下时半透明白底（触感）
+        b.setOnTouchListener((View v, MotionEvent ev) -> {
+            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                v.setBackgroundColor(Color.argb(60, 255, 255, 255)); // 按下微亮
+            } else if (ev.getActionMasked() == MotionEvent.ACTION_UP
+                    || ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                v.setBackground(null); // 松开恢复透明
+            }
+            return false; // 不拦截（让 OnClickListener 收到）
+        });
+        // 无独立框：与整体框融合（用户：别有自己的框框）
         return b;
     }
 
@@ -183,9 +209,9 @@ public class LyricOverlayService extends android.app.Service {
 
     private android.graphics.drawable.Drawable drawRoundedBorder() {
         android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-        g.setColor(Color.argb(90, 16, 16, 24)); // 半透明深底（白字可读）
+        g.setColor(Color.argb(105, 12, 12, 20)); // ③ 深底稍深（白字更清晰）
         g.setCornerRadius(dp(14));
-        g.setStroke(dp(1), Color.argb(110, 255, 255, 255)); // 1px 白描边
+        g.setStroke(dp(1), Color.argb(130, 255, 255, 255)); // ③ 描边稍亮
         return g;
     }
 
@@ -194,6 +220,9 @@ public class LyricOverlayService extends android.app.Service {
         target.setOnTouchListener((View v, MotionEvent ev) -> {
             switch (ev.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    // 一抓就出框：按下瞬间出框 + 控制条立刻露出（跟手）
+                    if (rootBg != null) v.setBackground(rootBg);
+                    if (ctrl != null) ctrl.setVisibility(View.VISIBLE);
                     down[0] = ev.getRawX() - params.x;
                     down[1] = ev.getRawY() - params.y;
                     return true;
@@ -204,6 +233,11 @@ public class LyricOverlayService extends android.app.Service {
                     return true;
                 case MotionEvent.ACTION_UP:
                     prefs.edit().putInt("x", params.x).putInt("y", params.y).apply();
+                    // ④ 出框延迟 600ms（跟手）：恢复透明 + 控制条隐藏（平时只歌词）
+                    ui.postDelayed(() -> {
+                        v.setBackground(null);
+                        if (ctrl != null) ctrl.setVisibility(View.GONE);
+                    }, 600);
                     return true;
             }
             return false;
