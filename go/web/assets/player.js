@@ -217,7 +217,21 @@
     if (t) loadSong(t);
     emitQueue();
   }
-  function toggle() { if (!song) return; audio.paused ? audio.play().catch(() => {}) : audio.pause(); }
+  // 音响让位（用户拍板 A）：音响推送播放时 web audio 暂停，播放器面板控制音响
+  let spkDid = ''; // 音响播放目标 did（非空=音响模式，播放器面板控音响）
+  let spkState = 'idle'; // 音响播放状态（SSE /speaker/events 更新；playing/paused/idle）
+  function toggle() {
+    if (!song) return;
+    if (spkDid) { // 音响模式：播放/暂停控制音响（非 web audio）
+      const action = spkState === 'playing' ? 'pause' : 'play'; // 播放中→暂停，否则播放
+      fetch('/api/v1/speaker/control', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ did: spkDid, action }),
+      }).catch(() => {});
+      return;
+    }
+    audio.paused ? audio.play().catch(() => {}) : audio.pause();
+  }
   function seek(pct) { if (!song || !audio.duration) return; audio.currentTime = (pct / 100) * audio.duration; }
   function setQuality(q) { // 切换后若在播则按新音质重载（Vue 版同逻辑）
     quality = q;
@@ -313,9 +327,11 @@
       cacheScheduled = true;
       window.hcCache.cacheAfterPlaying(song.bvid, '/api/v1/music/stream/' + song.bvid + '?quality=' + quality);
     }
-    el.cur.textContent = fmt(audio.currentTime);
-    const d = audio.duration || 1;
-    el.prog.value = Math.round((audio.currentTime / d) * 1000);
+    if (!spkDid) { // 音响模式：进度由 /speaker/events SSE 推（不覆盖 web）
+      el.cur.textContent = fmt(audio.currentTime);
+      const d = audio.duration || 1;
+      el.prog.value = Math.round((audio.currentTime / d) * 1000);
+    }
     const now = Date.now();
     if (now - lastSaveAt > 5000) { lastSaveAt = now; saveP(); }
     if (now - lastWidgetReport > 250) { lastWidgetReport = now; reportWidget(); } // widget 250ms 上报（~4Hz，对齐 web timeupdate 实时性；桌面/安卓歌词挂件 SSE 跟得上 web，不卡顿）
@@ -422,6 +438,18 @@
 
   // ---- 音箱投送桥接：同 cast 模式，player 持当前歌调后端 ----
   // 带 title/duration/next_bvid：服务端建本地模拟进度 + 播完自动连播队列下一首（不打小米云轮询）
+  // 音响进度（speaker.js /speaker/events SSE 广播）：音响模式播放器面板显示音响进度
+  hcBus.on('speaker-progress', (all) => {
+    if (!spkDid || !all || !all[spkDid]) return;
+    const p = all[spkDid];
+    spkState = p.state || 'idle';
+    if (spkState === 'idle' || spkState === 'stopped') { spkDid = ''; render(); return; } // 音响停 → 回 web 模式
+    el.cur.textContent = fmt(p.position || 0);
+    const dur = p.duration || 1;
+    el.prog.value = Math.round(((p.position || 0) / dur) * 1000);
+    el.dur.textContent = fmt(p.duration || 0);
+    render(); // 播放按钮图标随音响状态
+  });
   hcBus.on('speaker-play', (d) => {
     if (!song) {
       hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '请先播放一首歌' });
@@ -436,7 +464,15 @@
     });
     fetch('/hx/speaker/play', { method: 'POST', body })
       .then((r) => r.text())
-      .then((t) => hcBus.emit('speaker-result', { ok: t.includes('音箱播放'), did: d.did, msg: '投送失败' }))
+      .then((t) => {
+        const ok = t.includes('音箱播放');
+        if (ok) { // 音响让位：web audio 暂停，播放器面板切音响模式
+          try { audio.pause(); } catch (e) {}
+          spkDid = d.did;
+          render();
+        }
+        hcBus.emit('speaker-result', { ok, did: d.did, msg: ok ? '音箱播放' : '投送失败' });
+      })
       .catch(() => hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '网络错误' }));
   });
 

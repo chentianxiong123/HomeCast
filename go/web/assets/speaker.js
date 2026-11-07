@@ -15,6 +15,8 @@
   var lastData = {}; // did -> 最近一次 SSE 进度（htmx 重绘后即时恢复，不闪空）
   function applyAll(all) {
     if (!all) return;
+    // 广播给播放器面板（音响让位模式：进度/状态复用 player-dock）
+    try { if (window.hcBus) window.hcBus.emit('speaker-progress', all); } catch (e) {}
     var boxes = document.querySelectorAll('.sp-prog[data-did]');
     if (!boxes.length) return;
     boxes.forEach(function (b) {
