@@ -105,22 +105,11 @@
     });
   }
 
-  function sync(sec) {
-    if (!lines.length) return;
-    const t = sec + offset; // 对齐偏移：行时间 s <= 播放位置+偏移（music.py t = pos + offset）
-    let idx = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i][0] <= t) idx = i; else break;
-    }
-    // 逐行进度（当前行唱到百分之几）：yrc 行自带时长（l[2]），LRC 用下一行差估算
-    if (idx >= 0) {
-      const start = lines[idx][0];
-      const dur = (typeof lines[idx][2] === 'number' && lines[idx][2] > 0) ? lines[idx][2]
-        : (lines[idx + 1] ? lines[idx + 1][0] - start : 0);
-      const p = dur > 0 ? Math.min(1, Math.max(0, (t - start) / dur)) : 1;
-      const d = linesEl.children[idx];
-      if (d) d.style.setProperty('--prog', p.toFixed(3));
-    }
+  // 当前行高亮（统一数据流：走后端 SSE lyric-line，不本地 sec<=t 定位）
+  function highlightLine(line) {
+    if (!lines.length || typeof line !== 'string') return;
+    let idx = lines.findIndex((l) => l[1] === line);
+    if (idx < 0 && line) return; // 行不在当前列表（换歌/未匹配）不动
     if (idx === lastIdx) return;
     lastIdx = idx;
     linesEl.querySelectorAll('.ly-line').forEach((d, i) => {
@@ -133,6 +122,22 @@
       d.classList.toggle('scale-110', active);
     });
     if (idx >= 0) linesEl.children[idx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  hcBus.on('lyric-line', highlightLine);
+  // 逐行进度（当前行唱到百分之几，本地 timeupdate 显示细节；当前行文本走后端 SSE）
+  function sync(sec) {
+    if (!lines.length) return;
+    const t = sec + offset;
+    let idx = -1;
+    for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= t) idx = i; else break; }
+    if (idx >= 0) {
+      const start = lines[idx][0];
+      const dur = (typeof lines[idx][2] === 'number' && lines[idx][2] > 0) ? lines[idx][2]
+        : (lines[idx + 1] ? lines[idx + 1][0] - start : 0);
+      const p = dur > 0 ? Math.min(1, Math.max(0, (t - start) / dur)) : 1;
+      const d = linesEl.children[idx];
+      if (d) d.style.setProperty('--prog', p.toFixed(3));
+    }
   }
 
   let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲

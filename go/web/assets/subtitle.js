@@ -140,14 +140,26 @@
     if (enabled) place(); // 歌词写入后条宽变化，重定位（clamp 回视口）
   }
 
+  // 当前行统一走后端（SSE lyric-line，player.js 广播），显示层纯渲染，不本地 sec<=t
+  function applyLyricLine(line) {
+    if (!enabled) return;
+    if (typeof line === 'string' && line) { lastIdx = -1; if (textEl) textEl.textContent = line; if (progEl) progEl.style.width = '0%'; }
+    else if (textEl) textEl.textContent = songTitle || '';
+  }
+  hcBus.on('lyric-line', applyLyricLine);
   function sync(sec) {
-    if (!enabled || !lines.length) return;
-    const t = sec + offset; // 对齐偏移（music.py t = pos + offset）
+    // 本地只算进度（当前行文本走后端 SSE）；进度是显示细节，timeupdate 驱动
+    if (!enabled || !lines.length || !progEl) return;
+    const t = sec + offset;
     let idx = -1;
     for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= t) idx = i; else break; }
-    if (idx === lastIdx) return;
-    lastIdx = idx;
-    if (textEl) textEl.textContent = idx >= 0 ? lines[idx][1] : (songTitle || '');
+    if (idx >= 0) {
+      const t0 = lines[idx][0];
+      const dur = (typeof lines[idx][2] === 'number' && lines[idx][2] > 0) ? lines[idx][2]
+        : (idx + 1 < lines.length ? lines[idx + 1][0] - t0 : (audio.duration || t0 + 1) - t0);
+      const pct = dur > 0 ? Math.min(100, Math.max(0, ((t - t0) / dur) * 100)) : 0;
+      if (progEl) progEl.style.width = pct + '%';
+    }
   }
 
   // 歌词对齐随动：歌词面板 ±0.5s 调节时字幕条实时同步（同 bvid 才生效）
@@ -167,26 +179,8 @@
   });
 
   audio.addEventListener('timeupdate', () => {
-    const tCur = audio.currentTime;
-    sync(tCur);
-    // 卡拉OK横向进度：当前句内推进；与 sync 用同一个对齐后时间 t = pos + offset（±0.5s 补偿后进度条与文字同拍）
-    // yrc 行自带时长（l[2]）优先，LRC 才退化用下一句起点差
-    if (!progEl) return;
-    let pct = 0;
-    if (lines.length && enabled) {
-      const t = tCur + offset;
-      let idx = -1;
-      for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= t) idx = i; else break; }
-      if (idx >= 0) {
-        const t0 = lines[idx][0];
-        const dur = (typeof lines[idx][2] === 'number' && lines[idx][2] > 0) ? lines[idx][2]
-          : (idx + 1 < lines.length ? lines[idx + 1][0] - t0 : (audio.duration || t0 + 1) - t0);
-        pct = dur > 0 ? Math.min(100, Math.max(0, ((t - t0) / dur) * 100)) : 0;
-      }
-    } else if (audio.duration) {
-      pct = (audio.currentTime / audio.duration) * 100;
-    }
-    progEl.style.width = pct + '%';
+    // 进度由 sync 算（当前行文本走后端 SSE lyric-line，显示层纯渲染）
+    sync(audio.currentTime);
   });
 
   if (tickBtn) tickBtn.addEventListener('click', () => {
