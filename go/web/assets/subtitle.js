@@ -116,18 +116,19 @@
       return;
     }
     try {
-      const kw = encodeURIComponent(((s.title || '') + ' ' + (s.artist || '')).trim());
-      // 带 bvid：服务端优先用分P标题作关键词（bili-music lyricSearchTitles 同款）
-      const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&bvid=' + encodeURIComponent(s.bvid) + '&limit=3')).json();
+      // 统一数据流：行列表权威走后端 /music/lyric?bvid=（选定源，同桌面挂件/歌词页）。
+      // 不再 candidates[0].lines 前端选源（造轮子、跟挂件不同源）。
+      const j = await (await fetch('/api/v1/music/lyric?bvid=' + encodeURIComponent(s.bvid) +
+        '&keyword=' + encodeURIComponent(((s.title || '') + ' ' + (s.artist || '')).trim()))).json();
       if (stale()) return; // 等待期间又切歌 → 丢弃旧响应
-      const cand = j && j.data && j.data[0];
-      lines = (cand && cand.lines) || [];
+      const d = j && j.data;
+      lines = (d && d.lines) || [];
       // 抓到的新词写入同一缓存（面板下次直接用，面板选定也会覆盖同键）
-      if (cand && cand.id && lines.length) {
+      if (lines.length) {
         try {
           const m = JSON.parse(localStorage.getItem('hc:lyc:cache') || '{}');
-          cand.at = Date.now();
-          m[s.bvid] = cand;
+          const row = { id: 0, name: s.title || '', artist: s.artist || '', at: Date.now(), lines: lines };
+          m[s.bvid] = row;
           const keys = Object.keys(m).sort((a, b) => (m[a].at || 0) - (m[b].at || 0));
           while (keys.length > 50) delete m[keys.shift()]; // LRU 淘汰最旧
           localStorage.setItem('hc:lyc:cache', JSON.stringify(m));

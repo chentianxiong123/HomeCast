@@ -68,6 +68,13 @@ func New() http.Handler {
 			widgetStateGlobal.BroadcastLyricState()
 		}
 	}
+	// 选源变更 → 清缓存重拉 + SSE 广播（歌词页点候选 / 挂件同源）
+	lyricHandler.OnSelectChange = func() {
+		if widgetStateGlobal != nil {
+			widgetStateGlobal.InvalidateLines()
+			widgetStateGlobal.BroadcastLyricState()
+		}
+	}
 	playlistHandler := &api.PlaylistHandler{Playlist: playlist.NewPlaylistService(client, db)}
 	tokenStore := token.NewTokenStore()
 	castSvc := cast.NewCastService(client, tokenStore)

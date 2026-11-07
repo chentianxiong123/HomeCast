@@ -225,8 +225,16 @@
       it.addEventListener('click', () => {
         const gen = loadGen;
         lycSet(currentSong.bvid, c); // 选定即记选择（sid 持久化；music.py lyric_map 同款记忆）
-        if (c.lines && c.lines.length) { renderFromCand(c); renderCandBar(); }
-        else lycSelLazy(c, gen); // 惰性拉正文（musicxx 两段式）
+        // 统一数据流：选源上报后端（SQLite 持久化 + OnSelectChange 广播），
+        // 行列表权威走后端 /music/lyric?bvid=（同挂件，不前端选源）。
+        fetch('/api/v1/lyric/select?bvid=' + encodeURIComponent(currentSong.bvid) +
+          '&sid=' + encodeURIComponent(c.id || 0) +
+          '&name=' + encodeURIComponent(c.name || '') +
+          '&artist=' + encodeURIComponent(c.artist || '') +
+          '&duration=' + encodeURIComponent(c.duration || c.dur || 0), { method: 'POST' })
+          .then(() => loadBackendLyric(currentSong, gen)) // 选源变 → 后端重拉行列表（同源）
+          .catch(() => { if (c.lines && c.lines.length) { renderFromCand(c); renderCandBar(); } });
+        renderCandBar();
       });
       candList.appendChild(it);
     });
@@ -268,13 +276,17 @@
     // 先查缓存（同歌秒显，离线可看）；同时后台刷新候选栏（选中项=已存档 sid）
     const cached = lycGet(song.bvid);
     if (cached && cached.lines) renderFromCand(cached);
+    // 行列表权威来源 = 后端 /music/lyric?bvid=（选定源，同桌面挂件 lyricSource）。
+    // 统一数据流：选源逻辑一份住后端（SelectedSID 或 LyricKeywords+GetLyricLines），
+    // 歌词页不再用 cands[0].lines 前端选源（那是造轮子、会跟挂件不同源）。
+    loadBackendLyric(song, gen);
     try {
       const kw = encodeURIComponent(titleToSong(song.title) + ' ' + (song.artist || ''));
       // 带 bvid：服务端优先用分P标题作关键词（B 站合集痛点，bili-music lyricSearchTitles 同款）
       const j = await (await fetch('/api/v1/music/lyric/candidates?keyword=' + kw + '&bvid=' + encodeURIComponent(song.bvid) + '&limit=8')).json();
       if (stale()) return; // 等待期间又切了歌 → 丢弃旧响应
       cands = (j && j.data) || [];
-      renderCandBar(); // 候选栏渲染 + 无选中时用第一个带正文候选
+      renderCandBar(); // 候选栏渲染（交互数据；行显示权威走后端 loadBackendLyric）
       if (!cands.length) { setSource(null); return; }
     } catch (e) {
       if (stale()) return;
@@ -283,6 +295,22 @@
       }
       setSource(null);
     }
+  }
+
+  // 后端选定源行列表（同挂件）：/music/lyric?bvid= 返回 {lines, offset}
+  async function loadBackendLyric(song, gen) {
+    try {
+      const j = await (await fetch('/api/v1/music/lyric?bvid=' + encodeURIComponent(song.bvid) +
+        '&keyword=' + encodeURIComponent(titleToSong(song.title) + ' ' + (song.artist || '')))).json();
+      if (gen !== loadGen || !currentSong || currentSong.bvid !== song.bvid) return;
+      const d = j && j.data;
+      if (!d || !d.lines || !d.lines.length) { if (!lines.length) { linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">未找到歌词</p></div>'; } return; }
+      lines = d.lines; // [[sec,text,dur]]
+      if (typeof d.offset === 'number') setOffset(d.offset);
+      lycSet(song.bvid, { id: 0, name: currentSong.title, artist: currentSong.artist, duration: 0, lines: d.lines }); // 秒显缓存
+      renderLines(); lastIdx = -1; sync(audio.currentTime);
+      setSource({ name: currentSong.title, artist: currentSong.artist });
+    } catch (e) { /* 后端行失败：candidates 兜底（renderFromCand） */ }
   }
 
   // ---- 歌词背景模式：封面模糊（cover，默认）/ 纯色（solid）----
