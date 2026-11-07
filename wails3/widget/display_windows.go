@@ -223,29 +223,26 @@ func (c *winCanvas) Text(x, y float64, text string, size float64, r, g, b, a flo
 
 // ── 控制条（GDI 手绘，同 Linux 视觉/顺序/位置：⏸−+🔓✕ 底部居中） ──
 
-// ctrlKind 按钮 kind（1⏸ 2− 3+ 4🔓 5✕）
-var ctrlKind = []string{"", "⏸", "−", "+", "🔓", "✕"}
-var ctrlKindW = []int{0, 30, 30, 30, 32, 28}
-
 // ctrlRects 计算 5 按钮矩形（窗口内坐标，底部居中；paint 绘制与 HitTest 共用）
+// 用共享按钮表 ctrlBtnTable（顺序/尺寸/kind 一份，只差异 GDI 布局）
 func ctrlRects() [5]struct{ x, y, w, h int } {
 	var out [5]struct{ x, y, w, h int }
 	rc := C.RECT{}
 	C.GetClientRect(hwndWin, &rc)
 	winW := int(rc.right)
-	// 总宽 = 5 按钮宽 + 4 间隙(6) + 两端 padding(10)
+	btns := ctrlBtnTable()
+	// 总宽 = 5 按钮宽 + 4 间隙(6)
 	total := 0
-	for i := 1; i <= 5; i++ {
-		total += ctrlKindW[i]
+	for _, b := range btns {
+		total += b.W
 	}
 	total += 4 * 6
 	x0 := (winW - total) / 2
 	y0 := WinH - CtrlH
 	cx := x0
-	for i := 1; i <= 5; i++ {
-		w := ctrlKindW[i]
-		out[i-1] = struct{ x, y, w, h int }{cx, y0, w, CtrlH}
-		cx += w + 6
+	for i, b := range btns {
+		out[i] = struct{ x, y, w, h int }{cx, y0, b.W, CtrlH}
+		cx += b.W + 6
 	}
 	return out
 }
@@ -257,18 +254,19 @@ func (d *winDisplay) DrawCtrl(shown, locked bool) {
 	}
 	if locked {
 		// 锁定态：只出小锁按钮（对齐 Linux hc_lockbtn 语义）
-		drawCtrlButton(4, true)
+		drawCtrlButton(4)
 		return
 	}
 	for k := 1; k <= 5; k++ {
-		drawCtrlButton(k, false)
+		drawCtrlButton(k)
 	}
 }
 
 // drawCtrlButton 画单个按钮（GDI 文字；hover 反馈由绘制层简化——透明底白字）
-func drawCtrlButton(kind int, force bool) {
+func drawCtrlButton(kind int) {
+	btns := ctrlBtnTable()
 	rects := ctrlRects()
-	if kind < 1 || kind > 5 {
+	if kind < 1 || kind > len(btns) {
 		return
 	}
 	r := rects[kind-1]
@@ -279,7 +277,7 @@ func drawCtrlButton(kind int, force bool) {
 	}
 	c := &winCanvas{dc: dc}
 	// 文字垂直居中（CtrlH=24，字体 16）
-	c.Text(float64(r.x+4), float64(r.y+4), ctrlKind[kind], 16, 0.91, 0.91, 0.96, 1)
+	c.Text(float64(r.x+4), float64(r.y+4), btns[kind-1].Label, 16, 0.91, 0.91, 0.96, 1)
 	C.ReleaseDC(hwndWin, dc)
 }
 
