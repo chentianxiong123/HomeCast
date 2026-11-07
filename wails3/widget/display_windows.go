@@ -125,7 +125,7 @@ func (d *winDisplay) QueueDraw() {
 
 // 穿透切换：ShowUI 取消 WS_EX_TRANSPARENT（接收鼠标，控制条可点/可拖）；HideUI 恢复穿透
 func setClickable(on bool) {
-	if hwndWin == 0 {
+	if hwndWin == nil {
 		return
 	}
 	ex := C.GetWindowLongPtr(hwndWin, C.GWL_EXSTYLE)

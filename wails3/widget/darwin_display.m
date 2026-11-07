@@ -1,3 +1,5 @@
+//go:build darwin && !ios
+
 // darwin_display.m — macOS 桌面歌词挂件 ObjC 核心（照 Linux cglue.c / Windows GDI 模式）
 // NSWindow 无边框置顶透明 + 穿透(ignoresMouseEvents) + drawRect 绘制 + 鼠标事件
 #import <Cocoa/Cocoa.h>
