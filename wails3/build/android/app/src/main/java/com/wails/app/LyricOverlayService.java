@@ -60,6 +60,7 @@ public class LyricOverlayService extends android.app.Service {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private android.view.View rootView;
+    private TextView btnPause; // 播放/暂停按钮（applyState 按 playing 切 ⏸/▶️）
     private String currentBvid = "";
     private double currentOffset = 0;
 
@@ -94,13 +95,13 @@ public class LyricOverlayService extends android.app.Service {
         lyricView.setGravity(Gravity.CENTER);
         // 对齐桌面挂件视觉：透明底 + 1px 白描边 + 圆角
         lyricView.setPadding(dp(14), dp(8), dp(14), dp(8));
-        lyricView.setBackground(drawRoundedBorder());
+        // 整体一个框：歌词不再独立描边（root 统一圆角背景 + 描边）
 
         // 控制条（特殊接口适配：安卓 UI；逻辑仍走后端 /widget/toggle、/lyric/offset）
         LinearLayout ctrl = new LinearLayout(this);
         ctrl.setOrientation(LinearLayout.HORIZONTAL);
         ctrl.setGravity(Gravity.CENTER);
-        TextView btnPause = ctrlBtn("⏸");
+        btnPause = ctrlBtn("⏸"); // 字段：applyState 按 playing 切 ⏸/▶️
         TextView btnMinus = ctrlBtn("−");
         TextView btnPlus = ctrlBtn("+");
         btnPause.setOnClickListener(v -> postJson("/api/v1/widget/toggle", "{}"));
@@ -116,7 +117,9 @@ public class LyricOverlayService extends android.app.Service {
         root.setGravity(Gravity.CENTER);
         root.addView(lyricView);
         root.addView(ctrl);
-        root.setPadding(dp(4), dp(4), dp(4), dp(4));
+        root.setPadding(dp(6), dp(6), dp(6), dp(6));
+        // 整体一个框：桌面挂件同款——圆角 + 半透明深底 + 白描边（歌词+控制条在内）
+        root.setBackground(drawRoundedBorder());
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -319,7 +322,12 @@ public class LyricOverlayService extends android.app.Service {
             line = title.isEmpty() ? "HomeCast 歌词" : title + " - " + artist;
         }
         final String finalLine = line;
-        ui.post(() -> lyricView.setText(finalLine));
+        final boolean playing = d.optBoolean("playing", true);
+        ui.post(() -> {
+            lyricView.setText(finalLine);
+            // ⏸/▶️ UI 变化：播放中 ⏸（可暂停），暂停 ▶️（可播放）
+            if (btnPause != null) btnPause.setText(playing ? "⏸" : "▶️");
+        });
     }
 
     // ---- 后端 HTTP（cleartext 127.0.0.1 已放行 network_security_config） ----
