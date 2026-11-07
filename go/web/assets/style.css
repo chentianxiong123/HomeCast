@@ -1,3 +1,12 @@
+/* 全局字体栈：PingFang SC 最前——iOS 26.3 模拟器 WKWebView 的 -apple-system/BlinkMacSystemFont 中文 fallback 失败
+   （英文走 SF 正常、中文 fallback 苹方失败 → 豆腐块）；系统 UI/百度（默认字体栈）中文正常。
+   显式 PingFang SC 最前让中文直接走苹方、英文苹方也有，不依赖 -apple-system 的中文 fallback。
+   桌面/安卓系统字体 fallback 正常，显式声明不影响。
+   !important 覆盖 Tailwind CDN 注入的字体栈（Tailwind ui-sans-serif 在 iOS 解析成无字形字体 → 豆腐）。 */
+html, body, button, input, select, textarea, div, span, p, a, li, h1, h2, h3, h4, h5, h6 {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", -apple-system, sans-serif !important;
+}
+
 /* Tailwind CDN 之外仅有的补充样式 */
 #player-dock { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; }
 .htmx-indicator { display: none; }
