@@ -104,3 +104,53 @@ jobs:
         run: |
           cd wails3/build/android
           ./gradlew :app:compileReleaseJavaWithJavac --no-daemon
+
+  # ── macOS 桌面构建（macos runner + Xcode；cgo + Cocoa/WebKit）──
+  build-macos:
+    name: 构建 macOS 桌面
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: |
+            go/go.sum
+            wails3/go.sum
+      - name: 安装 wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 官方构建（macOS，Cocoa + WebKit，原生架构）
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd wails3 && wails3 build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hcexp-macos
+          path: wails3/bin/hcexp
+          if-no-files-found: error
+
+  # ── iOS 模拟器构建（macos runner + Xcode；架构自适应 + 模拟器 ad-hoc 签名）──
+  build-ios:
+    name: 构建 iOS 模拟器
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: |
+            go/go.sum
+            wails3/go.sum
+      - name: 安装 wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: iOS 模拟器构建 + 打包（架构自适应，ad-hoc 签名，无需真机签名）
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd wails3 && wails3 task ios:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hcexp-ios
+          path: wails3/bin/hcexp.app
+          if-no-files-found: error

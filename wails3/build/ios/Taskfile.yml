@@ -16,7 +16,22 @@ vars:
   IOS_PLATFORM: '{{.IOS_PLATFORM | default "simulator"}}'
   MIN_IOS_VERSION: '{{.MIN_IOS_VERSION | default "15.0"}}'
   IOS_SDK: '{{if eq .IOS_PLATFORM "device"}}iphoneos{{else}}iphonesimulator{{end}}'
-  IOS_TARGET: 'arm64-apple-ios{{.MIN_IOS_VERSION}}{{if ne .IOS_PLATFORM "device"}}-simulator{{end}}'
+  HOST_ARCH:
+    sh: uname -m
+  # 模拟器架构自适应：Intel Mac→x86_64，Apple Silicon→arm64；真机永远 arm64
+  # 模拟器架构 = 本机架构（Intel Mac→x86_64，Apple Silicon→arm64），不依赖 ARCH 传递
+  SIM_ARCH: '{{if eq .ARCH "amd64"}}x86_64{{else if eq .ARCH "arm64"}}arm64{{else}}{{.HOST_ARCH}}{{end}}'
+  # GOARCH（Go 侧）：device→arm64；simulator→按本机
+  SIM_GOARCH: '{{if eq .ARCH "amd64"}}amd64{{else if eq .ARCH "arm64"}}arm64{{else}}{{if eq .HOST_ARCH "x86_64"}}amd64{{else}}arm64{{end}}{{end}}' 
+  IOS_ARCH: '{{if eq .IOS_PLATFORM "device"}}arm64{{else}}{{.SIM_ARCH}}{{end}}'
+  # IOS_TARGET：真机 arm64；模拟器按本机架构（Intel→x86_64，Apple Silicon→arm64）
+  IOS_TARGET:
+    sh: |-
+      if [ {{.IOS_PLATFORM}} = device ]; then
+        echo arm64-apple-ios{{.MIN_IOS_VERSION}}
+      else
+        echo {{.SIM_ARCH}}-apple-ios{{.MIN_IOS_VERSION}}-simulator
+      fi
   IOS_VERSION_MIN_FLAG: '{{if eq .IOS_PLATFORM "device"}}-miphoneos-version-min={{.MIN_IOS_VERSION}}{{else}}-mios-simulator-version-min={{.MIN_IOS_VERSION}}{{end}}'
   # "-" is ad-hoc signing: fine for the simulator, rejected by real devices.
   CODESIGN_IDENTITY: '{{.CODESIGN_IDENTITY | default "-"}}'
@@ -56,9 +71,14 @@ tasks:
     env:
       GOOS: ios
       CGO_ENABLED: 1
-      GOARCH: '{{.ARCH | default "arm64"}}'
+      # GOARCH：真机 arm64；模拟器按本机架构（Intel→amd64，Apple Silicon→arm64）
+      GOARCH:
+        sh: |-
+          if [ "{{.IOS_PLATFORM}}" = "device" ]; then echo arm64; else uname -m | sed 's/x86_64/amd64/'; fi
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
-      CGO_CFLAGS: '-isysroot {{.SDK_PATH}} -target {{.IOS_TARGET}} {{.IOS_VERSION_MIN_FLAG}}'
+      # CFLAGS 不带 -target：Go 编译 ios 时自己设置正确 target；带 -target 会破坏 runtime/cgo gcc_amd64.S（pushq 解析失败）
+      CGO_CFLAGS: '-isysroot {{.SDK_PATH}} {{.IOS_VERSION_MIN_FLAG}}'
+      # LDFLAGS 必须带 -target：链接器需要知道目标是 iOS 模拟器（否则报 building for macOS 但对象是 iOS）
       CGO_LDFLAGS: '-isysroot {{.SDK_PATH}} -target {{.IOS_TARGET}}'
 
   package:
@@ -211,8 +231,13 @@ tasks:
     env:
       GOOS: ios
       CGO_ENABLED: 1
-      GOARCH: '{{.ARCH | default "arm64"}}'
-      CGO_CFLAGS: '-isysroot {{.SDK_PATH}} -target {{.IOS_TARGET}} {{.IOS_VERSION_MIN_FLAG}}'
+      # GOARCH：真机 arm64；模拟器按本机架构（Intel→amd64，Apple Silicon→arm64）
+      GOARCH:
+        sh: |-
+          if [ "{{.IOS_PLATFORM}}" = "device" ]; then echo arm64; else uname -m | sed 's/x86_64/amd64/'; fi
+      # CFLAGS 不带 -target：Go 编译 ios 时自己设置正确 target；带 -target 会破坏 runtime/cgo gcc_amd64.S（pushq 解析失败）
+      CGO_CFLAGS: '-isysroot {{.SDK_PATH}} {{.IOS_VERSION_MIN_FLAG}}'
+      # LDFLAGS 必须带 -target：链接器需要知道目标是 iOS 模拟器（否则报 building for macOS 但对象是 iOS）
       CGO_LDFLAGS: '-isysroot {{.SDK_PATH}} -target {{.IOS_TARGET}}'
 
   ensure-simulator:
