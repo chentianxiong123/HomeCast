@@ -31,17 +31,26 @@ import (
 const Port = "28976"
 
 // New 组装全部 handler（带 CORS，桌面壳跨域用）
+// E2E/测试注入：环境变量 HC_BILI_BASE（假 B站 base URL，默认 api.bilibili.com）、
+// HC_DATA_DIR（数据目录，默认 ~/.config/homecast）——走真实 HTTP 全链路但不依赖外网、不污染用户数据。
 func New() http.Handler {
+	biliBase := os.Getenv("HC_BILI_BASE")
+	if biliBase == "" {
+		biliBase = "https://api.bilibili.com"
+	}
 	client := bilibili.NewClient(
-		"https://api.bilibili.com",
+		biliBase,
 		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 		"https://search.bilibili.com/", // 对齐 Python 默认值！www.bilibili.com 会被风控返回 HTML
 		30*time.Second,
 	)
 
 	// SQLite 单文件持久层：首启自动从旧 JSON 迁移（JSON 保留只读备份）
-	home, _ := os.UserHomeDir()
-	dataDir := filepath.Join(home, ".config", "homecast")
+	dataDir := os.Getenv("HC_DATA_DIR")
+	if dataDir == "" {
+		home, _ := os.UserHomeDir()
+		dataDir = filepath.Join(home, ".config", "homecast")
+	}
 	db, err := store.Open(filepath.Join(dataDir, "homecast.db"))
 	if err != nil {
 		log.Fatalf("open db: %v", err)

@@ -60,6 +60,35 @@ jobs:
           path: wails3/bin/hcexp
           if-no-files-found: error
 
+  # ── Linux 壳级 E2E 冒烟（Xvfb 启动真实 wails3 app：进程/后端/页面/API 最小链路）──
+  shell-e2e:
+    name: Linux 壳级 E2E 冒烟
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: |
+            go/go.sum
+            wails3/go.sum
+      - name: 安装 GTK4 / WebKitGTK / appindicator / Xvfb 依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev xvfb curl
+      - name: 下载 build-linux 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: hcexp-linux
+          path: wails3/bin
+      - name: 修复产物权限
+        run: chmod +x wails3/bin/hcexp
+      - name: 壳级 E2E 冒烟（Xvfb 启动真实 app + 断言进程/后端/页面/API）
+        run: |
+          bash scripts/shell-e2e.sh wails3/bin/hcexp
+
   # ── Windows 桌面构建（mingw 交叉编译，无需 Windows runner）──
   build-windows:
     name: 构建 Windows 桌面
