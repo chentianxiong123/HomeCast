@@ -144,3 +144,33 @@ func TestSpeakerStopClears(t *testing.T) {
 		t.Errorf("停止后应 idle: %v", p)
 	}
 }
+// TestSpeakerAllProgress 所有设备进度（SSE 单流推所有，零小米云）
+func TestSpeakerAllProgress(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	s.startProgress("did1", "BV1test", PlayOpts{Title: "测试歌", Duration: 260}, 30280)
+	time.Sleep(120 * time.Millisecond)
+
+	all := s.AllProgress()
+	if len(all) != 1 {
+		t.Fatalf("AllProgress 应有 1 台，got %d", len(all))
+	}
+	p, ok := all["did1"]
+	if !ok {
+		t.Fatalf("AllProgress 缺 did1")
+	}
+	if p["state"] != "playing" || p["bvid"] != "BV1test" {
+		t.Errorf("did1 状态错误: %v", p)
+	}
+	pos := p["position"].(float64)
+	if pos <= 0 || pos > 2 {
+		t.Errorf("did1 position 应本地时钟增长: %v", pos)
+	}
+	// 未播放设备不推（stopped 跳过）
+	s.mu.Lock()
+	s.progress["did2"] = &SpeakerProgress{stopped: true}
+	s.mu.Unlock()
+	all = s.AllProgress()
+	if _, ok := all["did2"]; ok {
+		t.Errorf("stopped 设备不应推")
+	}
+}
