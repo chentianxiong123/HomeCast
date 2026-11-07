@@ -1,5 +1,7 @@
 # HomeCast iOS 版中文字体豆腐块排查与根治
 
+> 注：**macOS 版同源**——macOS 也用 WKWebView（WebKit）+ 同一套 go:embed 前端（shell.html + style.css），`-apple-system` 中文 fallback 失败同样影响 macOS。本次字体修复（PingFang SC 置顶）是**全局前端改动，同时覆盖 iOS 和 macOS**，无需单独改 macOS。
+
 ## 背景
 
 HomeCast（B站音乐播放器）用 wails3 v3.1.0 做壳，前后端全走真实 HTTP（`http://127.0.0.1:28976`），前端 go:embed 内嵌。最近给 macOS/iOS 都建了版，macOS 中文正常，**iOS 版一启动界面布局/图标全对，但所有文字（中英数）全是豆腐块（❓/方块）**。用户截图确认，系统设置 App / Safari 自己 UI 中文正常，说明不是模拟器系统字体坏了，是我们页面问题。
