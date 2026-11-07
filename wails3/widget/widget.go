@@ -240,11 +240,39 @@ func onCloseClick() {
 
 func handlePress(x, y float64, primary bool) {
 	st.mu.Lock()
-	if st.locked || st.closed {
+	if st.closed {
 		st.mu.Unlock()
 		return
 	}
+	locked := st.locked
 	st.mu.Unlock()
+	// 控制条按钮命中（显示层：linux=GTK widget 已接管→0；windows=GDI 手绘检测）
+	// 锁定态也先试命中（小锁按钮解锁：lockbtn 常显可点）
+	if primary && disp != nil {
+		kind := disp.HitTest(x, y)
+		if kind > 0 {
+			switch kind {
+			case 1:
+				onPauseClick()
+				return
+			case 2:
+				onMinusClick()
+				return
+			case 3:
+				onPlusClick()
+				return
+			case 4:
+				onLockClick()
+				return
+			case 5:
+				onCloseClick()
+				return
+			}
+		}
+	}
+	if locked {
+		return // 锁定态：未命中控制条 → 不拖拽（防误移）
+	}
 	if primary {
 		gx, gy := disp.Pos()
 		st.mu.Lock()
@@ -345,6 +373,8 @@ func paint(c Canvas) {
 	st.mu.Lock()
 	text := displayTextLocked()
 	winW := st.winW
+	uiShown := st.uiShown
+	locked := st.locked
 	st.mu.Unlock()
 
 	c.Clear()
@@ -363,6 +393,10 @@ func paint(c Canvas) {
 	// 阴影 + 主字（白字黑阴影，对齐原版）
 	c.Text(x+2, y0+2, text, FontSize, 0, 0, 0, 0.78)
 	c.Text(x, y0, text, FontSize, 1, 1, 1, 1)
+	// 控制条（显示层绘制：linux=GTK widget no-op / windows=GDI 手绘）
+	if disp != nil {
+		disp.DrawCtrl(uiShown, locked)
+	}
 }
 
 
