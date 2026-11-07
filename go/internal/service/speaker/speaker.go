@@ -338,6 +338,31 @@ func (s *SpeakerService) Progress(did string) map[string]any {
 	}
 }
 
+// AllProgress 所有设备本地模拟进度（{did: progress}，SSE 单流推所有，不打小米云）
+func (s *SpeakerService) AllProgress() map[string]map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]map[string]any{}
+	for did, p := range s.progress {
+		if p == nil || p.stopped {
+			continue
+		}
+		pos := p.Position()
+		if pos < 0 {
+			pos = 0
+		}
+		out[did] = map[string]any{
+			"state":    p.State(),
+			"bvid":     p.BVID,
+			"title":    p.Title,
+			"position": pos,
+			"duration": p.Duration,
+			"next_bvid": p.NextBVID,
+		}
+	}
+	return out
+}
+
 // Control 控制：pause/stop/resume/volume
 func (s *SpeakerService) Control(did, action string, volume int) (map[string]any, error) {
 	device, ok := s.getDevice(did)

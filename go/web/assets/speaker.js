@@ -9,34 +9,37 @@
     return (m < 10 ? '0' + m : '' + m) + ':' + (sec < 10 ? '0' + sec : '' + sec);
   };
 
-  // 当前播放中的进度条（避免同一设备多个卡片重复请求）
-  var lastFetch = {}; // did -> { ts, data }
-
-  function poll() {
+  // 单流 SSE（零轮询）：一个 /speaker/events 连接收所有音响本地模拟进度（不打小米云）。
+  // 服务端 1s 定时推 {did: {state,position,duration,title}}；htmx 重绘设备列表时
+  // 每帧重新遍历 DOM 动态绑定（progress 事件驱动渲染，不再 setInterval 轮询）。
+  var lastData = {}; // did -> 最近一次 SSE 进度（htmx 重绘后即时恢复，不闪空）
+  function applyAll(all) {
+    if (!all) return;
     var boxes = document.querySelectorAll('.sp-prog[data-did]');
     if (!boxes.length) return;
-    var dids = [];
-    boxes.forEach(function (b) { dids.push(b.getAttribute('data-did')); });
-    var seen = {};
-    boxes.forEach(function (box) {
-      var did = box.getAttribute('data-did');
-      if (seen[did]) return; // 同 did 只请求一次，其余共享
-      seen[did] = true;
-      var now = Date.now();
-      var cached = lastFetch[did];
-      if (cached && now - cached.ts < 800) { render(box, cached.data); return; }
-      fetch('/api/v1/speaker/progress/' + encodeURIComponent(did))
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          var d = (j && j.data) || {};
-          lastFetch[did] = { ts: Date.now(), data: d };
-          boxes.forEach(function (b) {
-            if (b.getAttribute('data-did') === did) render(b, d);
-          });
-        })
-        .catch(function () {});
+    boxes.forEach(function (b) {
+      var did = b.getAttribute('data-did');
+      var d = all[did];
+      if (!d) { render(b, { state: 'idle' }); return; }
+      lastData[did] = d;
+      render(b, d);
     });
   }
+  try {
+    var es = new EventSource('/api/v1/speaker/events');
+    es.addEventListener('progress', function (ev) {
+      try { applyAll(JSON.parse(ev.data)); } catch (e) {}
+    });
+    es.onerror = function () {}; // 断线自动重连（EventSource 内建）
+  } catch (e) {}
+  // htmx 重绘设备列表后（#speaker-section innerHTML swap）：用 lastData 即时恢复，
+  // 不闪空（SSE 下个 1s tick 也会来，但重绘瞬间先恢复）
+  document.addEventListener('htmx:afterSwap', function (ev) {
+    var t = ev.target && ev.target.id;
+    if (t === 'speaker-section' || (ev.detail && ev.detail.elt && ev.detail.elt.closest && ev.detail.elt.closest('#speaker-section'))) {
+      if (Object.keys(lastData).length) applyAll(lastData);
+    }
+  });
 
   function render(box, d) {
     var state = d.state || 'idle';
@@ -59,5 +62,5 @@
     else st.textContent = '本地进度';
   }
 
-  setInterval(poll, 1000);
+  // 轮询已废（单流 SSE 驱动渲染）
 })();

@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,42 @@ import (
 type SpeakerHandler struct {
 	Svc *spk.SpeakerService
 	QR  *speaker.QRLogin
+}
+
+// Events GET /api/v1/speaker/events —— SSE 单流：定时推所有音响本地模拟进度。
+// 零小米云轮询（进度本地时钟算）；手机面板一个连接收所有音响（一对多单流）。
+func (h *SpeakerHandler) Events(w http.ResponseWriter, r *http.Request) {
+	fl, ok := w.(http.Flusher)
+	if !ok {
+		errResp(w, http.StatusNotImplemented, "streaming unsupported")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	fl.Flush()
+	// 心跳 + 定时推所有音响进度（本地时钟算，不打小米云；客户端断开自动退出）
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-heartbeat.C:
+			fmt.Fprintf(w, ": ping\n\n")
+			fl.Flush()
+		case <-tick.C:
+			all := h.Svc.AllProgress()
+			if len(all) > 0 {
+				b, _ := json.Marshal(all)
+				fmt.Fprintf(w, "event: progress\ndata: %s\n\n", b)
+				fl.Flush()
+			}
+		}
+	}
 }
 
 // Status GET /api/v1/speaker/status
