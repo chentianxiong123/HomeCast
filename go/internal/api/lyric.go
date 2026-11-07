@@ -17,6 +17,8 @@ type LyricHandler struct {
 	// OnOffsetChange 对齐偏移变更回调（offset 改了 → 挂件/显示层需重新定位广播；
 	// 由 server 注入，handler 不依赖 widget 域，保持解耦）
 	OnOffsetChange func()
+	// OnSelectChange 歌词源选择变更回调（用户选候选 → 选源变 → 清缓存重拉 + SSE 广播）
+	OnSelectChange func()
 }
 
 // keywordsFor bvid 非空时优先分P标题列表（bili-music lyricSearchTitles 同款，逐个搜第一个命中），
@@ -116,6 +118,10 @@ func (h *LyricHandler) Select(w http.ResponseWriter, r *http.Request) {
 		BVID: body.BVID, SID: body.SID, Name: body.Name,
 		Artist: body.Artist, Cover: body.Cover, Duration: body.Duration,
 	})
+	// 选源变了 → 清缓存重拉 + SSE 广播新 line（显示层纯渲染，同 offset 链路）
+	if h.OnSelectChange != nil {
+		h.OnSelectChange()
+	}
 	ok(w, true)
 }
 

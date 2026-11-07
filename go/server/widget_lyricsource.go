@@ -28,16 +28,25 @@ func (l *lyricSource) Lines(bvid string) ([][3]any, float64, bool) {
 			return toLrcLines(res.Lines), 0, true
 		}
 	}
-	// ② 无已选源：用前端上报的歌名（WidgetState.Title）关键词自动选第一有词源
-	title := ""
+	// ② 无已选源：走歌词页同款路径（同源，不造轮子）——
+	// LyricKeywords(bvid, 标题+歌手)（Music 层 bvid 构造，同 /music/lyric/candidates）
+	// → GetLyricLines（选第一个带≥3行候选，同歌词页 renderCandBar 默认选第一个）。
+	title, artist := "", ""
 	if l.state != nil {
-		_, _, title, _, _, _ = l.state.Get()
+		_, title, artist, _, _, _ = l.state.Get()
 	}
-	if title != "" {
-		if kws := lyric.CleanSearchKeyword(title); kws != "" {
-			if res := lyric.GetLyricLines([]string{kws}, 0); res != nil {
-				return toLrcLines(res.Lines), 0, true
-			}
+	var kws []string
+	if l.handler.Music != nil {
+		kws = l.handler.Music.LyricKeywords(bvid, title+" "+artist)
+	}
+	if len(kws) == 0 {
+		if k := lyric.CleanSearchKeyword(title + " " + artist); k != "" {
+			kws = []string{k}
+		}
+	}
+	if len(kws) > 0 {
+		if res := lyric.GetLyricLines(kws, 0); res != nil {
+			return toLrcLines(res.Lines), 0, true
 		}
 	}
 	return nil, 0, false
