@@ -152,6 +152,24 @@ func savePos(x, y int) {
 	}
 }
 
+// ── 控制条按钮表（平台无关一份：顺序/尺寸/kind/标签） ──
+// Linux（GTK widget）与 Windows（GDI 手绘）共用同一份，只差异绘制/命中 API。
+type ctrlBtn struct {
+	Label string // 图标
+	W     int    // 按钮宽（px）
+	Kind  int    // 动作 kind（1⏸ 2− 3+ 4🔓 5✕，映射 onPause/onMinus/onPlus/onLock/onClose）
+}
+
+func ctrlBtnTable() []ctrlBtn {
+	return []ctrlBtn{
+		{"⏸", 30, 1},
+		{"−", 30, 2},
+		{"+", 30, 3},
+		{"🔓", 32, 4},
+		{"✕", 28, 5},
+	}
+}
+
 // ── 控制条按钮动作（cglue.c _hc_btn_cb → //export 回调 → 核心） ──
 // PlayerCtl 事件桥已退役（前端 htmx 不监听 wails 事件）；±0.5s 仍走本地 offset 显示微调。
 

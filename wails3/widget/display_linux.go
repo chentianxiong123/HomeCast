@@ -91,18 +91,16 @@ func (d *gtkDisplay) initGtk4(x, y int) error {
 	// 5 个按钮用横向 box 包一组作为 center 内容
 	btns := C.gtk_box_new(C.GTK_ORIENTATION_HORIZONTAL, 6)
 	C.gtk_center_box_set_center_widget((*C.GtkCenterBox)(unsafe.Pointer(center)), btns)
-	mkBtn := func(label string, w, kind int) {
-		b := C.gtk_button_new_with_label(C.CString(label))
-		C.gtk_widget_set_size_request(b, C.gint(w), C.gint(CtrlH))
-		C.gtk_widget_set_name(b, C.CString("hc-btn"))
-		C._hc_btn_connect(b, C.int(kind))
-		C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(btns)), b)
+	mkBtn := func(b ctrlBtn) {
+		bb := C.gtk_button_new_with_label(C.CString(b.Label))
+		C.gtk_widget_set_size_request(bb, C.gint(b.W), C.gint(CtrlH))
+		C.gtk_widget_set_name(bb, C.CString("hc-btn"))
+		C._hc_btn_connect(bb, C.int(b.Kind))
+		C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(btns)), bb)
 	}
-	mkBtn("⏸", 30, 1)
-	mkBtn("−", 30, 2)
-	mkBtn("+", 30, 3)
-	mkBtn("🔓", 32, 4)
-	mkBtn("✕", 28, 5)
+	for _, b := range ctrlBtnTable() {
+		mkBtn(b)
+	}
 	C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(ctrl)), center)
 	// 外层 ctrl 放左下角，宽度由 Resize 跟踪（全宽 → center-box 自动居中按钮组）
 	C.gtk_fixed_put((*C.GtkFixed)(unsafe.Pointer(fixed)), ctrl, 0, C.double(WinH-CtrlH))
