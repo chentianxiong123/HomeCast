@@ -85,7 +85,9 @@
   function setEnabled(v) {
     enabled = v;
     try { localStorage.setItem('hc:subtitle', v ? '1' : '0'); } catch (e) {}
-    v ? showBar() : hideBar();
+    // 安卓：web 字幕条不显示（悬浮窗承担），只同步 d-tick-on 高亮
+    if (isAndroid) { if (tickBtn) tickBtn.classList.toggle('d-tick-on', !!v); }
+    else v ? showBar() : hideBar();
   }
 
   async function loadLyrics(s) {
@@ -159,7 +161,8 @@
     const s = d.song;
     if (!s || !s.bvid) { hideBar(); return; }
     if (s.bvid !== lastBvid) { lastBvid = s.bvid; loadLyrics(s); }
-    if (enabled) showBar();
+    // 安卓：播放状态变化不显示 web 字幕条（悬浮窗承担）；web/桌面才 showBar
+    if (enabled && !isAndroid) showBar();
   });
 
   audio.addEventListener('timeupdate', () => {
