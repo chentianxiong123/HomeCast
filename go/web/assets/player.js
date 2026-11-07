@@ -277,6 +277,11 @@
   try {
     const es = new EventSource('/api/v1/widget/events');
     es.addEventListener('toggle', () => toggle());
+    // 歌词当前行统一走后端（SSE lyric-state 带 line）→ hcBus 广播给歌词页/字幕条，
+    // 显示层纯渲染（不再各自 sec<=t 本地定位——数据流统一一份住后端）。
+    es.addEventListener('lyric-state', (ev) => {
+      try { const d = JSON.parse(ev.data); if (d && typeof d.line === 'string') hcBus.emit('lyric-line', d.line); } catch (e) {}
+    });
     // 断线自动重连（EventSource 内建）；onerror 忽略，重连后继续收
     es.onerror = () => {};
   } catch (e) {}
