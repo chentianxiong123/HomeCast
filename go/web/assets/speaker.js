@@ -3,12 +3,6 @@
 // 不打小米云。轮询期间设备列表可能被 htmx 重绘 → 每 tick 重新遍历 DOM 动态绑定。
 (function () {
   'use strict';
-  var fmt = function (s) {
-    s = Math.max(0, Math.floor(s));
-    var m = Math.floor(s / 60), sec = s % 60;
-    return (m < 10 ? '0' + m : '' + m) + ':' + (sec < 10 ? '0' + sec : '' + sec);
-  };
-
   // 单流 SSE（零轮询）：一个 /speaker/events 连接收所有音响本地模拟进度（不打小米云）。
   // 服务端 1s 定时推 {did: {state,position,duration,title}}；htmx 重绘设备列表时
   // 每帧重新遍历 DOM 动态绑定（progress 事件驱动渲染，不再 setInterval 轮询）。
@@ -17,7 +11,7 @@
     if (!all) return;
     // 广播给播放器面板（音响让位模式：进度/状态复用 player-dock）
     try { if (window.hcBus) window.hcBus.emit('speaker-progress', all); } catch (e) {}
-    var boxes = document.querySelectorAll('.sp-prog[data-did]');
+    var boxes = document.querySelectorAll('.sp-state[data-did]');
     if (!boxes.length) return;
     boxes.forEach(function (b) {
       var did = b.getAttribute('data-did');
@@ -45,23 +39,17 @@
 
   function render(box, d) {
     var state = d.state || 'idle';
+    var label = box.querySelector('.sp-state-label');
+    if (!label) return;
     if (state === 'idle' || !d.bvid) {
       box.classList.add('hidden');
+      label.textContent = '';
       return;
     }
     box.classList.remove('hidden');
-    var fill = box.querySelector('.sp-prog-fill');
-    var time = box.querySelector('.sp-prog-time');
-    var st = box.querySelector('.sp-prog-state');
-    if (!fill || !time || !st) return;
-    var dur = d.duration || 0;
-    var pos = d.position || 0;
-    var pct = dur > 0 ? Math.min(100, Math.round((pos / dur) * 100)) : 0;
-    fill.style.width = pct + '%';
-    time.textContent = fmt(pos) + (dur > 0 ? ' / ' + fmt(dur) : '');
-    if (state === 'paused') st.textContent = '已暂停 · 自动续播待命中';
-    else if (d.next_bvid) st.textContent = '本地进度 · 播完自动连播';
-    else st.textContent = '本地进度';
+    if (state === 'paused') label.textContent = '已暂停';
+    else if (d.next_bvid) label.textContent = '播放中 · 播完自动连播';
+    else label.textContent = '播放中';
   }
 
   // 轮询已废（单流 SSE 驱动渲染）
