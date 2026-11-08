@@ -185,7 +185,7 @@
       // 关于
       '<div class="card p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">' +
       '<p class="font-medium text-gray-900 dark:text-white mb-1">关于</p>' +
-      '<p class="text-xs text-gray-500 dark:text-gray-400">HomeCast Go + htmx · 环境：' + (envDesktop ? '桌面壳（hcEnv=desktop，字幕走桌面挂件）' : '网页') + '</p>' +
+      '<p class="text-xs text-gray-500 dark:text-gray-400">mymusic Go + htmx · 环境：' + (envDesktop ? '桌面壳（hcEnv=desktop，字幕走桌面挂件）' : '网页') + '</p>' +
       '</div>' +
       '</div>';
 

@@ -5,10 +5,10 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.0.1",
-			"CompanyName": "HomeCast",
+			"CompanyName": "mymusic",
 			"FileDescription": "家庭音乐播放器（B站音乐 个人免费）",
 			"LegalCopyright": "(c) 2025, My Company",
-			"ProductName": "HomeCast",
+			"ProductName": "mymusic",
 			"Comments": "Some Product Comments"
 		}
 	}

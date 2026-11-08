@@ -1,4 +1,4 @@
-// HomeCast 统一壳（wails3 v3）：一个入口，三端构建
+// mymusic 统一壳（wails3 v3）：一个入口，三端构建
 //
 //	🐧 Linux / 🪟 Windows / 🤖 安卓 共用：
 //	  - 内嵌 go/ 后端（server.New() handler，模板/静态/API/SQLite 全在内）
@@ -115,7 +115,7 @@ func main() {
 	// build/android/.../MainActivity.java BACKEND_URL），不再走 wails asset 桥。
 	// 因此不需要 Assets.Handler（桌面走绝对 URL 也不走 asset 桥）。asset 桥彻底退役。
 	app = application.New(application.Options{
-		Name:        "HomeCast",
+		Name:        "mymusic",
 		Description: "家庭音乐播放器（B站音乐 · 个人免费）",
 		Icon:        musicIcon(), // 🎵 应用图标（替换 wails 默认 logo）
 	})
@@ -123,7 +123,7 @@ func main() {
 	// WebviewWindowOptions.JS：页面加载完成后由 wails 官方注入（替代原 injectHcEnv 中间件）。
 	// 前端 settings.js/subtitle.js 读 window.hcEnv 区分桌面壳/网页，业务用途保留。
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "HomeCast 家庭投屏播放器",
+		Title:            "mymusic 家庭投屏播放器",
 		Width:            1280,
 		Height:           800,
 		MinWidth:         920,

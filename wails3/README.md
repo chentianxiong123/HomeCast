@@ -1,6 +1,6 @@
 # wails3/ — 统一壳（🐧 Linux 🪟 Windows 🤖 安卓，一个入口三端构建）
 
-HomeCast 的应用壳。**同一个 `main.go`**，平台差异全部走同目录 build tag 文件，构建脚本按端分开。
+mymusic 的应用壳。**同一个 `main.go`**，平台差异全部走同目录 build tag 文件，构建脚本按端分开。
 
 ```
 wails3/

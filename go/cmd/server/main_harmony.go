@@ -17,7 +17,7 @@ import (
 	"homecast/server"
 )
 
-// StartServer 启动 HomeCast HTTP 后端。dataDir 必须是正式 App 的沙盒 filesDir；
+// StartServer 启动 mymusic HTTP 后端。dataDir 必须是正式 App 的沙盒 filesDir；
 // 显式设置 HOME / HC_DATA_DIR，不依赖 hdc shell 的环境变量。
 // 在独立 goroutine 运行（后端是长驻服务，不占调用线程）。
 //
@@ -34,7 +34,7 @@ func StartServer(dataDir *C.char) {
 	go func() {
 		// 不吞掉启动错误：让 hilog 能看到真实失败原因。
 		if err := server.ListenAndServe("127.0.0.1:" + server.Port); err != nil {
-			log.Printf("HomeCast backend stopped: %v", err)
+			log.Printf("mymusic backend stopped: %v", err)
 		}
 	}()
 }

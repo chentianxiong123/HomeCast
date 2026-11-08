@@ -5,8 +5,14 @@
 //   3. 填 wails3/build/wechat/project.config.json 的 appid
 //   4. 运行：node scripts/mp-preview.js <私钥文件路径>
 // 扫码后手机微信右上角菜单"打开调试"可绕过域名校验（访问 http://内网IP）
-const ci = require('miniprogram-ci');
+// miniprogram-ci 装在独立工具目录 /home/a1/hc-mp-ci（不污染项目、免全局权限），
+// 可用环境变量 MP_CI_DIR 覆盖。
+const { createRequire } = require('module');
 const path = require('path');
+
+const toolDir = process.env.MP_CI_DIR || '/home/a1/hc-mp-ci';
+const toolRequire = createRequire(path.join(toolDir, 'package.json'));
+const ci = toolRequire('miniprogram-ci');
 
 const privateKeyPath = process.argv[2];
 if (!privateKeyPath) {
@@ -26,7 +32,7 @@ const projectRoot = path.resolve(__dirname, '../wails3/build/wechat');
   });
   const previewResult = await ci.preview({
     project,
-    desc: 'HomeCast 真机预览',
+    desc: 'mymusic 真机预览',
     setting: { es6: true, minify: true },
     qrcodeFormat: 'terminal', // 终端直接显示二维码（或用 'image' 输出图片）
     onProgressUpdate: console.log

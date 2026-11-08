@@ -53,7 +53,7 @@ func (d *winDisplay) Init(x, y int) error {
 		return fmt.Errorf("RegisterClassEx 失败: %d", C.GetLastError())
 	}
 
-	title := C.CString("HomeCast 桌面歌词")
+	title := C.CString("mymusic 桌面歌词")
 	defer C.free(unsafe.Pointer(title))
 
 	var exStyle C.DWORD = C.WS_EX_TOOLWINDOW | C.WS_EX_TOPMOST

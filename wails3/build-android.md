@@ -18,7 +18,7 @@ task android:package ARCH=arm64
 
 ## 已知约束
 
-- **包名锁死 `com.wails.app`**：wails3 安卓 JNI export 符号写死（`Java_com_wails_app_*`），改包名要 fork 依赖 → 保持默认；显示名由 manifest label 控制 = HomeCast
+- **包名锁死 `com.wails.app`**：wails3 安卓 JNI export 符号写死（`Java_com_wails_app_*`），改包名要 fork 依赖 → 保持默认；显示名由 manifest label 控制 = mymusic
 - **asset 桥三丢**：WebViewAssetLoader.PathHandler 剥 query、header 不透传、body 丢弃 → 前端参数一律走 query + `hc=1` 标记（搜索/收藏/歌词源已按此绕）
 - **APK 被冻结**（报 task 挂）：`adb reboot` 清
 - **数据落盘**：`filesDir/.config/homecast/`（hc-http.log + homecast.db）

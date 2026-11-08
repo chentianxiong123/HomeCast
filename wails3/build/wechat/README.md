@@ -1,4 +1,4 @@
-# HomeCast 微信小程序壳（Go 后端 + mp-html 渲原生）
+# mymusic 微信小程序壳（Go 后端 + mp-html 渲原生）
 
 **零 npm 架构**：壳内**没有 node_modules、没有构建链、没有依赖安装**——mp-html 组件是直接拷贝进来的（`components/mp-html/`），页面是手写 WXML/JS。唯一用 npm 的是**预览工具** `miniprogram-ci`（微信官方 CLI，只在预览时用，不是壳的依赖）。
 
@@ -37,7 +37,7 @@ scripts/mp-backend.sh
 
 ```bash
 node scripts/mp-preview.js <代码上传私钥路径>
-# 终端显示二维码 → 手机微信扫码 → 真机打开 HomeCast
+# 终端显示二维码 → 手机微信扫码 → 真机打开 mymusic
 ```
 
 **域名校验**：`project.config.json` 已设 `urlCheck:false`；若真机仍拦，手机微信打开小程序后 **右上角菜单 → 打开调试**（官方途径，免 IDE）即可访问 http://内网IP。

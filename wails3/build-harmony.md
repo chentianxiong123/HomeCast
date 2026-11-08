@@ -93,7 +93,7 @@ C:\PROGRA~1\Huawei\DevEco~1\tools\hvigor\bin\hvigorw.bat --mode module -p produc
 hdc list targets                        # 127.0.0.1:5555
 hdc install C:\Users\a1\homecast\wails3\build\harmony\signing\homecast-signed.hap
 hdc shell aa start -a EntryAbility -b com.homecast.music
-hdc shell "hilog | grep HomeCast"       # 看启动/后端日志
+hdc shell "hilog | grep mymusic"       # 看启动/后端日志
 ```
 
 ### 5. 验证（成功日志序列）
@@ -109,7 +109,7 @@ StartServer dataDir=/data/storage/el2/base/haps/entry/files
 Go backend start returned: true
 ```
 
-随后 ArkWeb 初始化、`backend HTTP ready after N retries`、`Web page loaded: http://127.0.0.1:28976/`，页面显示 HomeCast 首页。
+随后 ArkWeb 初始化、`backend HTTP ready after N retries`、`Web page loaded: http://127.0.0.1:28976/`，页面显示 mymusic 首页。
 
 > 就绪前 `backend probe` 的 `code:2300007` / `osErr:"111"` / `tcpConnE:"115"` 是**正常轮询失败日志**，不是失败证据；以 `start returned: true` + 页面加载日志为准。
 
@@ -169,9 +169,9 @@ set_target_properties(homecast_go PROPERTIES
 
 ## 为 wails3 社区做贡献（复现 + 贡献路径）
 
-HomeCast 鸿蒙壳是**wails3 官方不装机器的第四端参考实现**（wails3 只支持 linux/windows/darwin/android/ios，无鸿蒙）。本仓库坚持不 fork wails3，壳层 ArkTS 自建、业务与前端仍复用 Go 后端 + go:embed——这套「不改 wails3、壳层外挂」的路径本身就可以回输社区：
+mymusic 鸿蒙壳是**wails3 官方不装机器的第四端参考实现**（wails3 只支持 linux/windows/darwin/android/ios，无鸿蒙）。本仓库坚持不 fork wails3，壳层 ArkTS 自建、业务与前端仍复用 Go 后端 + go:embed——这套「不改 wails3、壳层外挂」的路径本身就可以回输社区：
 
-1. **复现路径公开**：本文档 + `docs/2026-11-08-HomeCast-鸿蒙版从编译签名到模拟器跑通排查记录.md` + `go/cmd/server/main_harmony.go` + `wails3/build/harmony/` 全部公开，任何人照做可复现「c-shared 后端 + NAPI + ArkWeb」链路。
+1. **复现路径公开**：本文档 + `docs/2026-11-08-mymusic-鸿蒙版从编译签名到模拟器跑通排查记录.md` + `go/cmd/server/main_harmony.go` + `wails3/build/harmony/` 全部公开，任何人照做可复现「c-shared 后端 + NAPI + ArkWeb」链路。
 2. **可贡献给 wails3 上游的内容**（供 fork/issue/PR 引用）：
    - `build/harmony/` 整套 ArkTS 壳工程模板（ArkWeb 轮询后端 + NAPI 加载 Go c-shared + 明文 HTTP 配置 + 命名导出契约）
    - `main_harmony.go` 的 `StartServer(dataDir)` 嵌入式入口范式（正式 App 沙盒目录 + 显式 HOME/HC_DATA_DIR，不杀宿主进程）

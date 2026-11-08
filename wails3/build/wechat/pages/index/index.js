@@ -1,4 +1,4 @@
-// HomeCast 微信小程序壳逻辑层
+// mymusic 微信小程序壳逻辑层
 // 职责：搜索 → 后端吐 HTML 片段 → mp-html 渲原生；点击卡片 → 播放音频
 // 业务逻辑 100% 在 Go 后端，本文件只是"事件的接法"
 const { BASE } = require('../../utils/config');
