@@ -1,0 +1,26 @@
+// HomeCast 微信小程序壳配置
+// urlCheck:false —— 开发阶段不校验请求域名（配合后端 http://内网IP:28976）
+// 上线前改为 true 并配置合法域名（https + 备案）
+{
+  "description": "HomeCast 微信小程序壳（Go 后端 + mp-html 渲原生）",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmManually": false,
+    "ignoreUploadUnusedFiles": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.0.0",
+  "appid": "wx0000000000000000",
+  "projectname": "homecast-wechat",
+  "condition": {}
+}

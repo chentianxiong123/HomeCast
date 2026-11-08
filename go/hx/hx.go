@@ -64,6 +64,8 @@ func (h *H) Router() http.Handler {
 			h.searchPage(w, r) // 无 kw = 搜索页
 		}
 	})
+	// 小程序专用片段：纯展示 + <a href="hc-play://">，mp-html 渲原生 + link 事件触发播放
+	mux.HandleFunc("GET /hx/search-mp", h.SearchMP)
 	mux.HandleFunc("GET /hx/favs", h.FavsPage)
 	mux.HandleFunc("GET /hx/cast", h.CastPage)
 	mux.HandleFunc("GET /hx/settings", h.SettingsPage)
