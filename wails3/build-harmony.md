@@ -155,6 +155,34 @@ set_target_properties(homecast_go PROPERTIES
 | `bind: permission denied`（hdc shell） | shell 环境 ≠ 正式 App 沙盒 | 改用 `this.context.filesDir` 显式传沙盒目录 |
 | 首启白屏 | ArkWeb 先于后端就绪加载 | Index.ets 轮询 HTTP 200 后再设 URL（最多 100 次 * 200ms） |
 
+## CI 覆盖与边界（为什么不真跑 HAP 构建）
+
+`.github/workflows/ci.yml` 里有 `harmony-checks`（Linux runner，秒级）：守壳工程关键资产 + 历史根因修复防回归，不真机构建：
+
+- 壳工程关键文件齐全（app.json5 / module.json5 / CMakeLists.txt / napi_init.cpp / Index.d.ts / EntryAbility.ets / Index.ets / network_config.json 等）
+- 防回归：CMakeLists 带 `CMAKE_SKIP_RPATH` + `IMPORTED_NO_SONAME`（堵死绝对路径进 DT_NEEDED 的复发）
+- 防回归：Index.d.ts 命名导出 ↔ EntryAbility 命名导入对齐；INTERNET 权限 + 明文 HTTP 配置在位
+- Go 鸿蒙入口 `main_harmony.go` 存在且 `//export StartServer`
+- `build-harmony.md` 是完整复现手册（含步骤/根因/签名）
+
+**为什么 GitHub Actions 跑不了真鸿蒙构建**：HAP 构建依赖 DevEco Studio 生态的闭源/本机组件——hvigor 构建、OpenHarmony SDK（native/llvm clang）、hap-sign-tool 签名（本地调试证书 p12/pem）、Emulator 模拟器。这些在 GitHub runner 上不可用/不可分。**真机构建路径按本文档第 1–5 节在 win11 开发机本机执行**（`build-harmony-x86_64.bat` / `build-harmony-arm64.bat` / `sign-homecast-hap.bat` 已固化）。
+
+## 为 wails3 社区做贡献（复现 + 贡献路径）
+
+HomeCast 鸿蒙壳是**wails3 官方不装机器的第四端参考实现**（wails3 只支持 linux/windows/darwin/android/ios，无鸿蒙）。本仓库坚持不 fork wails3，壳层 ArkTS 自建、业务与前端仍复用 Go 后端 + go:embed——这套「不改 wails3、壳层外挂」的路径本身就可以回输社区：
+
+1. **复现路径公开**：本文档 + `docs/2026-11-08-HomeCast-鸿蒙版从编译签名到模拟器跑通排查记录.md` + `go/cmd/server/main_harmony.go` + `wails3/build/harmony/` 全部公开，任何人照做可复现「c-shared 后端 + NAPI + ArkWeb」链路。
+2. **可贡献给 wails3 上游的内容**（供 fork/issue/PR 引用）：
+   - `build/harmony/` 整套 ArkTS 壳工程模板（ArkWeb 轮询后端 + NAPI 加载 Go c-shared + 明文 HTTP 配置 + 命名导出契约）
+   - `main_harmony.go` 的 `StartServer(dataDir)` 嵌入式入口范式（正式 App 沙盒目录 + 显式 HOME/HC_DATA_DIR，不杀宿主进程）
+   - 构建脚本三件套（x86_64/arm64 交叉编译、hap-sign-tool 签名、hvigorw assembleHap）
+   - 一个明确的**坑情报**：CMake 交叉链接 IMPORTED 库会把构建机绝对路径写进 DT_NEEDED/RUNPATH，必须 `CMAKE_SKIP_RPATH` + `IMPORTED_NO_SONAME`（wails3 若哪天加鸿蒙，这条对 NDK/OHOS 交叉都适用）
+3. **给 wails3 上游的 issue 主题建议**（内容已在本文档/排查记录里，可直接引用）：
+   - 请求：wails3 官方对 HarmonyOS/OpenHarmony 的支持态度与路线图（community 是否接入 ohos-go / OpenHarmony SDK 的 c-shared 交叉编译）
+   - 附上本仓库已跑通的参考实现链接，避免社区重复踩坑
+
+> 贡献动作（提 issue / 开 PR / fork 演示）按用户节奏执行，本仓库文档与工程资产已就绪。
+
 ## 待办边界（已定，不再展开）
 
 - 搜索/播放最小业务链路待验证（不能仅凭首页显示宣称全部通过）

@@ -118,6 +118,71 @@ jobs:
           path: wails3/bin/hcexp.exe
           if-no-files-found: error
 
+  # ── 鸿蒙：轻量资产检查（GitHub runner 无 DevEco/HarmonyOS SDK/模拟器，无法跑真 HAP 构建；
+  #    这里只守壳工程关键资产与历史根因修复，防回归；真机构建按 build-harmony.md 在本机跑）──
+  harmony-checks:
+    name: 鸿蒙壳资产检查（防回归）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 壳工程关键文件齐全
+        run: |
+          set -euo pipefail
+          H=wails3/build/harmony
+          for f in \
+            $H/AppScope/app.json5 \
+            $H/build-profile.json5 \
+            $H/entry/build-profile.json5 \
+            $H/entry/src/main/cpp/CMakeLists.txt \
+            $H/entry/src/main/cpp/napi_init.cpp \
+            $H/entry/src/main/cpp/types/libentry/Index.d.ts \
+            $H/entry/src/main/ets/entryability/EntryAbility.ets \
+            $H/entry/src/main/ets/pages/Index.ets \
+            $H/entry/src/main/module.json5 \
+            $H/entry/src/main/resources/base/profile/network_config.json; do
+            test -f "$f" || { echo "MISSING: $f"; exit 1; }
+          done
+          echo "壳工程文件齐全"
+      - name: 防回归：CMake 不带绝对路径（SKIP_RPATH + IMPORTED_NO_SONAME）
+        run: |
+          set -euo pipefail
+          C=wails3/build/harmony/entry/src/main/cpp/CMakeLists.txt
+          grep -q 'CMAKE_SKIP_RPATH' "$C" || { echo '缺 CMAKE_SKIP_RPATH'; exit 1; }
+          grep -q 'IMPORTED_NO_SONAME' "$C" || { echo '缺 IMPORTED_NO_SONAME'; exit 1; }
+          echo "CMake 防绝对路径两开关在位"
+      - name: 防回归：NAPI 命名导出 / ArkTS 命名导入对齐
+        run: |
+          set -euo pipefail
+          D=wails3/build/harmony/entry/src/main/cpp/types/libentry/Index.d.ts
+          A=wails3/build/harmony/entry/src/main/ets/entryability/EntryAbility.ets
+          grep -q 'export const startServer' "$D" || { echo 'Index.d.ts 须为命名导出'; exit 1; }
+          grep -q "import { startServer } from 'libentry.so'" "$A" || { echo 'EntryAbility 须命名导入'; exit 1; }
+          echo "NAPI 导出/导入对齐"
+      - name: 防回归：INTERNET 权限 + 明文 HTTP 允许（127.0.0.1）
+        run: |
+          set -euo pipefail
+          M=wails3/build/harmony/entry/src/main/module.json5
+          N=wails3/build/harmony/entry/src/main/resources/base/profile/network_config.json
+          grep -q 'ohos.permission.INTERNET' "$M" || { echo '缺 INTERNET 权限'; exit 1; }
+          grep -q 'cleartextTrafficPermitted' "$N" || { echo '缺明文 HTTP 配置'; exit 1; }
+          echo "网络权限齐备"
+      - name: Go 鸿蒙入口存在且导出 StartServer
+        run: |
+          set -euo pipefail
+          G=go/cmd/server/main_harmony.go
+          test -f "$G" || { echo "MISSING: $G"; exit 1; }
+          grep -q '//go:build openharmony' "$G" || { echo '缺 openharmony build tag'; exit 1; }
+          grep -q '//export StartServer' "$G" || { echo '缺 StartServer 导出'; exit 1; }
+          echo "Go 鸿蒙入口在位"
+      - name: 构建文档为复现手册（含根因与步骤）
+        run: |
+          set -euo pipefail
+          D=wails3/build-harmony.md
+          for k in '复现步骤' 'CMakeLists' 'DT_NEEDED' 'sign-homecast' 'hvigorw'; do
+            grep -q "$k" "$D" || { echo "build-harmony.md 缺关键词: $k"; exit 1; }
+          done
+          echo "复现手册完整"
+
   # ── 安卓 Java 编译检查（防 Java 回归；Go .so 预编译进 jniLibs，Java 独立）──
   build-android:
     name: 安卓 Java 编译检查
