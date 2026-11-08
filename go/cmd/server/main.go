@@ -1,3 +1,5 @@
+//go:build !openharmony
+
 // homecast Go 后端入口（复用 internal/server 全部端点）
 package main
 

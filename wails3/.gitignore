@@ -18,3 +18,17 @@ build/android/app/build/
 build/android/.gradle/
 build/android/local.properties
 build/android/app/src/main/jniLibs/
+# 鸿蒙原生库 / HAP / 中间产物
+build/harmony/entry/src/main/cpp/libs/
+build/harmony/entry/src/main/cpp/include/libhomecast_go.h
+build/harmony/build/
+build/harmony/oh_modules/
+build/harmony/entry/oh_modules/
+build/harmony/entry/.cxx/
+build/harmony/entry/build/
+build/harmony/entry/.preview/
+build/harmony/.hvigor/
+build/harmony/.idea/
+build/harmony/.clangd/
+build/harmony/local.properties
+build/harmony/signing/
