@@ -1,13 +1,2 @@
-<view class="page">
-  <view class="search-bar">
-    <input class="search-input" placeholder="搜索 B 站音乐" confirm-type="search"
-           bindconfirm="onSearch" bindinput="onInput" value="{{keyword}}" />
-    <button class="search-btn" size="mini" bindtap="onSearch">搜索</button>
-  </view>
-
-  <view wx:if="{{loading}}" class="hint">加载中…</view>
-  <view wx:elif="{{!html}}" class="hint">输入关键词，搜索 B 站音乐</view>
-
-  <!-- 后端吐 HTML → mp-html 渲原生；点击卡片触发 link 事件 → 播放 -->
-  <mp-html wx:else content="{{html}}" bindlink="onLink" />
-</view>
+<!-- web-view 薄壳：直接加载 HomeCast H5 整站（导航/播放器/歌词全有，零重写） -->
+<web-view src="{{url}}" bindmessage="onMsg" />

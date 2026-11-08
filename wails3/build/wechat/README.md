@@ -1,63 +1,70 @@
-# mymusic 微信小程序壳（Go 后端 + mp-html 渲原生）
+# mymusic 微信小程序壳（Go 后端）
 
-**零 npm 架构**：壳内**没有 node_modules、没有构建链、没有依赖安装**——mp-html 组件是直接拷贝进来的（`components/mp-html/`），页面是手写 WXML/JS。唯一用 npm 的是**预览工具** `miniprogram-ci`（微信官方 CLI，只在预览时用，不是壳的依赖）。
+**两个版本**：
+
+| 版本 | 壳 | 观感 | 重写量 | 状态 |
+|---|---|---|---|---|
+| **A. web-view（默认）** | 一个 `<web-view>` 组件 | 网页 | **零** | ✅ 完美运行 |
+| **B. 无 web-view（mp-html）** | mp-html 渲原生 | 原生 | 要重写导航/播放器/歌词 | ⏳ 攻坚 |
+
+## A. web-view 版本（当前默认，零重写）
+
+壳 = 一个 `<web-view src="http://127.0.0.1:28976/">`，加载 HomeCast **H5 整站**（go:embed 前端）。
+**导航、播放器控制条、歌词、投屏全部原样运行，零重写。**
 
 ```
 wails3/build/wechat/
-├── app.js / app.json / app.wxss      # 壳入口（业务全在后端，壳空）
-├── project.config.json               # appid + urlCheck:false（开发期不校验域名）
+├── app.js / app.json / app.wxss        # 壳入口
+├── project.config.json                 # appid + urlCheck:false
 ├── sitemap.json
-├── components/mp-html/               # mp-html 组件包（git 拷 dist/mp-weixin，零 npm）
-├── pages/index/                      # 搜索框 + mp-html 渲染 + 播放
-└── utils/config.js                   # BASE = 后端地址（真机要能访问，填内网 IP）
+├── pages/index/
+│   ├── index.wxml                      # <web-view>（就一行）
+│   ├── index.js                        # url = BASE + '/'
+│   └── index.json
+└── utils/config.js                     # BASE 后端地址
 ```
 
-## 架构（沿用项目原则）
+## B. 无 web-view 版本（mp-html 原生，攻坚中）
 
-- **业务逻辑一份住 Go 后端**，壳只做：搜索 → 后端吐 HTML → mp-html 渲原生 → 点击播放
-- **前后端走真实 HTTP**（`http://<内网IP>:28976`）
-- **内容复用 go:embed 模板**：后端新增 `/hx/search-mp`（纯展示片段，无 onclick/hx-post），mp-html 渲成小程序原生节点
-- **交互重接**：mp-html 不执行 JS，但支持 `<a>` 的 `link` 事件——后端片段用 `<a href="hc-play://play?bvid=...">` 包卡片，小程序 `bindlink` 拿 href 解析 bvid → 播放
+用 mp-html 把后端 HTML 渲成**原生节点**（内容复用），但**交互必须重写**：
+- 后端新增 `/hx/search-mp`（纯展示片段，卡片用 `<a href>` 包，`linktap` 事件触发播放）
+- mp-html 关键点：事件名是 **`linktap`**（不是 `link`），默认行为是**复制链接**，需 `copy-link="false"` 关掉
+- 待补齐：导航、底部播放器控制条、歌词面板（mp-html 不会自动有）
 
-## 前置
+> mp-html 组件包在 `components/mp-html/`（零 npm，git 拷贝 `dist/mp-weixin`）。
+> 播放已验证：`InnerAudioContext` 播 `/api/v1/music/stream/{bvid}` 能出声。
 
-1. **Node**（仅预览工具用）+ `npm install -g miniprogram-ci`
-2. **小程序 AppID**：mp.weixin.qq.com 免费注册（个人主体）→ 填进 `project.config.json`
-3. **代码上传密钥**：微信公众平台 → 开发管理 → 开发设置 →「小程序代码上传」→ 下载私钥
+## 架构（共用）
+
+- **业务逻辑一份住 Go 后端**（`go/cmd/server`），前后端走真实 HTTP `http://127.0.0.1:28976`
+- 后端 `/hx/search-mp` 是 mp-html 版专用纯展示片段（web-view 版用整站 `/`，不需要它）
+- 零 npm：壳无 node_modules；mp-html 组件直接拷贝；miniprogram-ci 仅预览用
+
+## 前置（一次性）
+
+1. Node + `npm install -g miniprogram-ci`（装到独立目录 `/home/a1/hc-mp-ci`，免全局权限）
+2. 小程序 AppID：填 `project.config.json`
+3. 代码上传密钥（公众平台→开发→开发管理→开发设置→小程序代码上传→生成）
 
 ## 起后端（局域网可达）
 
 ```bash
-scripts/mp-backend.sh
-# 输出内网 IP，把它填进 wails3/build/wechat/utils/config.js 的 BASE
-# 手机先浏览器访问 http://<内网IP>:28976 确认能通
+scripts/mp-backend.sh        # mockbili :39001 + server :28976
+# 模拟器用 127.0.0.1（后端本机）；真机预览改 config.js 为局域网 IP
 ```
 
-## 真机预览（零 IDE）
+## 预览/调试
 
-```bash
-node scripts/mp-preview.js <代码上传私钥路径>
-# 终端显示二维码 → 手机微信扫码 → 真机打开 mymusic
-```
+- **模拟器**（IDE）：微信开发者工具导入 `wails3/build/wechat` → 勾「不校验合法域名」→ 编译
+- **真机扫码**（零 IDE）：`node scripts/mp-preview.js <私钥>` → 手机微信打开调试
 
-**域名校验**：`project.config.json` 已设 `urlCheck:false`；若真机仍拦，手机微信打开小程序后 **右上角菜单 → 打开调试**（官方途径，免 IDE）即可访问 http://内网IP。
+## mp-html 边界（版本 B 用）
 
-## 自测分层
-
-| 层 | 方式 | 需 IDE/真机 |
-|---|---|---|
-| 后端逻辑 | `go test ./...` + CI E2E（已有） | 否 |
-| 搜索片段 | `curl 'http://127.0.0.1:28976/hx/search-mp?kw=test'` | 否 |
-| 壳逻辑层 | `node --check pages/index/index.js`（语法）+ 手动走查 | 否 |
-| 真机体验 | `node scripts/mp-preview.js` 扫码 | 仅真机 |
-
-## mp-html 边界（重要）
-
-- ✅ 渲：标签/样式/图片/表格/音频视频
-- ❌ 不执行：`<script>`、`onclick`、`hx-post` —— 所以后端片段是**纯展示**（`/hx/search-mp`），交互全部由壳逻辑层重接（`bindlink`/`bindtap`）
-- 播放走 `InnerAudioContext` 播 `/api/v1/music/stream/{bvid}`（后端代理流，mockbili 返回真实可播 WAV）
+- ✅ 渲：标签/样式/图片/表格/音视频
+- ❌ 不执行：`<script>`/`onclick`/`hx-post`；交互（播放/导航/歌词）需小程序逻辑层重接
+- 事件名 **`linktap`**；默认复制链接，用 `copy-link="false"` 关闭
 
 ## 上线前（暂不做）
 
-- `urlCheck:true` + 微信后台配置合法域名（**https + 备案域名**）
-- `miniprogram-ci upload` 上传 → 体验版 → 正式版
+- `urlCheck:true` + 配置合法域名 / 业务域名（https+备案）
+- `miniprogram-ci upload` 上传
