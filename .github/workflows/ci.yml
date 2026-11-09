@@ -41,15 +41,16 @@ jobs:
           cache-dependency-path: |
             go/go.sum
             wails3/go.sum
-      - name: 安装 GTK4 / WebKitGTK / appindicator 依赖
+      - name: 安装 GTK4 / WebKitGTK-6.0 / appindicator 依赖
+        # wails v3.1.0 Linux 需 gtk4 + webkitgtk-6.0（不是旧的 webkit2gtk-4.1）
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libayatana-appindicator3-dev
       - name: wails3 模块 vet
         run: |
           cd wails3 && go vet ./...
-      - name: 安装 wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 安装 wails3 CLI（与 go.mod 同版本）
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - name: 官方构建（Linux，gtk4 + go:embed）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -74,10 +75,10 @@ jobs:
           cache-dependency-path: |
             go/go.sum
             wails3/go.sum
-      - name: 安装 GTK4 / WebKitGTK / appindicator / Xvfb 依赖
+      - name: 安装 GTK4 / WebKitGTK-6.0 / appindicator / Xvfb 依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev xvfb curl
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libayatana-appindicator3-dev xvfb curl
       - name: 下载 build-linux 产物
         uses: actions/download-artifact@v4
         with:
@@ -102,12 +103,12 @@ jobs:
           cache-dependency-path: |
             go/go.sum
             wails3/go.sum
-      - name: 安装 mingw-w64
+      - name: 安装 mingw-w64 + GTK4/WebKitGTK-6.0（wails3 CLI 自身在 Linux 编译需 cgo 依赖）
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64
-      - name: 安装 wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+          sudo apt-get install -y gcc-mingw-w64-x86-64 libgtk-4-dev libwebkitgtk-6.0-dev libayatana-appindicator3-dev
+      - name: 安装 wails3 CLI（与 go.mod 同版本）
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - name: 官方构建（Windows，mingw + CGO）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -193,7 +194,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: 安装 Android SDK 组件（runner 预装 SDK；setup-android@v3 依赖的 `tools` 包已被 Google 下架）
+        run: |
+          set -euo pipefail
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKM" || SDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" "platform-tools" "platforms;android-35" "build-tools;35.0.0" | tail -3
       - name: 安卓 Java 编译（LyricOverlayService/MainActivity 等）
         run: |
           cd wails3/build/android
@@ -212,8 +219,8 @@ jobs:
           cache-dependency-path: |
             go/go.sum
             wails3/go.sum
-      - name: 安装 wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 安装 wails3 CLI（与 go.mod 同版本）
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - name: 官方构建（macOS，Cocoa + WebKit，原生架构）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -237,8 +244,8 @@ jobs:
           cache-dependency-path: |
             go/go.sum
             wails3/go.sum
-      - name: 安装 wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25
+      - name: 安装 wails3 CLI（与 go.mod 同版本）
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - name: iOS 模拟器构建 + 打包（架构自适应，ad-hoc 签名，无需真机签名）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
