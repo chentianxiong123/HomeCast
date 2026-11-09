@@ -223,7 +223,9 @@ func (s *CacheService) Size() float64 {
 		}
 	}
 	rows.Close()
-	return float64(total) / 1024 / 1024
+	mb := float64(total) / 1024 / 1024
+	// 保留两位小数（前端直接展示，免去长浮点尾巴）
+	return float64(int(mb*100+0.5)) / 100
 }
 
 // Count 缓存条目数

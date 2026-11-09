@@ -17,7 +17,8 @@
     try {
       const r = await fetch(BASE + '/stats');
       const d = await r.json();
-      return (d.data && d.data.used_mb) || 0;
+      const mb = (d.data && d.data.used_mb) || 0;
+      return Math.round(mb * 100) / 100; // 两位小数
     } catch (e) { return 0; }
   }
 
