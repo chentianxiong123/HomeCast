@@ -10,12 +10,13 @@ DATA_DIR="$(mktemp -d)"
 LOG="$(mktemp)"
 APP_PID=""   # trap 可能在赋值前触发，set -u 下需预置
 cleanup() {
-  # 只杀自己起的那个进程组（setsid 使 APP_PID 同时是 PGID），不用 pkill -f 匹配路径：
-  # pkill -f "$APP" 会匹配到本脚本自身命令行（bash scripts/shell-e2e.sh wails3/bin/hcexp）→ 自杀 exit 143
-  [ -n "${APP_PID:-}" ] && kill -TERM -"$APP_PID" 2>/dev/null
-  wait "${APP_PID:-}" 2>/dev/null
+  # pkill -f 会匹配到本脚本自身命令行 → 自杀 exit 143
+  # wait 等被 kill 的后台进程也会返回非零（signal）→ 覆盖 exit 参数
+  # 直接 kill PGID + 显式 exit 0，退出码才确定
+  kill -TERM -"${APP_PID:-}" 2>/dev/null || true
+  wait "${APP_PID:-}" 2>/dev/null || true
   rm -rf "$DATA_DIR" "$LOG"
-  return 0
+  exit 0
 }
 trap cleanup EXIT
 
