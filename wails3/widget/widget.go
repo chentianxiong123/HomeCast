@@ -390,7 +390,6 @@ func tick() {
 func paint(c Canvas) {
 	st.mu.Lock()
 	text := displayTextLocked()
-	winW := st.winW
 	uiShown := st.uiShown
 	locked := st.locked
 	st.mu.Unlock()
@@ -400,6 +399,27 @@ func paint(c Canvas) {
 		return
 	}
 	w, h := c.TextSize(text, FontSize)
+	// 自适应窗口宽：按当前行文字宽度扩展（MinW~MaxW），长歌词不再被右侧截断；
+	// 宽度变化时同步 resize 显示层（居中基准随之更新）
+	wantW := int(w) + 24 // 左右各 12px 留白
+	if wantW < MinW {
+		wantW = MinW
+	}
+	if wantW > MaxW {
+		wantW = MaxW
+	}
+	st.mu.Lock()
+	if st.winW != wantW {
+		st.winW = wantW
+		st.mu.Unlock()
+		if disp != nil {
+			disp.Resize(wantW, WinH)
+		}
+	} else {
+		st.mu.Unlock()
+	}
+	winW := wantW
+
 	x := (float64(winW) - w) / 2
 	if x < 0 {
 		x = 0
