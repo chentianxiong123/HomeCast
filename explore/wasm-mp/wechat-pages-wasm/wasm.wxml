@@ -1,0 +1,11 @@
+<!-- mp-html + wasm 结合：wasm 跑 Go 逻辑（搜 B站→渲 HTML→回调传回），mp-html 渲染 -->
+<view class="page">
+  <view class="head">
+    <input class="kw" value="{{kw}}" placeholder="搜 B站音乐" bindinput="onInput" confirm-type="search" bindconfirm="onSearch" />
+    <button class="btn" size="mini" bindtap="onSearch" disabled="{{!ready}}">搜索</button>
+  </view>
+  <view class="status" wx:if="{{!ready}}">WASM 加载中…（Go 后端编译进 wasm，同进程运行）</view>
+  <view class="status" wx:elif="{{loading}}">搜索中…</view>
+  <view class="err" wx:if="{{err}}">⚠ {{err}}</view>
+  <mp-html content="{{html}}" bindlinktap="onLink" />
+</view>

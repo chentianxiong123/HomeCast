@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "mymusic · WASM",
+  "usingComponents": {
+    "mp-html": "/components/mp-html/index"
+  }
+}
