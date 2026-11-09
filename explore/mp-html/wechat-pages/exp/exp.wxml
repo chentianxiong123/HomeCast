@@ -1,0 +1,6 @@
+<!-- 实验：mp-html 高频刷新播放条(500ms) + 歌词面板(500ms)，测多节点滚动流畅度 -->
+<view class="exp">
+  <view class="tip">实验：播放条 500ms + 歌词 12 行 500ms，两块 mp-html 同时刷新。看歌词滚动是否流畅、不卡。</view>
+  <mp-html content="{{bar}}" bindlinktap="onLink" />
+  <mp-html content="{{lyric}}" />
+</view>

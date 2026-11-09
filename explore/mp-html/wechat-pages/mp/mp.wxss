@@ -1,0 +1,7 @@
+.page { display: flex; flex-direction: column; height: 100vh; }
+.head { display: flex; gap: 12rpx; padding: 16rpx; background: #fff; border-bottom: 1rpx solid #eee; }
+.kw { flex: 1; border: 1rpx solid #ddd; border-radius: 40rpx; padding: 14rpx 24rpx; font-size: 28rpx; }
+.btn { flex-shrink: 0; }
+.err { color: #e33; font-size: 24rpx; padding: 8rpx 16rpx; }
+.body { flex: 1; overflow: hidden; padding: 16rpx; }
+.bottom { border-top: 1rpx solid #eee; background: #fff; padding-bottom: env(safe-area-inset-bottom); }

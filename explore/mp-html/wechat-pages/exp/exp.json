@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "mp-html": "/components/mp-html/index"
+  },
+  "navigationBarTitleText": "mp-html 高频刷新实验"
+}

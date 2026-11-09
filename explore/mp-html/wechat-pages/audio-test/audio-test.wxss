@@ -1,0 +1,8 @@
+.p { padding: 24rpx; }
+.t { font-size: 40rpx; font-weight: 700; margin-bottom: 8rpx; }
+.sub { font-size: 26rpx; color: #999; margin-bottom: 24rpx; }
+.i { border: 1rpx solid #ddd; border-radius: 12rpx; padding: 16rpx; font-size: 28rpx; margin-bottom: 20rpx; }
+.btns { display: flex; gap: 16rpx; margin-bottom: 20rpx; }
+.bar { font-size: 28rpx; color: #333; margin-bottom: 16rpx; }
+.err { color: #e33; font-size: 26rpx; margin-bottom: 12rpx; word-break: break-all; }
+.tip { font-size: 24rpx; color: #999; margin-top: 20rpx; line-height: 1.6; }

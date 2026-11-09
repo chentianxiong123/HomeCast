@@ -1,0 +1,13 @@
+<view class="p">
+  <view class="t">音频生死实验</view>
+  <view class="sub">InnerAudioContext 播真实 B站流（/api/v1/music/stream/{bvid}）</view>
+  <input class="i" value="{{bvid}}" bindinput="onBvid" placeholder="bvid" />
+  <view class="btns">
+    <button size="mini" type="primary" bindtap="play">{{playing ? '播放中…' : '播放'}}</button>
+    <button size="mini" bindtap="pause">暂停</button>
+  </view>
+  <view class="bar" wx:if="{{dur > 0}}">进度 {{pos.toFixed(1)}} / {{dur.toFixed(1)}}s</view>
+  <view class="bar" wx:elif="{{playing}}">已播 {{pos.toFixed(1)}}s（时长未加载，mp4 渐进式）</view>
+  <view class="err" wx:if="{{err}}">⚠ {{err}}</view>
+  <view class="tip">点"播放"后看：出进度（能播）→ 生死实验过；报错/无进度 → 卡住</view>
+</view>

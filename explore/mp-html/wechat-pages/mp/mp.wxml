@@ -1,0 +1,19 @@
+<!-- 纯 mp-html 渲染 UI：搜索框（原生 input）+ mp-html 渲卡片/播放条/歌词 -->
+<view class="page">
+  <view class="head">
+    <input class="kw" value="{{kw}}" bindinput="onInput" confirm-type="search" bindconfirm="onSearch" placeholder="搜 B站音乐" />
+    <button class="btn" size="mini" bindtap="onSearch">搜索</button>
+  </view>
+  <view class="err" wx:if="{{err}}">⚠ {{err}}</view>
+
+  <!-- 内容区：mp-html 渲搜索卡片 -->
+  <scroll-view class="body" scroll-y>
+    <mp-html content="{{cards}}" />
+  </scroll-view>
+
+  <!-- 底部：mp-html 渲播放条 + 歌词（500ms 刷新） -->
+  <view class="bottom">
+    <mp-html content="{{bar}}" />
+    <mp-html content="{{lyric}}" />
+  </view>
+</view>

@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "mymusic",
+  "usingComponents": {
+    "mp-html": "/components/mp-html/index"
+  }
+}
