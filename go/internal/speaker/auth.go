@@ -354,11 +354,17 @@ func (a *SpeakerAuth) ListDevices() ([]SpeakerDevice, error) {
 			Hardware: d.Hardware,
 			DID:      d.MiotDID,
 			Name:     name,
-			IsOnline: true,
+			// 真实在线状态：小米 device_list 的 presence 字段（"online"/"offline"）。
+			// 小爱音箱待机/休眠时 presence=offline（属正常），不能写死 true。
+			IsOnline: presenceOnline(d.Presence),
 		})
 	}
 	return out, nil
 }
+
+// presenceOnline 小米 device_list presence 字段 → 在线判定
+// （"online" 才在线；offline/空/未知均为不在线——小爱音箱待机 presence=offline 属正常）
+func presenceOnline(p string) bool { return p == "online" }
 
 // PlayURL 播放 URL（deviceId 是设备 hardware ID）
 func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
