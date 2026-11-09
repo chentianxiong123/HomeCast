@@ -71,6 +71,10 @@ func (d *gtkDisplay) initGtk4(x, y int) error {
 	cwin := C.gtk_window_new()
 	C.gtk_window_set_decorated((*C.GtkWindow)(unsafe.Pointer(cwin)), 0)
 	C.gtk_window_set_default_size((*C.GtkWindow)(unsafe.Pointer(cwin)), C.gint(MinW), C.gint(WinH))
+	// 浮层语义：不占任务栏/Alt-Tab/抢焦点 + 无条件置顶。GTK4 已删 set_keep_above /
+	// set_type_hint / skip_taskbar，故全走 X11 原生（cglue.c hc_keep_above 增强：
+	// 设置 _NET_WM_WINDOW_TYPE_UTILITY + _NET_WM_STATE ABOVE|SKIP_TASKBAR|SKIP_PAGER，
+	// 并在窗口 map 事件后由 WM 接管时重发，kwin 才可靠生效）
 
 	fixed := C.gtk_fixed_new()
 	C.gtk_window_set_child((*C.GtkWindow)(unsafe.Pointer(cwin)), fixed)

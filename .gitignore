@@ -108,3 +108,6 @@ go/web/assets/daisyui.min.css
 wails3/build/darwin/*.icns
 wails3/build/darwin/*.png
 wails3/build/darwin/Assets.car
+
+# ── Release 产物下载目录（测试用，勿提交） ──
+mymusic-test.zip/

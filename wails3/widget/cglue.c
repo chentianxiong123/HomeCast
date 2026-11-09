@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 #include <gdk/x11/gdkx.h>
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/shape.h>
 
 // Go 侧回调（display_linux.go //export）
@@ -23,6 +24,7 @@ extern int pointer_global(int *x, int *y);
 
 // X11 底层前向声明（定义在下方）
 void hc_get_pos(int *x, int *y);
+static gboolean _map_cb(GtkWidget *w, GdkEvent *ev, gpointer u);
 
 static GtkWidget *g_win = NULL;
 static GtkWidget *g_fixed = NULL;
@@ -163,6 +165,9 @@ void wire_signals(void) {
 	gtk_widget_add_controller(g_draw, GTK_EVENT_CONTROLLER(drag));
 
 	g_timeout_add(150, goTick, NULL);
+
+	// 窗口 map 后重发 _NET_WM_STATE（kwin 接管才生效；防 WM 重置置顶/任务栏）
+	g_signal_connect(g_win, "map", G_CALLBACK(_map_cb), NULL);
 }
 
 // ── X11 底层：move/resize/get_pos/keep_above（GTK4 移除了 gtk_window_move 等）──
@@ -193,18 +198,38 @@ void hc_ctrl_fullwidth(int w) {
 }
 
 
+// ── 浮层语义：无条件置顶 + 不占任务栏/Alt-Tab（X11 原生，kwin 可靠）──
+// 1) 设 _NET_WM_WINDOW_TYPE = UTILITY（不占任务栏/Alt-Tab/不抢焦点）
+// 2) 发 _NET_WM_STATE = ABOVE|SKIP_TASKBAR|SKIP_PAGER|STICKY
+// 3) 窗口 map 后 WM 接管会重置状态，故在 map 事件里重发（见 _map_cb）
 void hc_keep_above(void) {
 	Display *d = _dpy(); Window w = _xid();
+	if (!w) return;
+	Atom type = XInternAtom(d, "_NET_WM_WINDOW_TYPE", False);
+	Atom utility = XInternAtom(d, "_NET_WM_WINDOW_TYPE_UTILITY", False);
+	XChangeProperty(d, w, type, XA_ATOM, 32, PropModeReplace, (unsigned char*)&utility, 1);
+
 	Atom net = XInternAtom(d, "_NET_WM_STATE", False);
 	Atom above = XInternAtom(d, "_NET_WM_STATE_ABOVE", False);
 	Atom skip = XInternAtom(d, "_NET_WM_STATE_SKIP_TASKBAR", False);
 	Atom pager = XInternAtom(d, "_NET_WM_STATE_SKIP_PAGER", False);
+	Atom sticky = XInternAtom(d, "_NET_WM_STATE_STICKY", False);
 	XEvent e; memset(&e, 0, sizeof(e));
 	e.xclient.type = ClientMessage; e.xclient.window = w; e.xclient.message_type = net;
-	e.xclient.format = 32; e.xclient.data.l[0] = 1; e.xclient.data.l[1] = above;
-	e.xclient.data.l[2] = skip; e.xclient.data.l[3] = pager;
+	e.xclient.format = 32; e.xclient.data.l[0] = 1; // _NET_WM_STATE_ADD
+	e.xclient.data.l[1] = above;
+	e.xclient.data.l[2] = skip;
+	e.xclient.data.l[3] = pager;
+	e.xclient.data.l[4] = sticky;
 	XSendEvent(d, DefaultRootWindow(d), False, SubstructureRedirectMask|SubstructureNotifyMask, &e);
 	XFlush(d);
+}
+
+// 窗口 map 后重发（WM 接管才响应 _NET_WM_STATE；GTK4 无 set_keep_above）
+static gboolean _map_cb(GtkWidget *w, GdkEvent *ev, gpointer u) {
+	(void)ev; (void)u;
+	hc_keep_above();
+	return FALSE;
 }
 
 // ── X11 真穿透：输入区域用 1bpp pixmap（照 GTK3 版；block=0 全穿透，1 整窗可点）──
