@@ -318,5 +318,16 @@
   <script src="/assets/subtitle.js"></script>
   <script src="/assets/search-history.js"></script>
   <script src="/assets/settings.js"></script>
+  <script>
+  // ═══ WebView 点两次根因修复：按钮点击后获得 focus，后续点击被 focus/选中拦截一次。
+  // 全局 mousedown 阻止非输入元素 focus（用户点一下即生效，无需二次）。
+  // 输入框/下拉/滑杆保留原生 focus（需键盘操作）。
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target;
+    if (t && t.closest && !t.closest('input, textarea, select, [contenteditable]')) {
+      e.preventDefault();
+    }
+  });
+  </script>
 </body>
 </html>

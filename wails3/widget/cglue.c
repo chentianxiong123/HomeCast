@@ -31,10 +31,20 @@ static GtkWidget *g_fixed = NULL;
 static GtkWidget *g_ctrl = NULL;
 static GtkWidget *g_lockbtn = NULL;
 static GtkWidget *g_draw = NULL;
+static GtkWidget *g_playbtn = NULL; // 播放/暂停按钮（图标随状态切换）
 
 GtkWidget* hc_win(void)     { return g_win; }
 GtkWidget* hc_ctrl(void)    { return g_ctrl; }
 GtkWidget* hc_lockbtn(void) { return g_lockbtn; }
+GtkWidget* hc_playbtn(void) { return g_playbtn; }
+
+void hc_set_playbtn(GtkWidget *w) { g_playbtn = w; }
+
+// 播放/暂停按钮图标切换：playing=1 ⏸（暂停符号），0 ▶（播放符号）
+void hc_set_play_icon(int playing) {
+	if (!g_playbtn) return;
+	gtk_button_set_label(GTK_BUTTON(g_playbtn), playing ? "⏸" : "▶");
+}
 
 // 桌面挂件整个窗口显示/隐藏（下面面板 #d-tick → POST /api/v1/widget/lyric-visible）
 void hc_set_visible(int on) {

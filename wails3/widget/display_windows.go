@@ -151,6 +151,9 @@ func (d *winDisplay) HideUI() {
 // SetVisible Windows 版（TODO 挂件窗口显示/隐藏）
 func (d *winDisplay) SetVisible(on bool) {}
 
+// SetPlayIcon Windows：控制条按钮由 GDI 手绘，play 图标随状态（TODO 待真 Windows 环境补）
+func (d *winDisplay) SetPlayIcon(playing bool) {}
+
 func (d *winDisplay) Tick(delayMs int, f func()) {
 	coreTick = f
 	C.SetTimer(hwndWin, 1, C.UINT(delayMs), nil)

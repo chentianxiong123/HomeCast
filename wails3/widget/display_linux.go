@@ -24,6 +24,9 @@ extern void hc_set_fixed(GtkWidget*);
 extern void hc_set_draw_area(GtkWidget*);
 extern GtkWidget* hc_draw(void);
 extern void _hc_btn_connect(GtkWidget*, int);
+extern void hc_set_play_icon(int);
+extern void hc_set_playbtn(GtkWidget*);
+extern GtkWidget* hc_playbtn(void);
 extern void _hc_css(void);
 extern void wire_signals(void);
 extern void xshape_mask(int);
@@ -100,6 +103,9 @@ func (d *gtkDisplay) initGtk4(x, y int) error {
 		C.gtk_widget_set_size_request(bb, C.gint(b.W), C.gint(CtrlH))
 		C.gtk_widget_set_name(bb, C.CString("hc-btn"))
 		C._hc_btn_connect(bb, C.int(b.Kind))
+		if b.Kind == 1 { // 播放/暂停按钮：存全局引用供图标切换
+			C.hc_set_playbtn(bb)
+		}
 		C.gtk_box_append((*C.GtkBox)(unsafe.Pointer(btns)), bb)
 	}
 	for _, b := range ctrlBtnTable() {
@@ -217,6 +223,15 @@ func (d *gtkDisplay) SetVisible(on bool) {
 		C.hc_set_visible(1)
 	} else {
 		C.hc_set_visible(0)
+	}
+}
+
+// SetPlayIcon 播放/暂停按钮图标（▶ ↔ ⏸）
+func (d *gtkDisplay) SetPlayIcon(playing bool) {
+	if playing {
+		C.hc_set_play_icon(1)
+	} else {
+		C.hc_set_play_icon(0)
 	}
 }
 

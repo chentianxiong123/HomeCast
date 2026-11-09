@@ -225,10 +225,15 @@
     if (song) loadSong(song);
     hcBus.emit('toast', { msg: '音质 ' + q + 'k' });
   }
+  // 静音状态用 JS 变量维护（WebKit 的 audio.muted 赋值后同帧读取可能返回旧值，
+  // 导致 mute() 里判断失真——偶发「点两次才生效」根因）。
+  let volMuted = false;
   function setVol(v) {
     audio.volume = v / 100;
-    audio.muted = v === 0;
+    volMuted = v === 0; // 拖到 0 = 静音（JS 状态源）
+    audio.muted = volMuted;
     try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
+    renderMute();
   }
   function setState(s) {
     state = s;
@@ -276,6 +281,8 @@
   try {
     const es = new EventSource('/api/v1/widget/events');
     es.addEventListener('toggle', () => toggle());
+    es.addEventListener('prev', () => step('prev'));
+    es.addEventListener('next', () => step('next'));
     // 歌词当前行统一走后端（SSE lyric-state 带 line）→ hcBus 广播给歌词页/字幕条，
     // 显示层纯渲染（不再各自 sec<=t 本地定位——数据流统一一份住后端）。
     es.addEventListener('lyric-state', (ev) => {
@@ -340,9 +347,42 @@
   if (el.qualityBtn) el.qualityBtn.addEventListener('click', () => {
     setQuality(quality === 64 ? 128 : quality === 128 ? 192 : 64);
   });
-  function mute() { audio.muted = !audio.muted; }
+  // 静音图标（未静音=喇叭，静音=喇叭带斜杠）+ 静音时音量条禁用
+  // 只认 audio.muted 单一状态源（不再 OR volume===0——否则音量拖到 0 后
+  // 静音按钮翻转 muted 但图标永远斜杠，按钮失效）
+  function renderMute() {
+    if (!el.muteBtn) return;
+    const muted = volMuted;
+    el.muteBtn.innerHTML = muted
+      ? '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>'
+      : '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
+    if (el.vol) {
+      el.vol.classList.toggle('opacity-40', muted); // 静音时变灰，但仍可拖（拖>0 自动取消静音）
+    }
+  }
+  function mute() {
+    // 统一状态机：当前静音（volMuted 或音量拖到 0）→ 恢复音量；否则 → 静音
+    if (volMuted || audio.volume === 0) {
+      volMuted = false;
+      if (audio.volume === 0) { // 音量被拖到 0 的静音：恢复默认音量
+        const def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+        audio.volume = def / 100;
+        if (el.vol) el.vol.value = def;
+        try { localStorage.setItem('hc:vol', String(def)); } catch (e) {}
+      }
+    } else {
+      volMuted = true;
+    }
+    audio.muted = volMuted; // 同步到 audio（异步生效不影响 JS 状态源）
+    renderMute();
+  }
   if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
-  audio.volume = parseInt(localStorage.getItem('hc:vol') || '80', 10) / 100;
+  const initVol = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+  audio.volume = initVol / 100;
+  volMuted = false;
+  audio.muted = false;
+  if (el.vol) el.vol.value = initVol; // 滑杆与实际音量一致（localStorage 可能非 80）
+  renderMute();
 
   // ---- 总线 ----
   hcBus.on('play', play);

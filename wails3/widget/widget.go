@@ -162,9 +162,9 @@ type ctrlBtn struct {
 
 func ctrlBtnTable() []ctrlBtn {
 	return []ctrlBtn{
-		{"⏸", 30, 1},
-		{"−", 30, 2},
-		{"+", 30, 3},
+		{"|◀", 30, 2}, // 上一首（带竖杠，区别于播放 ▶）
+		{"⏸", 30, 1},  // 播放/暂停（图标随状态切换 ▶↔⏸）
+		{"▶|", 30, 3}, // 下一首（带竖杠，区别于播放 ▶）
 		{"🔓", 32, 4},
 		{"✕", 28, 5},
 	}
@@ -191,12 +191,29 @@ func onPauseClick() {
 	}()
 }
 
+// postWidget 挂件控制意图 → 后端 SSE 广播 → 前端 EventSource 即时消费
+func postWidget(path string) {
+	if Backend == "" {
+		return
+	}
+	go func() {
+		req, err := http.NewRequest(http.MethodPost, Backend+path, nil)
+		if err != nil {
+			return
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
+}
+
 func onMinusClick() {
-	postOffset(-0.5)
+	postWidget("/api/v1/widget/prev") // ◀ 上一首
 }
 
 func onPlusClick() {
-	postOffset(0.5)
+	postWidget("/api/v1/widget/next") // ▶ 下一首
 }
 
 // postOffset 用户 ±0.5s 微调：改后端持久化 offset（逻辑住后端：PickLine 用 ct+offset 算行），
@@ -495,6 +512,10 @@ func applyState(bvid, title, artist, line string, ct, dur float64, playing bool)
 	st.dur = dur
 	st.currentLine = line // 后端算好的当前行（唯一逻辑产物）
 	st.mu.Unlock()
+	// 播放/暂停按钮图标随状态切换（▶ ↔ ⏸）
+	if disp != nil {
+		disp.SetPlayIcon(playing)
+	}
 	queueDraw() // 状态变了立即重绘（GTK4 draw_func 需显式 queue）
 }
 

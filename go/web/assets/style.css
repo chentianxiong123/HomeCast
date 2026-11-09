@@ -145,6 +145,17 @@ html, body, button, input, select, textarea, div, span, p, a, li, h1, h2, h3, h4
    真机窄屏（~393px）内容易溢出，WebView 显示横/竖滚动条（容器 dpr 低没暴露）。
    隐藏滚动条（WebView 侧已 setScrollBarEnabled(false) 兜底，这里全局 + 内层滚动区）。 */
 html, body { overflow-x: hidden; }
+
+/* ═══ WebView 按钮点击不选中：全局禁止文本选中 + 去点击高亮 ═══
+   桌面/移动 WebView 里按钮默认 user-select:auto，点击先「选中」文字（蓝底），
+   导致需点两次才生效。全局 user-select:none + tap-highlight 透明。 */
+html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; } /* 输入框仍可选中 */
+* { -webkit-tap-highlight-color: transparent; }
+button, a, [role="button"] { -webkit-tap-highlight-color: transparent; outline: none; }
+/* 鼠标点击（非键盘）后不保留 focus 环——WebView 里点一次即生效，无需二次 */
+button:focus:not(:focus-visible), a:focus:not(:focus-visible), [role="button"]:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+
 body::-webkit-scrollbar, #main::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 *::-webkit-scrollbar { width: 0; height: 0; display: none; }

@@ -131,6 +131,16 @@ func (w *WidgetState) BroadcastToggle() {
 	w.broadcast(SSEMsg{Name: "toggle", Data: "{}"})
 }
 
+// BroadcastPrev 挂件 ◀ 按钮：请求上一首
+func (w *WidgetState) BroadcastPrev() {
+	w.broadcast(SSEMsg{Name: "prev", Data: "{}"})
+}
+
+// BroadcastNext 挂件 ▶ 按钮：请求下一首
+func (w *WidgetState) BroadcastNext() {
+	w.broadcast(SSEMsg{Name: "next", Data: "{}"})
+}
+
 // currentLine 位置→当前行 唯一逻辑（住后端）：ct+offset 对齐 t，找 sec<=t 最后一行；
 // 无歌词/无行返回空（显示层退回标题）。
 // 歌词行缓存：切歌（bvid 变）才异步预拉一次（低频、不阻塞 SSE），逐帧只用缓存定位。

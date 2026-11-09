@@ -41,6 +41,8 @@ type Display interface {
 	HitTest(x, y float64) int
 	// SetVisible 整个挂件窗口显示/隐藏（下面面板 #d-tick → /api/v1/widget/lyric-visible）
 	SetVisible(on bool)
+	// SetPlayIcon 播放/暂停按钮图标（true=⏸ 暂停符号，false=▶ 播放符号）
+	SetPlayIcon(playing bool)
 	// Tick 周期调度核心循环（delayMs 毫秒后执行一次并自动续期）
 	Tick(delayMs int, f func())
 	// MainLoop 阻塞事件循环；Quit 退出

@@ -62,6 +62,8 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("GET /api/v1/widget/state", widget.Get)
 	mux.HandleFunc("POST /api/v1/widget/state", widget.Set)
 	mux.HandleFunc("POST /api/v1/widget/toggle", widget.Toggle)
+	mux.HandleFunc("POST /api/v1/widget/prev", widget.Prev)
+	mux.HandleFunc("POST /api/v1/widget/next", widget.Next)
 	mux.HandleFunc("GET /api/v1/widget/events", widget.Events)
 	mux.HandleFunc("GET /api/v1/cache/stats", cache.Stats)
 	mux.HandleFunc("POST /api/v1/cache/clear", cache.ClearAll)

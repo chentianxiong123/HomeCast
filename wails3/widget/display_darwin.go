@@ -155,6 +155,9 @@ func (d *macDisplay) HitTest(x, y float64) int {
 
 func (d *macDisplay) SetVisible(on bool) { C.hc_mac_visible(C.int(bool2int(on))) }
 
+// SetPlayIcon macOS：图标切换待真 Mac 环境补
+func (d *macDisplay) SetPlayIcon(playing bool) {}
+
 func (d *macDisplay) Tick(delayMs int, f func()) {
 	log.Printf("[mac-debug] Tick(%dms)", delayMs)
 	goTickFn = f

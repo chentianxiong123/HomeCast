@@ -47,6 +47,18 @@ func (h *WidgetHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 	ok(w, true)
 }
 
+// Prev POST /api/v1/widget/prev —— 挂件 ◀ 按钮请求上一首
+func (h *WidgetHandler) Prev(w http.ResponseWriter, r *http.Request) {
+	h.State.BroadcastPrev()
+	ok(w, true)
+}
+
+// Next POST /api/v1/widget/next —— 挂件 ▶ 按钮请求下一首
+func (h *WidgetHandler) Next(w http.ResponseWriter, r *http.Request) {
+	h.State.BroadcastNext()
+	ok(w, true)
+}
+
 // Events GET /api/v1/widget/events —— SSE 下行控制流（挂件按钮 → 前端即时消费）
 // 事件：event: toggle （前端收到即切换播放/暂停）；15s 心跳保活
 func (h *WidgetHandler) Events(w http.ResponseWriter, r *http.Request) {
