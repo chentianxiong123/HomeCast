@@ -7,11 +7,17 @@
 package speaker
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,7 +50,12 @@ type SpeakerAuth struct {
 	client    *miservice.Client
 	tokenPath string
 	loggedIn  bool
+	lastRefresh time.Time // 上次用 passToken 刷新 serviceToken 的时间
 }
+
+// tokenRefreshInterval 用 passToken 刷新 serviceToken 的间隔。
+// serviceToken 有效期短（小时级），提前续期保证「一直用一直刷」永不碰到过期。
+const tokenRefreshInterval = 30 * time.Minute
 
 // NewSpeakerAuth 构造；自动尝试恢复已有 token
 func NewSpeakerAuth() *SpeakerAuth {
@@ -58,6 +69,7 @@ func NewSpeakerAuth() *SpeakerAuth {
 		if err := client.Login("micoapi"); err == nil {
 			a.client = client
 			a.loggedIn = true
+			a.lastRefresh = time.Now()
 			a.saveToken()
 			log.Printf("[speaker] 恢复持久化 token 并刷新登录态 (userId=%s)", t.UserId)
 			return a
@@ -74,6 +86,7 @@ func NewSpeakerAuth() *SpeakerAuth {
 		if err := client.Login("micoapi"); err == nil {
 			a.client = client
 			a.loggedIn = true
+			a.lastRefresh = time.Now()
 			a.saveToken() // 刷新后的 token 落 speaker.json，下次走 restoreToken 快路径
 			log.Printf("[speaker] 从 QR speaker_auth.json 恢复并刷新登录态 (userId=%s)", t.UserId)
 		} else {
@@ -142,6 +155,126 @@ func (a *SpeakerAuth) saveToken() {
 }
 
 // IsLoggedIn 是否已登录
+// ensureToken 每次调小米 API 前调用：距上次刷新超阈值就用 passToken 重刷 serviceToken
+// （Login("micoapi") 带 passToken+userId cookie 走 serviceLogin，无需密码，可持续续期）。
+// serviceToken 有效期短，提前续期保证「一直用一直刷」永不碰到过期 401。
+func (a *SpeakerAuth) ensureToken() {
+	if a.client == nil || !a.loggedIn {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if time.Since(a.lastRefresh) < tokenRefreshInterval {
+		return
+	}
+	// 快速重刷（网络 ~1s）；失败不致命：旧 serviceToken 可能仍有效，或由调用方报错。
+	// 失败时也推进 lastRefresh（退避到下一间隔再试），避免每请求刷屏。
+	// 用自有 refreshServiceToken（miservice.Login 的 nonce 用 int64 接收会丢精度 → 401）。
+	if err := a.refreshServiceToken(); err != nil {
+		log.Printf("[speaker] 运行中刷新 serviceToken 失败（退避重试）: %v", err)
+		a.lastRefresh = time.Now()
+		return
+	}
+	a.lastRefresh = time.Now()
+	a.saveToken()
+	log.Printf("[speaker] 运行中刷新 serviceToken (userId=%s)", a.client.Token.UserId)
+}
+
+// refreshServiceToken 用 passToken 重新走 serviceLogin + requestServiceToken 刷新 serviceToken。
+// 不依赖 miservice.Login——其 loginResp.Nonce 是 int64，JSON 里 nonce 超 2^53（float64 精确上限），
+// 反序列化丢精度导致 clientSign 签名错，小米返回 401（刷新失败但旧 token 仍有效）。
+// 这里用 UseNumber 保精度，复刻 miservice 的 serviceLogin/requestServiceToken 两步。
+func (a *SpeakerAuth) refreshServiceToken() error {
+	c := a.client
+	if c == nil || c.Token == nil {
+		return fmt.Errorf("client/token nil")
+	}
+	// step1: pass/serviceLogin?sid=micoapi 用 passToken cookie（无需密码）
+	cookies := []*http.Cookie{
+		{Name: "sdkVersion", Value: "3.9"},
+		{Name: "deviceId", Value: c.Token.DeviceId},
+	}
+	if c.Token.PassToken != "" {
+		cookies = append(cookies, &http.Cookie{Name: "userId", Value: c.Token.UserId})
+		cookies = append(cookies, &http.Cookie{Name: "passToken", Value: c.Token.PassToken})
+	}
+	loginURL := fmt.Sprintf("https://account.xiaomi.com/pass/serviceLogin?sid=micoapi&_json=true")
+	req, _ := http.NewRequest(http.MethodGet, loginURL, nil)
+	req.Header.Set("User-Agent", miservice.UA)
+	for _, ck := range cookies {
+		req.AddCookie(ck)
+	}
+	// 用独立干净 client（新 jar）：避免 c.Client 累积的旧 cookie（serviceToken 等）
+	// 导致小米返回「已登录」形态（无 ssecurity/nonce，只有 psecurity）→ 刷新失败。
+	refreshClient := &http.Client{}
+	resp, err := refreshClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	// 解析：UseNumber 保 nonce/userId 精度（miservice 用 int64 会丢精度 → 签名错 → 401）
+	var data struct {
+		Code      int         `json:"code"`
+		Location  string      `json:"location"`
+		Ssecurity string      `json:"ssecurity"`
+		Nonce     json.Number `json:"nonce"`
+		PassToken string      `json:"passToken"`
+		UserId    json.Number `json:"userId"`
+	}
+	dec := json.NewDecoder(strings.NewReader(strings.TrimPrefix(string(body), "&&&START&&&")))
+	dec.UseNumber()
+	if err := dec.Decode(&data); err != nil {
+		return err
+	}
+	if data.Code != 0 {
+		return fmt.Errorf("serviceLogin code=%d", data.Code)
+	}
+	if data.Location == "" || data.Ssecurity == "" || data.Nonce == "" {
+		return fmt.Errorf("serviceLogin 缺字段: location=%q ssecurity=%q nonce=%q", data.Location, data.Ssecurity, data.Nonce)
+	}
+	// step2: requestServiceToken——clientSign = base64(sha1("nonce={nonce}&{ssecurity}"))，nonce 原样字符串
+	nsec := fmt.Sprintf("nonce=%s&%s", data.Nonce, data.Ssecurity)
+	sum := sha1.Sum([]byte(nsec))
+	clientSign := base64.StdEncoding.EncodeToString(sum[:])
+	stURL := fmt.Sprintf("%s&clientSign=%s", data.Location, url.QueryEscape(clientSign))
+	req2, _ := http.NewRequest(http.MethodGet, stURL, nil)
+	req2.Header.Set("User-Agent", miservice.UA)
+	resp2, err := refreshClient.Do(req2)
+	if err != nil {
+		return err
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		return fmt.Errorf("requestServiceToken HTTP %d", resp2.StatusCode)
+	}
+	var st string
+	for _, ck := range resp2.Cookies() {
+		if ck.Name == "serviceToken" {
+			st = ck.Value
+			break
+		}
+	}
+	if st == "" {
+		return fmt.Errorf("serviceToken 未在 cookie")
+	}
+	// 更新 token：ssecurity + serviceToken + 新 passToken（小米可能轮换）
+	if data.PassToken != "" {
+		c.Token.PassToken = data.PassToken
+	}
+	if data.UserId != "" {
+		c.Token.UserId = data.UserId.String()
+	}
+	if c.Token.Sids == nil {
+		c.Token.Sids = map[string]miservice.SidToken{}
+	}
+	c.Token.Sids["micoapi"] = miservice.SidToken{
+		Ssecurity:    data.Ssecurity,
+		ServiceToken: st,
+	}
+	return nil
+}
+
 func (a *SpeakerAuth) IsLoggedIn() bool {
 	return a.loggedIn && a.client != nil
 }
@@ -164,6 +297,7 @@ func (a *SpeakerAuth) Login(account, password string) error {
 	}
 	a.client = client
 	a.loggedIn = true
+	a.lastRefresh = time.Now()
 	a.saveToken()
 	log.Printf("[speaker] 账号登录成功: %s", account)
 	return nil
@@ -180,6 +314,7 @@ func (a *SpeakerAuth) LoginWithToken(t *miservice.Tokens) error {
 	}
 	a.client = client
 	a.loggedIn = true
+	a.lastRefresh = time.Now()
 	a.saveToken()
 	log.Printf("[speaker] token 登录成功: %s", t.UserId)
 	return nil
@@ -199,6 +334,7 @@ func (a *SpeakerAuth) ListDevices() ([]SpeakerDevice, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	devices, err := a.client.ListMinaDevices(0)
 	if err != nil {
 		return nil, err
@@ -231,6 +367,7 @@ func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	return a.client.PlayerPlayUrl(deviceID, url)
 }
 
@@ -239,6 +376,7 @@ func (a *SpeakerAuth) Pause(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	return a.client.PlayerPause(deviceID)
 }
 
@@ -247,6 +385,7 @@ func (a *SpeakerAuth) Stop(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	return a.client.PlayerStop(deviceID)
 }
 
@@ -255,6 +394,7 @@ func (a *SpeakerAuth) Resume(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	return a.client.PlayerResume(deviceID)
 }
 
@@ -263,6 +403,7 @@ func (a *SpeakerAuth) GetStatus(deviceID string) (map[string]any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	v, err := a.client.PlayerGetStatus(deviceID)
 	if err != nil {
 		return nil, err
@@ -289,6 +430,7 @@ func (a *SpeakerAuth) SetVolume(deviceID string, volume int) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
+	a.ensureToken()
 	if volume < 0 {
 		volume = 0
 	}
