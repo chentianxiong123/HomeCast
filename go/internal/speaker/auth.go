@@ -50,12 +50,8 @@ type SpeakerAuth struct {
 	client    *miservice.Client
 	tokenPath string
 	loggedIn  bool
-	lastRefresh time.Time // 上次用 passToken 刷新 serviceToken 的时间
+	lastRefresh time.Time // 上次刷新 serviceToken 的时间（启动/登录/失败重刷时更新）
 }
-
-// tokenRefreshInterval 用 passToken 刷新 serviceToken 的间隔。
-// serviceToken 有效期短（小时级），提前续期保证「一直用一直刷」永不碰到过期。
-const tokenRefreshInterval = 30 * time.Minute
 
 // NewSpeakerAuth 构造；自动尝试恢复已有 token
 func NewSpeakerAuth() *SpeakerAuth {
@@ -155,29 +151,28 @@ func (a *SpeakerAuth) saveToken() {
 }
 
 // IsLoggedIn 是否已登录
-// ensureToken 每次调小米 API 前调用：距上次刷新超阈值就用 passToken 重刷 serviceToken
-// （Login("micoapi") 带 passToken+userId cookie 走 serviceLogin，无需密码，可持续续期）。
-// serviceToken 有效期短，提前续期保证「一直用一直刷」永不碰到过期 401。
-func (a *SpeakerAuth) ensureToken() {
+// retryOnAuth 失败兜底重试：第一次调用若失败（可能 serviceToken 过期），
+// 用 passToken 重刷一次再重试（仅一次，不循环）。平时零开销——不主动定时刷新，
+// 只在「每次打开刷一次」（NewSpeakerAuth 启动 Login）的基础上，真过期时自动恢复。
+func (a *SpeakerAuth) retryOnAuth(fn func() error) error {
 	if a.client == nil || !a.loggedIn {
-		return
+		return fn()
 	}
+	err := fn()
+	if err == nil {
+		return nil
+	}
+	// 失败 → 重刷一次 → 重试一次。重刷失败返回原始错误（由调用方上报）。
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if time.Since(a.lastRefresh) < tokenRefreshInterval {
-		return
+	rerr := a.refreshServiceToken()
+	a.mu.Unlock()
+	if rerr != nil {
+		log.Printf("[speaker] 失败后重刷 serviceToken 也失败: %v（原始错误: %v）", rerr, err)
+		return err
 	}
-	// 快速重刷（网络 ~1s）；失败不致命：旧 serviceToken 可能仍有效，或由调用方报错。
-	// 失败时也推进 lastRefresh（退避到下一间隔再试），避免每请求刷屏。
-	// 用自有 refreshServiceToken（miservice.Login 的 nonce 用 int64 接收会丢精度 → 401）。
-	if err := a.refreshServiceToken(); err != nil {
-		log.Printf("[speaker] 运行中刷新 serviceToken 失败（退避重试）: %v", err)
-		a.lastRefresh = time.Now()
-		return
-	}
-	a.lastRefresh = time.Now()
 	a.saveToken()
-	log.Printf("[speaker] 运行中刷新 serviceToken (userId=%s)", a.client.Token.UserId)
+	log.Printf("[speaker] 失败后重刷 serviceToken 并重试 (userId=%s)", a.client.Token.UserId)
+	return fn()
 }
 
 // refreshServiceToken 用 passToken 重新走 serviceLogin + requestServiceToken 刷新 serviceToken。
@@ -334,9 +329,12 @@ func (a *SpeakerAuth) ListDevices() ([]SpeakerDevice, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
-	devices, err := a.client.ListMinaDevices(0)
-	if err != nil {
+	var devices []miservice.DeviceData
+	if err := a.retryOnAuth(func() error {
+		var e error
+		devices, e = a.client.ListMinaDevices(0)
+		return e
+	}); err != nil {
 		return nil, err
 	}
 	out := make([]SpeakerDevice, 0, len(devices))
@@ -367,8 +365,15 @@ func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
-	return a.client.PlayerPlayUrl(deviceID, url)
+	var res any
+	if err := a.retryOnAuth(func() error {
+		var e error
+		res, e = a.client.PlayerPlayUrl(deviceID, url)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Pause 暂停
@@ -376,8 +381,15 @@ func (a *SpeakerAuth) Pause(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
-	return a.client.PlayerPause(deviceID)
+	var res any
+	if err := a.retryOnAuth(func() error {
+		var e error
+		res, e = a.client.PlayerPause(deviceID)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Stop 停止
@@ -385,8 +397,15 @@ func (a *SpeakerAuth) Stop(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
-	return a.client.PlayerStop(deviceID)
+	var res any
+	if err := a.retryOnAuth(func() error {
+		var e error
+		res, e = a.client.PlayerStop(deviceID)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Resume 恢复
@@ -394,8 +413,15 @@ func (a *SpeakerAuth) Resume(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
-	return a.client.PlayerResume(deviceID)
+	var res any
+	if err := a.retryOnAuth(func() error {
+		var e error
+		res, e = a.client.PlayerResume(deviceID)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // GetStatus 播放状态（对齐 Python：info JSON 解析 status/volume/loop_type）
@@ -403,9 +429,12 @@ func (a *SpeakerAuth) GetStatus(deviceID string) (map[string]any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
-	v, err := a.client.PlayerGetStatus(deviceID)
-	if err != nil {
+	var v any
+	if err := a.retryOnAuth(func() error {
+		var e error
+		v, e = a.client.PlayerGetStatus(deviceID)
+		return e
+	}); err != nil {
 		return nil, err
 	}
 	// 返回结构可能是 map，d.info 是 JSON 字符串
@@ -430,14 +459,21 @@ func (a *SpeakerAuth) SetVolume(deviceID string, volume int) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
-	a.ensureToken()
 	if volume < 0 {
 		volume = 0
 	}
 	if volume > 100 {
 		volume = 100
 	}
-	return a.client.PlayerSetVolume(deviceID, volume)
+	var res any
+	if err := a.retryOnAuth(func() error {
+		var e error
+		res, e = a.client.PlayerSetVolume(deviceID, volume)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Tokens 暴露 token（QR 登录成功后注入用）
