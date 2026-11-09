@@ -1,0 +1,3 @@
+# explore/ 只保留探索原型与历史只读，不跑任何构建。
+# 禁止误提交 node_modules（legacy/vue-frontend 的依赖量巨大，不入仓）
+legacy/vue-frontend/node_modules/

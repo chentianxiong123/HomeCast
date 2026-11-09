@@ -9,6 +9,8 @@
 | `legacy/vue-frontend/` | **老 HomeCast 前端**（Vue 3）：htmx 重构前的旧界面 | 历史参考，不跑 |
 | `legacy/test_fav.json` | 老收藏接口的测试数据 | 历史 fixture |
 | `android/` | **手搓安卓 WebView 壳**（Java）：wails3 安卓壳早期实现 | 兜底参考（可读） |
+| `wasm-mp/` | **微信小程序 WASM 同进程方案**（已放弃）：Go 后端编译 wasm 跑在小程序进程 | 探索留档，不跑 |
+| `mp-html/` | **微信小程序 mp-html 渲染方案**（已废弃）：后端吐 HTML + mp-html 渲 | 探索留档，不跑 |
 
 ## 血缘
 

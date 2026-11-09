@@ -1,0 +1,51 @@
+# docs/ —— 项目文档总目录
+
+正主是 `go/`（业务核心，module `homecast`）+ `wails3/`（各平台壳）。本目录只收排查记录、架构决策、探索总结，不参与构建。
+
+## 排查记录（按时间）
+
+| 文档 | 内容 | 状态 |
+|------|------|------|
+| `2026-10-04-homecast安卓壳方案对比.md` | 安卓壳方案选型 | 已落地 |
+| `2026-10-04-homecast安卓wails3首跑三连坑排查记录.md` | 安卓 wails3 首跑三连坑 | 已解决 |
+| `2026-10-04-homecast安卓SIGSYS崩溃排查与解决.md` | 安卓 SIGSYS 崩溃 | 已解决 |
+| `2026-10-04-homecast-Windows版Wine实跑与WebView2光标问题.md` | Windows Wine + WebView2 光标 | 已解决 |
+| `2026-10-04-小米音箱推送原理与局域网快路径调查.md` | 小米音箱推送 + 局域网快路径 | 已落地 |
+| `2026-10-14-wails壳子优雅使用方案.md` | wails 壳子使用方案 | 已落地 |
+| `2026-10-14-wails系统壳迁移计划.md` | wails 系统壳迁移计划 | 已落地 |
+| `2026-10-17-架构探索与内聚化经验.md` | 架构探索与内聚化 | 参考 |
+| `2026-10-17-框架与架构优异性论证.md` | 框架与架构论证 | 参考 |
+| `2026-11-05-webview移动端UI适配避坑与处理思路.md` | WebView 移动端 UI 适配 | 已落地 |
+| `2026-11-06-多平台歌词控制统一方向（减少适配难度）.md` | 多平台歌词统一方向 | 已落地 |
+| `2026-11-06-歌词控制统一架构（全端一致·SSE推送·后端算行）.md` | 歌词统一架构 | 已落地 |
+| `2026-11-07-音响控制一对多改唯一决策.md` | 音响控制一对多 → 唯一决策 | 已决策 |
+| `2026-11-07-HomeCast-iOS版中文字体豆腐块排查与根治.md` | iOS 中文字体豆腐块 | 已根治 |
+| `2026-11-08-HomeCast-鸿蒙版从编译签名到模拟器跑通排查记录.md` | 鸿蒙版从编译到模拟器跑通 | 已跑通 |
+| `2026-11-09-HomeCast-微信小程序壳-mp-html与webview双版本探索.md` | 小程序壳 A.web-view / B.mp-html 双版本探索 | A 已定，B 废弃 |
+| `2026-11-09-HomeCast-微信小程序壳-mp-html渲染方案探索与废弃.md` | mp-html 渲染方案废弃 | 已废弃 |
+| `2026-11-09-HomeCast-微信小程序壳-WASM同进程方案探索与放弃.md` | WASM 同进程方案放弃 | 已放弃 |
+
+## 架构与决策
+
+| 文档 | 内容 |
+|------|------|
+| `Golang-HTML模板残缺问题排查与治理.md` | Go HTML 模板治理 |
+| `upstream-issue-libc-syslstat.md` | 上游 libc syslstat 问题 |
+| `gh-issue-body.md` | GitHub issue 模板 |
+| `Go转型指导.md` | Go 转型指导 |
+
+## 探索留档（不跑）
+
+| 路径 | 内容 |
+|------|------|
+| `explore/README.md` | 探索区总览（历史只读） |
+| `explore/wasm-mp/README.md` | 小程序 WASM 同进程方案探索（已放弃） |
+| `explore/mp-html/README.md` | 小程序 mp-html 渲染方案探索（已废弃） |
+
+## 约定（快速查阅）
+
+- 后端模块名 `homecast`（保留不动，73 处 import），产品表面名 `mymusic`。
+- 前后端只走真实 HTTP：`http://127.0.0.1:28976`（小程序真机改局域网 IP，后端已监听 0.0.0.0）。
+- 小程序壳零 npm：手写 WXML/JS，mp-html 组件包直接拷贝，唯一 npm 是预览工具 miniprogram-ci（已卸载，真机预览暂缓）。
+- 鸿蒙：ArkTS + NAPI + ArkWeb，`StartServer(dataDir)` 导出，CMake 防绝对路径（`IMPORTED_NO_SONAME TRUE` + `CMAKE_SKIP_RPATH TRUE`）。
+- iOS 歌词/PiP/锁屏按要求暂缓。FreeBSD 不兼容（无壳、未验证）。
