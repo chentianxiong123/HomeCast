@@ -13,6 +13,7 @@ import (
 	"homecast/hx"
 	"homecast/internal/api"
 	"homecast/internal/bilibili"
+	"homecast/internal/service/cache"
 	"homecast/internal/service/cast"
 	"homecast/internal/service/fav"
 	"homecast/internal/service/lyric"
@@ -59,6 +60,8 @@ func New() http.Handler {
 		fav.FavSchema,
 		playlist.PlaylistSchema,
 		lyric.LyricSchema,
+		cache.CacheSchema,
+		cache.SettingsSchema,
 	}, map[string]string{
 		fav.FavTable:     filepath.Join(dataDir, "favorites.json"),
 		playlist.PlaylistTable: filepath.Join(dataDir, "playlist.json"),
@@ -66,8 +69,11 @@ func New() http.Handler {
 		log.Fatalf("migrate db: %v", err)
 	}
 
+	// 音频缓存：文件落盘 dataDir/cache/audio；元数据 SQLite；上限默认 500MB（settings 持久化）
+	cacheSvc := cache.NewCacheService(db, filepath.Join(dataDir, "cache", "audio"), -1)
 	musicSvc := &music.MusicService{Client: client}
 	musicHandler := api.NewMusicHandler(musicSvc)
+	musicHandler.Cache = cacheSvc
 	favHandler := &api.FavHandler{Fav: fav.NewFavService(db)}
 	lyricHandler := &api.LyricHandler{Lyric: lyric.NewLyricStore(db), Music: musicSvc}
 	// offset 变更 → 挂件重定位广播（闭包引用 widgetStateGlobal，server 建完再赋值）
@@ -99,9 +105,10 @@ func New() http.Handler {
 	widgetStateGlobal = widgetState
 	widgetHandler := &api.WidgetHandler{State: widgetState}
 
+	cacheHandler := &api.CacheHandler{Cache: cacheSvc, FavTable: fav.FavTable}
 	mux := api.NewMux(
 		musicHandler, favHandler, lyricHandler, playlistHandler,
-		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler,
+		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler, cacheHandler,
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片

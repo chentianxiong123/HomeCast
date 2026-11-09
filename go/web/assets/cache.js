@@ -1,119 +1,51 @@
-// 歌曲缓存（零件）：IndexedDB 存音频 blob + LRU + 上限（YesPlayMusic automaticallyCacheSongs 同款）。
-// 纯前端零后端：bvid → {data: Blob, size, lastUsed}；超上限按 lastUsed 淘汰最旧。
+// 歌曲缓存（后端落盘版）：逻辑一份住 Go 后端（SQLite 元数据 + 磁盘文件），
+// 前端只经 /api/v1/cache/* 接口读状态/清缓存；播放由 Stream 端点优先走缓存。
+// 保留 hcCache 接口（get/put/sizeMB/clear/cacheAfterPlaying/limitMB）兼容 player.js 旧调用，
+// 但 get 命中判定改由后端 Stream 完成（前端不再存 blob，避免重复缓存）。
 (function () {
-  const DB = 'hc-cache';
-  const STORE = 'songs';
+  const BASE = '/api/v1/cache';
 
-  // 上限（MB）：localStorage hc:cachelimit；'0'=关
+  // 上限（MB）：localStorage hc:cachelimit 为旧键；后端 settings 持久化为权威。
+  // 启动时同步一次：后端有则用后端，否则写后端默认。
   function limitMB() {
     const v = parseInt(localStorage.getItem('hc:cachelimit') || '500', 10);
     return isNaN(v) || v < 0 ? 500 : v;
   }
 
-  function openDB() {
-    return new Promise((resolve, reject) => {
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = () => {
-        if (!r.result.objectStoreNames.contains(STORE)) {
-          r.result.createObjectStore(STORE, { keyPath: 'bvid' });
-        }
-      };
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    });
-  }
-
-  function tx(db, mode, fn) {
-    return new Promise((resolve, reject) => {
-      const t = db.transaction(STORE, mode);
-      const req = fn(t.objectStore(STORE));
-      t.oncomplete = () => resolve(req ? req.result : undefined);
-      t.onerror = () => reject(t.error);
-      t.onabort = () => reject(t.error);
-    });
-  }
-
-  // 取缓存（音质需匹配，否则不算命中；命中刷新 lastUsed）
-  async function get(bvid, quality) {
-    if (!bvid || limitMB() === 0) return null;
-    try {
-      const db = await openDB();
-      const row = await tx(db, 'readwrite', (st) => st.get(bvid));
-      if (row && row.data && row.quality === quality) {
-        row.lastUsed = Date.now();
-        await tx(db, 'readwrite', (st) => st.put(row));
-        return row.data;
-      }
-      return null;
-    } catch (e) { return null; }
-  }
-
-  // 缓存当前音质的流（存 quality 标记；切音质后按需重新缓存）
-  async function put(bvid, blob, quality) {
-    if (!bvid || !blob || limitMB() === 0) return;
-    try {
-      const db = await openDB();
-      await tx(db, 'readwrite', (st) => st.put({ bvid, quality: quality || '', data: blob, size: blob.size, lastUsed: Date.now() }));
-      await trimIfNeeded();
-    } catch (e) {}
-  }
-
-  // LRU 淘汰：总量超上限时删最旧，直到达标
-  async function trimIfNeeded() {
-    const limit = limitMB();
-    if (limit === 0) return;
-    try {
-      const db = await openDB();
-      const rows = await tx(db, 'readonly', (st) => st.getAll());
-      const limitBytes = limit * 1024 * 1024;
-      let total = rows.reduce((s, r) => s + (r.size || 0), 0);
-      if (total <= limitBytes) return;
-      rows.sort((a, b) => (a.lastUsed || 0) - (b.lastUsed || 0)); // 最旧在前
-      const del = tx(db, 'readwrite', (st) => st);
-      for (const r of rows) {
-        if (total <= limitBytes) break;
-        del.delete(r.bvid);
-        total -= r.size || 0;
-      }
-    } catch (e) {}
-  }
-
-  // 已用大小（MB，两位小数）
+  // 已用大小（MB，两位小数）——后端统计
   async function sizeMB() {
     try {
-      const db = await openDB();
-      const rows = await tx(db, 'readonly', (st) => st.getAll());
-      const total = rows.reduce((s, r) => s + (r.size || 0), 0);
-      return Math.round((total / 1024 / 1024) * 100) / 100;
+      const r = await fetch(BASE + '/stats');
+      const d = await r.json();
+      return (d.data && d.data.used_mb) || 0;
     } catch (e) { return 0; }
   }
 
-  async function clear() {
+  // 清空缓存：mode=all 全清 / unfav 只清未收藏
+  async function clear(mode) {
+    try { await fetch(BASE + '/clear?mode=' + (mode || 'all'), { method: 'POST' }); } catch (e) {}
+  }
+
+  // 同步后端上限（设置页切换 / 启动校准）
+  async function syncLimit(mb) {
     try {
-      const db = await openDB();
-      await tx(db, 'readwrite', (st) => st.clear());
+      await fetch(BASE + '/limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit_mb: mb }),
+      });
     } catch (e) {}
   }
 
-  // 后台缓存：播放超过 60s 且未缓存时，拉全量音频存库（防并发）
-  let caching = {};
-  async function cacheAfterPlaying(bvid, streamURL) {
-    if (!bvid || !streamURL || caching[bvid] || limitMB() === 0) return;
-    const have = await get(bvid);
-    if (have) return;
-    caching[bvid] = true;
-    try {
-      const resp = await fetch(streamURL);
-      if (!resp.ok) return;
-      const blob = await resp.blob();
-      if (blob && blob.size > 1024 * 64) { // 防坏流/极小响应
-        await put(bvid, blob, (streamURL.match(/quality=(\d+)/) || [0, ''])[1]);
-        hcBus.emit('cache-changed');
-      }
-    } catch (e) {} finally {
-      delete caching[bvid];
-    }
-  }
+  // 兼容旧接口：get 不再本地取 blob（后端 Stream 已优先缓存）。返回 null 让
+  // player.js 走网络流，后端负责回写缓存。保留以便旧调用不报错。
+  async function get() { return null; }
 
-  window.hcCache = { get, put, sizeMB, clear, cacheAfterPlaying, limitMB };
+  // 兼容旧接口：put 不再本地存（后端 Stream 已处理）。
+  async function put() {}
+
+  // 兼容旧接口：播放超 60s 触发——后端 Stream 已边播边缓存，此处 no-op。
+  async function cacheAfterPlaying() {}
+
+  window.hcCache = { get, put, sizeMB, clear, cacheAfterPlaying, limitMB, syncLimit };
 })();

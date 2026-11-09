@@ -6,8 +6,6 @@
   const audio = document.getElementById('audio');
   if (!audio) return;
   const $ = (id) => document.getElementById(id);
-  let curBlobURL = null; // 当前缓存 blob URL（换歌释放）
-  let cacheScheduled = false; // 后台缓存防重复
   const el = {
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
@@ -152,9 +150,6 @@
   }
   function loadSong(d) {
     song = d;
-    // 释放上一首的缓存 blob URL（防内存泄漏）
-    if (curBlobURL) { try { URL.revokeObjectURL(curBlobURL); } catch (e) {} curBlobURL = null; }
-    cacheScheduled = false;
     notify(d);
     rememberRecent(d);
     hcBus.emit('now', d); // 歌词页/其他孤岛取当前曲
@@ -164,20 +159,10 @@
     el.artist.textContent = d.artist || '未知作者';
     el.cover.src = d.cover || '';
     el.cover.alt = d.title;
-    // 播放源：缓存命中 → blob URL（秒开）；未命中 → 网络流（播过 60s 后台缓存）
+    // 播放源：后端 Stream 端点（优先缓存秒开；未命中转发 B站流并边播边落盘缓存）
     const streamURL = '/api/v1/music/stream/' + d.bvid + '?quality=' + quality;
-    const useCached = () => {
-      window.hcCache.get(d.bvid, quality).then((blob) => {
-        if (!blob) { audio.src = streamURL; audio.play().catch(() => {}); }
-        else {
-          curBlobURL = URL.createObjectURL(blob);
-          audio.src = curBlobURL;
-          audio.play().catch(() => {});
-          setState('playing'); // 缓存命中视为可播
-        }
-      });
-    };
-    if (window.hcCache) useCached(); else { audio.src = streamURL; audio.play().catch(() => {}); }
+    audio.src = streamURL;
+    audio.play().catch(() => {});
     setState('loading');
     hcBus.emit('nowplaying', { bvid: d.bvid });
     saveP();
@@ -322,11 +307,6 @@
   audio.addEventListener('loadedmetadata', () => { el.dur.textContent = fmt(audio.duration); });
   audio.addEventListener('timeupdate', () => {
     if (!song) return;
-    // 后台缓存：播放超 60s 且非缓存播放且未开始缓存 → 拉全量入库（LRU 上限管控）
-    if (!curBlobURL && window.hcCache && !cacheScheduled && audio.currentTime > 60) {
-      cacheScheduled = true;
-      window.hcCache.cacheAfterPlaying(song.bvid, '/api/v1/music/stream/' + song.bvid + '?quality=' + quality);
-    }
     if (!spkDid) { // 音响模式：进度由 /speaker/events SSE 推（不覆盖 web）
       el.cur.textContent = fmt(audio.currentTime);
       const d = audio.duration || 1;

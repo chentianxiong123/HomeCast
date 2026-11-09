@@ -153,8 +153,10 @@
       '<p class="text-xs text-gray-500 dark:text-gray-400 mb-3">自动缓存播放超过 60 秒的歌，再次播放秒开；超上限自动淘汰最旧</p>' +
       '<div class="flex items-center justify-between mb-3">' +
       '<span class="text-sm text-gray-500 dark:text-gray-400">已用：<span id="cache-used" class="text-gray-700 dark:text-gray-200 font-medium">计算中…</span></span>' +
+      '<div class="flex gap-2">' +
+      '<button id="cache-clear-unfav" class="px-3 py-1.5 rounded-full text-sm text-gray-400 hover:text-red-400 border border-gray-700 transition-colors">清空未收藏</button>' +
       '<button id="cache-clear" class="px-3 py-1.5 rounded-full text-sm text-gray-400 hover:text-red-400 border border-gray-700 transition-colors">清空缓存</button>' +
-      '</div>' +
+      '</div></div>' +
       '<div class="flex items-center justify-between">' +
       '<span class="text-sm text-gray-500 dark:text-gray-400">缓存上限</span>' +
       '<select id="cache-limit" class="bg-gray-100 dark:bg-gray-700 text-sm rounded-lg px-2 py-1 border border-gray-300 dark:border-gray-600">' +
@@ -244,14 +246,32 @@
       }
     }
     refreshCacheUI();
+    // 后端上限同步：启动时拉一次权威值（localStorage 为旧键，后端 settings 持久化）
+    if (window.hcCache) {
+      fetch('/api/v1/cache/limit').then((r) => r.json()).then((d) => {
+        const v = d.data && d.data.limit_mb;
+        if (typeof v === 'number') {
+          W('hc:cachelimit', String(v));
+          const sel = document.getElementById('cache-limit');
+          if (sel) sel.value = String(v);
+        }
+      }).catch(() => {});
+    }
     const cacheLimit = document.getElementById('cache-limit');
     if (cacheLimit) cacheLimit.addEventListener('change', () => {
-      W('hc:cachelimit', cacheLimit.value); hcBus.emit('toast', { msg: '缓存上限已更新' }); refreshCacheUI();
+      W('hc:cachelimit', cacheLimit.value);
+      if (window.hcCache && window.hcCache.syncLimit) window.hcCache.syncLimit(parseInt(cacheLimit.value, 10) || 0);
+      hcBus.emit('toast', { msg: '缓存上限已更新' }); refreshCacheUI();
     });
     const cacheClear = document.getElementById('cache-clear');
     if (cacheClear) cacheClear.addEventListener('click', () => {
       if (!window.confirm('确定清空全部歌曲缓存？')) return;
-      window.hcCache.clear().then(() => { hcBus.emit('toast', { msg: '缓存已清空' }); refreshCacheUI(); });
+      window.hcCache.clear('all').then(() => { hcBus.emit('toast', { msg: '缓存已清空' }); refreshCacheUI(); });
+    });
+    const cacheClearUnfav = document.getElementById('cache-clear-unfav');
+    if (cacheClearUnfav) cacheClearUnfav.addEventListener('click', () => {
+      if (!window.confirm('确定清空未收藏歌曲的缓存？')) return;
+      window.hcCache.clear('unfav').then(() => { hcBus.emit('toast', { msg: '未收藏缓存已清空' }); refreshCacheUI(); });
     });
     // 歌词缓存：计数 + 清空（与歌词面板/字幕条共用 hc:lyc:cache）
     const lycClear = document.getElementById('lyc-clear');

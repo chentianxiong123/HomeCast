@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"homecast/internal/bilibili"
+	"homecast/internal/service/cache"
 	"homecast/internal/service/music"
 )
 
@@ -28,6 +29,7 @@ func errResp(w http.ResponseWriter, status int, msg string) {
 // MusicHandler 音乐端点集合
 type MusicHandler struct {
 	Music *music.MusicService
+	Cache *cache.CacheService // 音频缓存（可空：无缓存功能时直转发）
 }
 
 // NewMusicHandler 构造
@@ -60,8 +62,18 @@ func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
 	ok(w, res)
 }
 
+// serveFile 本地缓存文件响应（支持 Range：拖动进度条）
+func serveFile(w http.ResponseWriter, r *http.Request, path string) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+	http.ServeFile(w, r, path)
+}
+
 // Stream GET /api/v1/music/stream/{bvid}?quality=192
-// DASH 音频直转：带 referer 头直接转发流，不转码不缓存，支持 Range。
+// 缓存优先（秒开）：命中缓存文件直接 serve；未命中带 referer 直转发 B站流。
+// 支持 Range（播放器拖动进度条）。
 func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	bvid := r.PathValue("bvid")
 	if bvid == "" {
@@ -72,6 +84,16 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	if quality == 0 {
 		quality = bilibili.PreferredQuality
 	}
+
+	// 1. 缓存命中：直接 serve 本地文件（秒开，支持 Range）
+	if h.Cache != nil {
+		if _, _, ok := h.Cache.Get(bvid); ok {
+			serveFile(w, r, h.Cache.FilePath(bvid))
+			return
+		}
+	}
+
+	// 2. 未命中：取 B站流地址并转发
 	stream, err := h.Music.GetAudioStream(bvid, quality)
 	if err != nil {
 		log.Printf("[stream] %s: %v", bvid, err)
@@ -83,7 +105,6 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 带 referer 直转发 B站流
 	extra := http.Header{}
 	if rg := r.Header.Get("Range"); rg != "" {
 		extra.Set("Range", rg)
@@ -112,7 +133,14 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "audio/mpeg")
 	}
 	w.WriteHeader(upResp.StatusCode)
-	if r.Method != http.MethodHead {
+	if r.Method == http.MethodHead {
+		return
+	}
+
+	// 3. 回写缓存：上限开启且非 Range（全量流）时，边转发边 tee 落盘
+	if h.Cache != nil && h.Cache.LimitMB() > 0 && r.Header.Get("Range") == "" {
+		h.Cache.StreamAndCache(w, bvid, quality, upResp.Body)
+	} else {
 		_, _ = io.Copy(w, upResp.Body)
 	}
 }
