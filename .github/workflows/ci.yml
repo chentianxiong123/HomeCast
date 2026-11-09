@@ -54,11 +54,11 @@ jobs:
       - name: 官方构建（Linux，gtk4 + go:embed）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          cd wails3 && wails3 build
+          cd wails3 && wails3 build && cp bin/hcexp ../mymusic-linux && chmod +x ../mymusic-linux && ls -lh ../mymusic-linux
       - uses: actions/upload-artifact@v4
         with:
-          name: hcexp-linux
-          path: wails3/bin/hcexp
+          name: mymusic-linux
+          path: mymusic-linux
           if-no-files-found: error
 
   # ── Linux 壳级 E2E 冒烟（Xvfb 启动真实 wails3 app：进程/后端/页面/API 最小链路）──
@@ -82,12 +82,13 @@ jobs:
       - name: 下载 build-linux 产物
         uses: actions/download-artifact@v4
         with:
-          name: hcexp-linux
+          name: mymusic-linux
           path: wails3/bin
       - name: 修复产物权限
-        run: chmod +x wails3/bin/hcexp
+        run: chmod +x wails3/bin/mymusic-linux
       - name: 壳级 E2E 冒烟（Xvfb 启动真实 app + 断言进程/后端/页面/API）
         run: |
+          cp wails3/bin/mymusic-linux wails3/bin/hcexp
           bash scripts/shell-e2e.sh wails3/bin/hcexp
 
   # ── Windows 桌面构建（mingw 交叉编译，无需 Windows runner）──
@@ -112,11 +113,11 @@ jobs:
       - name: 官方构建（Windows，mingw + CGO）
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          cd wails3 && wails3 build GOOS=windows
+          cd wails3 && wails3 build GOOS=windows && cp bin/hcexp.exe ../mymusic-windows.exe && chmod +x ../mymusic-windows.exe && ls -lh ../mymusic-windows.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: hcexp-win
-          path: wails3/bin/hcexp.exe
+          name: mymusic-windows
+          path: mymusic-windows.exe
           if-no-files-found: error
 
   # ── 鸿蒙：轻量资产检查（GitHub runner 无 DevEco/HarmonyOS SDK/模拟器，无法跑真 HAP 构建；
@@ -184,9 +185,9 @@ jobs:
           done
           echo "复现手册完整"
 
-  # ── 安卓 Java 编译检查（防 Java 回归；Go .so 预编译进 jniLibs，Java 独立）──
+  # ── 安卓 Java 编译 + 出 debug 签名 APK（jniLibs 已预置 libwails.so，无需交叉编 Go）──
   build-android:
-    name: 安卓 Java 编译检查
+    name: 构建安卓 APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -201,10 +202,27 @@ jobs:
           test -x "$SDKM" || SDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)"
           yes | "$SDKM" --licenses > /dev/null 2>&1 || true
           "$SDKM" "platform-tools" "platforms;android-35" "build-tools;35.0.0" | tail -3
-      - name: 安卓 Java 编译（LyricOverlayService/MainActivity 等）
+      - name: 缓存 Gradle（runner 拉 wrapper 分发容易超时，缓存后不重复下）
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: false
+      - name: 安卓 Java 编译 + assembleRelease（LyricOverlayService/MainActivity 等）
         run: |
           cd wails3/build/android
-          ./gradlew :app:compileReleaseJavaWithJavac --no-daemon
+          ./gradlew :app:assembleRelease --no-daemon
+      - name: 收集 APK（无 keystore 时 gradle 自动走 debug 签名，可装测试）
+        run: |
+          set -euo pipefail
+          APK="$(find wails3/build/android/app/build/outputs/apk/release -name '*.apk' | head -1)"
+          test -n "$APK" || { echo '未找到 APK'; exit 1; }
+          cp "$APK" mymusic-android-arm64.apk
+          ls -lh mymusic-android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mymusic-android
+          path: mymusic-android-arm64.apk
+          if-no-files-found: error
 
   # ── macOS 桌面构建（macos runner + Xcode；cgo + Cocoa/WebKit）──
   build-macos:
@@ -225,11 +243,41 @@ jobs:
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           cd wails3 && wails3 build
+      - name: 打包 macOS 产物
+        run: |
+          set -euo pipefail
+          cd wails3/bin
+          if [ -d hcexp.app ]; then zip -qr ../../mymusic-macos.app.zip hcexp.app; else cp hcexp ../../mymusic-macos; fi
+          ls -lh ../..
       - uses: actions/upload-artifact@v4
         with:
-          name: hcexp-macos
-          path: wails3/bin/hcexp
+          name: mymusic-macos
+          path: mymusic-macos*
           if-no-files-found: error
+
+  # ── 发行：打 tag 时聚合各端产物发 GitHub Release（不较真验证，出包即发）──
+  release:
+    name: 发行 Release（聚合各端包）
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-macos, build-ios, build-android]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 整理产物名（各 job 已命名，这里只列清单）
+        run: |
+          set -euo pipefail
+          ls -lh dist
+          echo '=== 待发产物 ===' && ls -lh dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: false
+          generate_release_notes: true
 
   # ── iOS 模拟器构建（macos runner + Xcode；架构自适应 + 模拟器 ad-hoc 签名）──
   build-ios:
@@ -250,8 +298,15 @@ jobs:
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           cd wails3 && wails3 task ios:package
+      - name: 打包 iOS 模拟器 .app（zip 避免目录被打散）
+        run: |
+          set -euo pipefail
+          cd wails3/bin
+          test -d hcexp.app || { echo '未产出 hcexp.app'; ls -R .; exit 1; }
+          zip -qr ../../mymusic-ios-simulator.app.zip hcexp.app
+          ls -lh ../..
       - uses: actions/upload-artifact@v4
         with:
-          name: hcexp-ios
-          path: wails3/bin/hcexp.app
+          name: mymusic-ios
+          path: mymusic-ios-simulator.app.zip
           if-no-files-found: error

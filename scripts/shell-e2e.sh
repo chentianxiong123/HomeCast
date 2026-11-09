@@ -8,7 +8,15 @@ APP="${1:-wails3/bin/hcexp}"
 PORT="${HC_PORT:-28976}"
 DATA_DIR="$(mktemp -d)"
 LOG="$(mktemp)"
-cleanup() { pkill -f "xvfb-run.*$APP" 2>/dev/null; pkill -f "$APP" 2>/dev/null; rm -rf "$DATA_DIR" "$LOG"; }
+APP_PID=""   # trap 可能在赋值前触发，set -u 下需预置
+cleanup() {
+  # 只杀自己起的那个进程组（setsid 使 APP_PID 同时是 PGID），不用 pkill -f 匹配路径：
+  # pkill -f "$APP" 会匹配到本脚本自身命令行（bash scripts/shell-e2e.sh wails3/bin/hcexp）→ 自杀 exit 143
+  [ -n "${APP_PID:-}" ] && kill -TERM -"$APP_PID" 2>/dev/null
+  wait "${APP_PID:-}" 2>/dev/null
+  rm -rf "$DATA_DIR" "$LOG"
+  return 0
+}
 trap cleanup EXIT
 
 echo "[shell-e2e] 启动真实 wails3 app（Xvfb）：$APP"
@@ -60,3 +68,4 @@ fi
 
 echo ""
 echo "[shell-e2e] ✅ Linux 壳级 E2E 冒烟全过（进程/后端/页面/API）"
+exit 0
