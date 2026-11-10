@@ -68,6 +68,8 @@ type SpeakerController interface {
 	Control(did, action string, volume int) (map[string]any, error)
 	// Play 投送歌曲到音箱（切歌时重新投下一曲）
 	Play(bvid, did string, req SpkPlayReq) (map[string]any, error)
+	// Seek 跳转（音箱模式：改内存 offset + 重下发 URL）
+	Seek(did string, sec float64) (map[string]any, error)
 }
 
 // NewPlaybackState 构造
@@ -244,7 +246,17 @@ func (p *PlaybackState) Seek(sec float64) {
 		sec = 0
 	}
 	p.cur.Position = sec
+	did := p.cur.SpkDID
+	isSpk := p.cur.Source == "speaker" && did != ""
 	p.mu.Unlock()
+	if isSpk {
+		// 音箱模式：真 seek（改内存 offset + 重下发 URL 触发音箱重拉）
+		if spk, _ := p.spkActive(); spk != nil {
+			if _, err := spk.Seek(did, sec); err != nil {
+				log.Printf("[playback] 音箱 seek 失败: %v", err)
+			}
+		}
+	}
 	p.bcastProgress()
 }
 

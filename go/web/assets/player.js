@@ -72,8 +72,8 @@
       el.dur.textContent = fmt(p.duration);
       el.prog.value = Math.round((p.position / p.duration) * 1000);
     }
-    // 音箱模式：进度条置灰不可拖（音箱固件无 seek API，参考项目 xiaomusic/MiAir 同样不支持）
-    if (el.prog) el.prog.classList.toggle('opacity-40', p.source === 'speaker');
+    // 音箱模式：进度条可拖（seek 走后端真 seek，不再置灰）
+    if (el.prog) el.prog.classList.toggle('opacity-40', false);
   }
 
   // ---- 播放模式图标 ----
@@ -121,8 +121,15 @@
   }
   function seek(pct) {
     if (!pb().bvid) return;
-    if (pb().source === 'speaker') return; // 音箱固件无 seek API，忽略拖动
     const sec = (pct / 100) * (pb().duration || audio.duration || 0);
+    if (pb().source === 'speaker') {
+      // 音箱模式：seek 走后端（改内存 offset + 重下发 URL 触发音箱重拉）
+      seeking = true;
+      window.hcState.cmd('seek', { sec });
+      setTimeout(() => { seeking = false; }, 600);
+      render();
+      return;
+    }
     seeking = true;
     audio.currentTime = sec; // 本地即时（高频 UI），随后上报后端
     window.hcState.progress(sec, pb().duration, !audio.paused);
@@ -290,12 +297,11 @@
 
   // ---- 控制事件 ----
   el.prog.addEventListener('change', () => {
-    if (pb().source === 'speaker') { el.prog.value = Math.round((pb().position / (pb().duration || 1)) * 1000); return; } // 音箱不可 seek，弹回
     seeking = false;
     seek((el.prog.value / 1000) * 100);
   });
   el.prog.addEventListener('input', () => {
-    if (pb().source === 'speaker') return; // 音箱不可 seek，不更新时间预览
+    // 拖动中本地即时反馈（高频 UI），松手 change 才 seek+上报
     const d = pb().duration || audio.duration || 1;
     el.cur.textContent = fmt((el.prog.value / 1000) * d);
   });

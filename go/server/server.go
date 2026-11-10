@@ -220,3 +220,7 @@ func (a *speakerControllerAdapter) Play(bvid, did string, req playback.SpkPlayRe
 		Title: req.Title, Duration: req.Duration, NextBVID: req.NextBVID,
 	})
 }
+
+func (a *speakerControllerAdapter) Seek(did string, sec float64) (map[string]any, error) {
+	return a.svc.Seek(did, sec, 30280)
+}
