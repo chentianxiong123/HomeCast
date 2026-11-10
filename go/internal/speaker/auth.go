@@ -34,10 +34,12 @@ type SpeakerDevice struct {
 }
 
 // 部分硬件需要用 play_music_api（对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API）
+// needUsePlayMusicAPI 对齐 xiaomusic 实测结论：
+// LX05A/L07A/L15A 实测用 player_play_url 成功（play_by_music_url 失败），
+// 所以不含它们（xiaomusic 列表对，MiAir 含它们是错的）。
 var needUsePlayMusicAPI = map[string]bool{
 	"X08C": true, "X08E": true, "X8F": true, "X4B": true,
-	"LX05": true, "LX05A": true, "L07A": true, "OH2": true,
-	"OH2P": true, "X6A": true, "L15A": true,
+	"LX05": true, "OH2": true, "OH2P": true, "X6A": true,
 }
 
 // NeedPlayMusicAPI 硬件是否走 music API
@@ -372,8 +374,8 @@ func presenceOnline(p string) bool { return p == "online" }
 const DefaultAudioID = "448161862632079419"
 
 // PlayURL 播放 URL（deviceId 是设备 hardware ID）。
-// 硬件分文：需要 music API 的设备（LX05A/L07A 等）用 play_by_music_url（带 audio_id），
-// 否则用 play_by_url——对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API 分支。
+// 硬件分文：需要 music API 的设备（xiaomusic NEED_USE_PLAY_MUSIC_API 列表）
+// 用 play_by_music_url（带 audio_id），否则用 play_by_url——对齐 xiaomusic 分支。
 func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 	if a.client == nil {
 		return nil, nil
@@ -395,7 +397,7 @@ func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 
 // PlayerPlayMusicUrl 自实现 play_by_music_url（miservice-go 库没有该方法）。
 // 对齐 Python miservice minaservice.play_by_music_url：ubus mediaplayer.player_play_music
-// 带 audio_id（LX05A/L07A 等需要 music API 的硬件）。
+// 带 audio_id（xiaomusic NEED_USE_PLAY_MUSIC_API 列表内的硬件）。
 func (a *SpeakerAuth) PlayerPlayMusicUrl(deviceID, url, audioID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
@@ -410,8 +412,8 @@ func (a *SpeakerAuth) PlayerPlayMusicUrl(deviceID, url, audioID string) (any, er
 }
 
 // Pause 暂停
-// 对齐 MiAir：需要 music API 的设备（LX05A/L07A 等）调用 pause 后 API 状态不会
-// 正确更新为 paused（status=2），需改用 player_stop 实现暂停语义（workaround）。
+// 对齐 xiaomusic：需要 music API 的设备（NEED_USE_PLAY_MUSIC_API 列表）调用 pause 后
+// API 状态不会正确更新为 paused（status=2），需改用 player_stop 实现暂停语义（workaround）。
 func (a *SpeakerAuth) Pause(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil

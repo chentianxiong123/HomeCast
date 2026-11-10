@@ -2,24 +2,28 @@ package speaker
 
 import "testing"
 
-// TestNeedPlayMusicAPI 硬件分文：需要 music API 的设备（LX05A/L07A 等）走 play_by_music_url。
-// 对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API（含用户两台设备 L07A + LX05A）。
+// TestNeedPlayMusicAPI 硬件分文：需要 music API 的设备走 play_by_music_url。
+// 对齐 xiaomusic NEED_USE_PLAY_MUSIC_API（不含 LX05A/L07A/L15A）。
+// 实测反转：LX05A 用 player_play_url 成功 / play_by_music_url 失败，
+// 所以 LX05A/L07A/L15A 不在名单（MiAir 含它们是错的）。
 func TestNeedPlayMusicAPI(t *testing.T) {
 	cases := []struct {
 		hw   string
 		want bool
 	}{
-		{"L07A", true},   // Redmi小爱音箱Play L07A（用户设备）
-		{"LX05A", true},  // 小爱音箱万能遥控版 LX05A（用户设备）
-		{"LX05", true},   // 万能遥控版
-		{"X08C", true},   // 小爱音箱
-		{"L15A", true},   // 小爱音箱 Pro
+		// xiaomusic 名单内（走 music API）
+		{"LX05", true}, // 万能遥控版（注意：LX05 在，LX05A 不在）
+		{"X08C", true}, // 小爱音箱
+		{"X08E", true},
+		{"X8F", true},
+		{"X4B", true},
 		{"X6A", true},
 		{"OH2", true},
 		{"OH2P", true},
-		{"X4B", true},
-		{"X8F", true},
-		{"X08E", true},
+		// xiaomusic 名单外（走 play_by_url，实测 LX05A 用 play_by_url 成功）
+		{"LX05A", false}, // 小爱音箱万能遥控版 LX05A（用户设备，实测 play_by_url code:0）
+		{"L07A", false},  // Redmi小爱音箱Play L07A（用户设备）
+		{"L15A", false},  // 小爱音箱 Pro
 		// 不需要 music API 的设备（非名单）
 		{"", false},
 		{"unknown", false},
