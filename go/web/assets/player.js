@@ -86,11 +86,14 @@
   // ---- 状态渲染 ----
   function render() {
     el.dock.classList.toggle('hidden', !song);
-    const playing = state === 'playing';
+    // 音响模式（spkDid 非空）用音箱状态 spkState 驱动图标/频谱，否则用 web state。
+    // 修复：投送到音箱后 web audio 已 pause（state='paused'），但音箱在播（spkState='playing'）
+    // ——之前图标永远显示「▶」，不随音箱实际状态。
+    const playing = spkDid ? spkState === 'playing' : state === 'playing';
     el.toggle.innerHTML = playing
       ? '<svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
       : '<svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-    if (el.eq) el.eq.style.display = state === 'playing' ? 'flex' : 'none'; // 频谱只在真正播放时出现（inline 优先，防 flex 覆盖）
+    if (el.eq) el.eq.style.display = playing ? 'flex' : 'none'; // 频谱只在真正播放时出现（inline 优先，防 flex 覆盖）
     el.prev.disabled = el.next.disabled = !song || queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);
