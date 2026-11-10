@@ -77,7 +77,18 @@
   }, true);
 
   function toggleFav(item) {
-    // 取消收藏需确认：先查当前是否已收藏
+    // 统一走 hcFav（全局集合 + 确认 + POST + 广播），各收藏按钮逻辑一致
+    if (window.hcFav) {
+      const fakeBtn = document.createElement('button');
+      fakeBtn.dataset.bvid = item.bvid;
+      fakeBtn.dataset.title = item.title || '';
+      fakeBtn.dataset.artist = item.artist || '';
+      fakeBtn.dataset.cover = item.cover || '';
+      fakeBtn.dataset.duration = String(item.duration || 0);
+      window.hcFav.toggle(fakeBtn);
+      return;
+    }
+    // 降级（无 hcFav）：原逻辑
     fetch('/api/v1/fav/list')
       .then((r) => r.json())
       .then((j) => {

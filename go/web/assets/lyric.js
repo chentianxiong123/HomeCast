@@ -36,11 +36,26 @@
     return m + ':' + String(r).padStart(2, '0');
   }
 
+  // 锁 body 滚动：歌词面板全屏时主页面不滚（防滚动穿透）。
+  // 用 html/body overflow hidden + 恢复原值；滚动穿透根因是面板 fixed 但 body 仍可滚。
+  let prevBodyOverflow = '';
+  function lockBodyScroll(on) {
+    const b = document.body;
+    if (!b) return;
+    if (on) {
+      prevBodyOverflow = b.style.overflow;
+      b.style.overflow = 'hidden';
+    } else {
+      b.style.overflow = prevBodyOverflow;
+    }
+  }
+
   function show() { // 滑入动画：先显示再加 .ly-show（双 rAF 保证过渡生效）
     panel.classList.remove('ly-hidden');
     void panel.offsetWidth; // 强制 reflow
     panel.classList.add('ly-show');
     closeDrawers(); // 打开时抽屉默认收起（歌词全宽）
+    lockBodyScroll(true); // 锁 body 滚动：歌词页全屏时主页面不滚（防滚动穿透）
   }
 
   // ── 移动端抽屉：候选/工具按需展开（歌词区默认全宽；sm: 桌面三栏不动） ──
@@ -70,6 +85,7 @@
     panel.classList.remove('ly-show');
     setTimeout(() => { if (!panel.classList.contains('ly-show')) panel.classList.add('ly-hidden'); }, 300);
     lines = []; lastIdx = -1; linesEl.innerHTML = '';
+    lockBodyScroll(false); // 解锁 body 滚动
   }
 
   // 歌词时间显示开关（YesPlayMusic showLyricsTime 同款；hc:lytime 持久）
@@ -391,19 +407,33 @@
   document.getElementById('ly-nudge-down').addEventListener('click', () => nudge(-0.5));
   // 一键归零：点击偏移值显示 → resetOffset（bili-music 同款；复用 nudge 路径持久化+广播）
   if (nudgeVal) nudgeVal.addEventListener('click', () => { if (offset !== 0) nudge(-offset); });
-  // 侧栏歌曲操作（网易云歌词页同款）
-  document.getElementById('ly-fav').addEventListener('click', () => {
-    if (!currentSong) return;
-    const fd = new FormData();
-    fd.set('bvid', currentSong.bvid);
-    fd.set('title', currentSong.title || '');
-    fd.set('artist', currentSong.artist || '');
-    fd.set('cover', currentSong.cover || '');
-    fd.set('duration', String(currentSong.duration || 0));
-    fetch('/hx/fav/toggle', { method: 'POST', body: fd })
-      .then(() => hcBus.emit('toast', { msg: '收藏已切换 ♥' }))
-      .catch(() => hcBus.emit('toast', { msg: '收藏失败' }));
-  });
+  // 侧栏歌曲操作（网易云歌词页同款）：收藏统一走 hcFav（全局集合 + 广播）
+  const lyFavBtn = document.getElementById('ly-fav');
+  if (lyFavBtn) {
+    lyFavBtn.addEventListener('click', () => {
+      if (!currentSong || !currentSong.bvid) return;
+      if (window.hcFav) {
+        // 临时构造 .hc-fav 语义（data-* 从 currentSong），调统一 toggle
+        const fakeBtn = lyFavBtn;
+        fakeBtn.dataset.bvid = currentSong.bvid;
+        fakeBtn.dataset.title = currentSong.title || '';
+        fakeBtn.dataset.artist = currentSong.artist || '';
+        fakeBtn.dataset.cover = currentSong.cover || '';
+        fakeBtn.dataset.duration = String(currentSong.duration || 0);
+        window.hcFav.toggle(fakeBtn);
+      } else {
+        const fd = new FormData();
+        fd.set('bvid', currentSong.bvid);
+        fd.set('title', currentSong.title || '');
+        fd.set('artist', currentSong.artist || '');
+        fd.set('cover', currentSong.cover || '');
+        fd.set('duration', String(currentSong.duration || 0));
+        fetch('/hx/fav/toggle', { method: 'POST', body: fd })
+          .then(() => hcBus.emit('toast', { msg: '收藏已切换 ♥' }))
+          .catch(() => hcBus.emit('toast', { msg: '收藏失败' }));
+      }
+    });
+  }
   document.getElementById('ly-copy').addEventListener('click', () => {
     if (!currentSong || !currentSong.bvid) return;
     navigator.clipboard.writeText('https://www.bilibili.com/video/' + currentSong.bvid)

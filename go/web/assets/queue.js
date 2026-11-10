@@ -2,7 +2,6 @@
 // 数据在 player 进程内，页面只画（能重绘就别同步）
 (function () {
   let list = [], idx = -1;
-  let favedSet = new Set();
 
   // 初始恢复：读持久化队列（hc:queue），再靠广播覆盖——避免 player restoreP 广播早于本监听注册而丢队列
   try {
@@ -24,28 +23,12 @@
   }
 
   // 收藏状态集合（本地 SQLite 接口，稳定）；失败静默（按钮保持未收藏灰）
-  fetch('/api/v1/fav/list').then(function (r) { return r.json(); }).then(function (j) {
-    if (j && j.data && Array.isArray(j.data)) {
-      favedSet = new Set(j.data.map(function (f) { return f && f.bvid; }).filter(Boolean));
-      render();
-    }
-  }).catch(function () {});
+  // 已由 fav.js hcFav.load 全局维护，此处不重复加载
 
-  // 收藏按钮：未收藏=空心白/灰心，已收藏=实心红心（updateFavBtn 切换）
+  // 收藏按钮：未收藏=空心白/灰心，已收藏=实心红心（状态由 hcFav.syncBtn 同步）
   const FAV_HOLLOW = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>';
-  const FAV_SOLID = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.6-9.5-9C.8 8.6 2.3 5 5.5 5 8 5 12 8 12 8s4-3 6.5-3c3.2 0 4.7 3.6 3 7-2.5 4.4-9.5 9-9.5 9z"/></svg>';
   function favBtnHTML(q) {
-    return '<button class="q-fav w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-bvid="' + esc(q.bvid) + '" title="收藏">' + FAV_HOLLOW + '</button>';
-  }
-
-  function updateFavBtn(btn, faved) {
-    btn.classList.toggle('text-pink-500', faved);
-    btn.classList.toggle('dark:text-pink-400', faved);
-    btn.classList.toggle('text-gray-500', !faved);
-    btn.classList.toggle('dark:text-gray-400', !faved);
-    btn.title = faved ? '取消收藏' : '收藏';
-    const svg = btn.querySelector('svg');
-    if (svg) svg.outerHTML = faved ? FAV_SOLID : FAV_HOLLOW;
+    return '<button class="q-fav hc-fav w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-bvid="' + esc(q.bvid) + '" data-title="' + esc(q.title || '') + '" data-artist="' + esc(q.artist || '') + '" data-cover="' + esc(q.cover || '') + '" data-duration="' + (q.duration || 0) + '" title="收藏">' + FAV_HOLLOW + '</button>';
   }
 
   // 「上次在听」卡片（hc:last：手动点播时记录，刷新/播完永久保留；点卡片直接播）
@@ -160,25 +143,9 @@
         if (s) hcBus.emit('play-next', s);
       });
     });
-    // 收藏/取消收藏：先查状态（favedSet）→ 已收藏要确认（对齐右键菜单语义）
+    // 收藏按钮：状态同步交给 hcFav（fav.js 事件委托接管点击，全局集合+广播统一）
     view.querySelectorAll('.q-fav').forEach((btn) => {
-      updateFavBtn(btn, favedSet.has(btn.dataset.bvid));
-      btn.addEventListener('click', async () => {
-        const q = list.find((x) => x.bvid === btn.dataset.bvid);
-        if (!q) return;
-        const faved = favedSet.has(q.bvid);
-        if (faved && !window.confirm('确定取消收藏？')) return;
-        // 安卓壳（wails3 asset 桥）丢弃 POST body——参数走 query（Go 侧 r.FormValue 两者都认）
-        const params = new URLSearchParams({ bvid: q.bvid, title: q.title || '', artist: q.artist || '', cover: q.cover || '' });
-        if (q.duration != null) params.set('duration', q.duration);
-        try {
-          const r = await fetch('/hx/fav/toggle?' + params.toString(), { method: 'POST' });
-          if (!r.ok) return;
-          if (faved) favedSet.delete(q.bvid); else favedSet.add(q.bvid);
-          updateFavBtn(btn, !faved);
-          hcBus.emit('toast', { msg: !faved ? '已收藏 ♥' : '已取消收藏' });
-        } catch (e) { /* 网络失败静默 */ }
-      });
+      if (window.hcFav) window.hcFav.syncBtn(btn);
     });
     const clearBtn = view.querySelector('.queue-clear');
     if (clearBtn) clearBtn.addEventListener('click', () => hcBus.emit('queue-clear'));

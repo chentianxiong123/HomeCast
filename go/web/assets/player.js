@@ -13,7 +13,7 @@
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
     cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
-    qualityBtn: $('d-quality'), eq: $('d-eq'),
+    qualityBtn: $('d-quality'), eq: $('d-eq'), fav: $('d-fav'),
   };
   if (!el.dock || !el.toggle) return;
 
@@ -53,6 +53,18 @@
       if (el.cover.getAttribute('src') !== p.cover) { el.cover.src = p.cover || ''; el.cover.alt = p.title || ''; }
       if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
       renderMode(p.play_mode);
+      // 收藏按钮同步：data-* 属性更新 + 状态刷新（统一 hcFav）
+      const favBtn = el.fav;
+      if (favBtn) {
+        if (favBtn.dataset.bvid !== p.bvid) {
+          favBtn.dataset.bvid = p.bvid;
+          favBtn.dataset.title = p.title || '';
+          favBtn.dataset.artist = p.artist || '';
+          favBtn.dataset.cover = p.cover || '';
+          favBtn.dataset.duration = String(p.duration || 0);
+          if (window.hcFav) window.hcFav.syncBtn(favBtn);
+        }
+      }
     }
     // 进度显示（音箱模式进度由 SSE 推，web 由 timeupdate 推）
     if (!seeking && p.duration > 0) {
@@ -213,9 +225,37 @@
     if (now - lastReport > 250) {
       lastReport = now;
       window.hcState.progress(audio.currentTime, audio.duration || 0, !audio.paused);
+      reportWidget(); // widget 250ms 上报（~4Hz，桌面/安卓歌词挂件跟得上 web）
     }
   });
   let lastReport = 0;
+
+  // ---- widget 上报（桌面歌词挂件：后端 widgetState 读，SSE lyric-state 推行） ----
+  function reportWidget() {
+    const p = pb();
+    if (!p.bvid) return;
+    fetch('/api/v1/widget/state', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bvid: p.bvid, title: p.title, artist: p.artist || '',
+        current_time: audio.currentTime, duration: audio.duration || 0,
+        playing: !audio.paused,
+      }),
+    }).catch(() => {});
+  }
+
+  // ---- widget 下行控制（SSE 推送，非轮询）：挂件 ⏸/◀/▶ 按钮 → 前端即时消费 ----
+  try {
+    const es = new EventSource('/api/v1/widget/events');
+    es.addEventListener('toggle', () => toggle());
+    es.addEventListener('prev', () => step('prev'));
+    es.addEventListener('next', () => step('next'));
+    // 歌词当前行统一走后端（SSE lyric-state 带 line）→ hcBus 广播给歌词页/字幕条
+    es.addEventListener('lyric-state', (ev) => {
+      try { const d = JSON.parse(ev.data); if (d && typeof d.line === 'string') hcBus.emit('lyric-line', d.line); } catch (e) {}
+    });
+    es.onerror = () => {};
+  } catch (e) {}
 
   // ---- 控制事件 ----
   el.prog.addEventListener('change', () => {
