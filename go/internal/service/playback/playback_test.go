@@ -122,3 +122,33 @@ func TestNextBVID(t *testing.T) {
 		t.Fatal("next bvid loop")
 	}
 }
+
+func TestSetSpeakerProgress(t *testing.T) {
+	p := NewPlaybackState()
+	p.Play(Song{BVID: "A", Title: "songA"})
+	// 未切音箱：progress 不同步状态（source 仍 web）
+	p.SetSpeakerProgress("did1", "A", "songA", 10, 200, true)
+	s := p.Snapshot()
+	if s.Source != "web" || s.Position != 0 {
+		t.Fatalf("should not sync before switch: %+v", s)
+	}
+	// 切音箱后：progress 同步
+	p.SwitchSpeaker("did1")
+	p.SetSpeakerProgress("did1", "A", "songA", 30, 200, true)
+	s = p.Snapshot()
+	if s.Source != "speaker" || s.Position != 30 || s.Duration != 200 || !s.Playing {
+		t.Fatalf("speaker progress not synced: %+v", s)
+	}
+	// 其他 did 不同步
+	p.SetSpeakerProgress("did2", "B", "songB", 99, 300, true)
+	s = p.Snapshot()
+	if s.Position != 30 || s.BVID != "A" {
+		t.Fatalf("other did should not sync: %+v", s)
+	}
+	// 播完
+	p.SetSpeakerStopped("did1")
+	s = p.Snapshot()
+	if s.Playing || s.Position != 0 {
+		t.Fatalf("stopped wrong: %+v", s)
+	}
+}

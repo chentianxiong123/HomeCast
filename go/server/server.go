@@ -113,6 +113,9 @@ func New() http.Handler {
 	playbackStateGlobal = playbackState
 	stateHandler := &api.StateHandler{Pb: playbackState}
 
+	// 后端桥：音箱本地模拟进度 1s tick → 统一状态流（音箱播放状态并入 SSOT）
+	go bridgeSpeakerProgress(speakerSvc, playbackState)
+
 	mux := api.NewMux(
 		musicHandler, favHandler, lyricHandler, playlistHandler,
 		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler, cacheHandler,
@@ -169,4 +172,27 @@ func ListenAndServe(addr string) error {
 	}
 	log.Printf("homecast-go listening on http://%s (music + fav + lyric + playlist + cast + speaker + sites + widget)", addr)
 	return http.ListenAndServe(addr, New())
+}
+
+// bridgeSpeakerProgress 音箱本地模拟进度 → 统一状态流（1s tick）。
+// 音箱播放状态（position/duration/playing/bvid/title）并入 PlaybackState（SSOT），
+// 让 player-dock/进度条/图标从 /api/v1/state/stream 统一读，不再靠 speaker 独立事件。
+func bridgeSpeakerProgress(svc *spk.SpeakerService, pb *playback.PlaybackState) {
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		all := svc.AllProgress()
+		for did, d := range all {
+			if d == nil {
+				continue
+			}
+			bvid, _ := d["bvid"].(string)
+			title, _ := d["title"].(string)
+			pos, _ := d["position"].(float64)
+			dur, _ := d["duration"].(float64)
+			state, _ := d["state"].(string)
+			playing := state == "playing"
+			pb.SetSpeakerProgress(did, bvid, title, pos, dur, playing)
+		}
+	}
 }

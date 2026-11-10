@@ -327,3 +327,36 @@ func (p *PlaybackState) SetDuration(d float64) {
 	p.mu.Unlock()
 	p.bcastProgress()
 }
+
+// SetSpeakerProgress 音箱进度上报（后端桥：SpeakerService 1s tick → 统一状态流）。
+// 音箱模式（source=speaker 且 did 匹配）才同步状态；否则仅广播进度供前端参考。
+func (p *PlaybackState) SetSpeakerProgress(did, bvid, title string, position, duration float64, playing bool) {
+	p.mu.Lock()
+	isSpk := p.cur.Source == "speaker" && p.cur.SpkDID == did
+	if isSpk && bvid != "" {
+		p.cur.BVID = bvid
+		if title != "" {
+			p.cur.Title = title
+		}
+		p.cur.Position = position
+		if duration > 0 {
+			p.cur.Duration = duration
+		}
+		p.cur.Playing = playing
+	}
+	p.mu.Unlock()
+	if isSpk {
+		p.bcastProgress()
+	}
+}
+
+// SetSpeakerStopped 音箱播完/停止：音箱模式切回 web（若 source=speaker 且 did 匹配）
+func (p *PlaybackState) SetSpeakerStopped(did string) {
+	p.mu.Lock()
+	if p.cur.Source == "speaker" && p.cur.SpkDID == did {
+		p.cur.Playing = false
+		p.cur.Position = 0
+	}
+	p.mu.Unlock()
+	p.bcastProgress()
+}
