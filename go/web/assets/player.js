@@ -1,7 +1,10 @@
-// 播放器孤岛（M1/M2）：独立进程管理 audio 实时态（C 客户端瞬时态）
-// 不 import 任何页面代码；只经 hcBus(hc:*) 与外界通信：
-//   收 play{toggle,seek,pct,prev,next}，发 state/nowplaying/lyric-open
-// 播放队列 = 进程内播放历史（任意页面点播入队）；P 态 = localStorage 恢复上次
+// 播放器孤岛（阶段2 重构）：不再是状态持有者，而是「web 播放引擎 + 渲染层」。
+// 业务状态唯一住后端（/api/v1/state/stream SSE → Alpine.store('playback')，state.js 桥接）。
+// 本文件只做：
+//   1. 命令转发（用户点击 → POST /api/v1/state/command）
+//   2. HTMLAudio 物理播放执行（audio.play/pause/seek 由状态流驱动）
+//   3. 高频 UI：timeupdate 上报进度、拖动进度条即时反馈、音量条（本地临时态）
+//   4. 渲染：从 Alpine.store('playback') 派生面板 DOM
 (function () {
   const audio = document.getElementById('audio');
   if (!audio) return;
@@ -14,15 +17,12 @@
   };
   if (!el.dock || !el.toggle) return;
 
-  let song = null; // {bvid,title,artist,cover}
-  let state = 'idle'; // idle/loading/playing/paused/ended
-  let queue = []; // 播放队列（自动上下文），prev/next 队列走位
-  let qidx = -1;
-  let lastSaveAt = 0;
-  let lastWidgetReport = 0; // widget 上报节流（1s，独立于 5s 持久化）
-  let playMode = localStorage.getItem('hc:mode') || 'order'; // order/loop/single/random
+  // ---- 本地临时 UI 态（Alpine 不管这些高频/设备偏好；业务状态不走这） ----
   let quality = parseInt(localStorage.getItem('hc:quality') || '192', 10); // 64/128/192
-  if (el && el.qualityBtn) el.qualityBtn.textContent = quality + 'k'; // 按钮初始值跟随持久化音质
+  if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
+  let volMuted = false; // 静音（WebKit audio.muted 同帧读取旧值，用 JS 变量）
+  let lastBvid = '';    // 上次加载的 audio.src（避免重复设）
+  let seeking = false;  // 拖动进度条中（暂停上报，松手再上报）
 
   const fmt = (s) => {
     if (!isFinite(s) || !s) return '0:00';
@@ -30,344 +30,125 @@
     return m + ':' + String(x).padStart(2, '0');
   };
 
-  // ---- P 设备持久态：恢复上次播放（localStorage，不依赖服务器） ----
-  function saveP() {
-    try {
-      localStorage.setItem('hc:song', JSON.stringify({ song, at: audio.currentTime }));
-      // 完整队列持久化（刷新生效：player 与 queue 孤岛都从这里恢复，避免事件时序丢队列）
-      localStorage.setItem('hc:queue', JSON.stringify({
-        list: queue.map((q) => ({ bvid: q.bvid, title: q.title, fullTitle: q.fullTitle, artist: q.artist, cover: q.cover })),
-        idx: qidx,
-      }));
-      // 「上次在听」同曲则同步进度（展示'上次听到 mm:ss'）
-      if (song && song.bvid) {
-        const lastRaw = localStorage.getItem('hc:last');
-        if (lastRaw) {
-          const last = JSON.parse(lastRaw);
-          if (last && last.bvid === song.bvid) {
-            last.at = audio.currentTime;
-            localStorage.setItem('hc:last', JSON.stringify(last));
-          }
-        }
-      }
-    } catch (e) {}
-  }
-  function restoreP() {
-    try {
-      const raw = localStorage.getItem('hc:song');
-      if (!raw) return;
-      let had = false;
-      // 先恢复完整队列（hc:queue：list+idx），再定位当前曲
-      try {
-        const qraw = localStorage.getItem('hc:queue');
-        if (qraw) {
-          const qd = JSON.parse(qraw);
-          if (qd && Array.isArray(qd.list) && qd.list.length) {
-            queue = qd.list.map((q) => ({ bvid: q.bvid, title: q.title, fullTitle: q.fullTitle, artist: q.artist, cover: q.cover }));
-            qidx = typeof qd.idx === 'number' && qd.idx >= 0 && qd.idx < queue.length ? qd.idx : 0;
-            had = true;
-          }
-        }
-      } catch (e2) {}
-      if (!had) { song = d.song; queue = [song]; qidx = 0; }
-      const cur = queue[qidx] || d.song || queue[0];
-      if (cur) song = cur;
-      el.title.textContent = song.title;
-      el.artist.textContent = song.artist || '未知作者';
-      el.cover.src = song.cover || '';
-      audio.src = '/api/v1/music/stream/' + song.bvid + '?quality=' + quality; // P 态恢复也跟随持久化音质
-      if (d.at > 5) audio.currentTime = d.at;
-      setState('paused');
-      hcBus.emit('nowplaying', { bvid: song.bvid });
-      emitQueue(); // 恢复后广播完整队列（迟到监听者可在 afterSwap 重渲染）
-    } catch (e) {}
-  }
+  // ---- 播放状态（Alpine.store('playback') 由 state.js 维护）----
+  function pb() { return window.hcState ? window.hcState.get() : { playing: false, bvid: '', title: '', artist: '', cover: '', position: 0, duration: 0, queue: [], qidx: -1, play_mode: 'order', source: 'web' }; }
 
-  // ---- 状态渲染 ----
+  // ---- 渲染：从 playback 状态派生面板 DOM ----
   function render() {
-    el.dock.classList.toggle('hidden', !song);
-    // 音响模式（spkDid 非空）用音箱状态 spkState 驱动图标/频谱，否则用 web state。
-    // 修复：投送到音箱后 web audio 已 pause（state='paused'），但音箱在播（spkState='playing'）
-    // ——之前图标永远显示「▶」，不随音箱实际状态。
-    const playing = spkDid ? spkState === 'playing' : state === 'playing';
+    const p = pb();
+    const hasSong = !!(p.bvid);
+    el.dock.classList.toggle('hidden', !hasSong);
+    const playing = p.playing;
     el.toggle.innerHTML = playing
       ? '<svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
       : '<svg class="w-7 h-7 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-    if (el.eq) el.eq.style.display = playing ? 'flex' : 'none'; // 频谱只在真正播放时出现（inline 优先，防 flex 覆盖）
-    el.prev.disabled = el.next.disabled = !song || queue.length < 2;
+    if (el.eq) el.eq.style.display = playing ? 'flex' : 'none';
+    el.prev.disabled = el.next.disabled = !hasSong || p.queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);
-    renderMode();
+    // 歌曲信息（只在变化时写 DOM，防高频重排）
+    if (hasSong) {
+      if (el.title.textContent !== p.title) el.title.textContent = p.title || '';
+      if (el.artist.textContent !== p.artist) el.artist.textContent = p.artist || '未知作者';
+      if (el.cover.getAttribute('src') !== p.cover) { el.cover.src = p.cover || ''; el.cover.alt = p.title || ''; }
+      if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
+      renderMode(p.play_mode);
+    }
+    // 进度显示（音箱模式进度由 SSE 推，web 由 timeupdate 推）
+    if (!seeking && p.duration > 0) {
+      el.cur.textContent = fmt(p.position);
+      el.dur.textContent = fmt(p.duration);
+      el.prog.value = Math.round((p.position / p.duration) * 1000);
+    }
   }
 
-  // ---- 播放模式：order/loop/single/random（Vue 版同款轮换 + localStorage P 态） ----
+  // ---- 播放模式图标 ----
   const MODE_ICONS = {
     order: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
     loop: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
     single: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2 21 6l-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><text x="9" y="17" font-size="7" fill="currentColor" stroke="none">1</text>',
     random: '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>',
   };
-  const MODE_ORDER = ['order', 'loop', 'single', 'random'];
-  function renderMode() {
+  function renderMode(m) {
     if (!el.mode) return;
-    el.mode.innerHTML = MODE_ICONS[playMode] || MODE_ICONS.order;
-    el.mode.title = { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' }[playMode];
-    el.mode.classList.toggle('text-pink-400', playMode !== 'order');
-    el.mode.classList.toggle('hover:bg-gray-100', true);
-  }
-  function setPlayMode(m) {
-    playMode = m;
-    try { localStorage.setItem('hc:mode', m); } catch (e) {}
-    renderMode();
-    hcBus.emit('toast', { msg: { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' }[m] });
-  }
-  function cycleMode() {
-    setPlayMode(MODE_ORDER[(MODE_ORDER.indexOf(playMode) + 1) % MODE_ORDER.length]);
+    const mode = m || 'order';
+    el.mode.innerHTML = MODE_ICONS[mode] || MODE_ICONS.order;
+    el.mode.title = { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' }[mode] || '';
+    el.mode.classList.toggle('text-pink-400', mode !== 'order');
   }
 
-  // ---- 播放队列（C 态，进程内）：自动上下文 + 插队（参照 YesPlayMusic next 页） ----
-  function emitQueue() {
-    hcBus.emit('queue', {
-      list: queue.map((q) => ({ bvid: q.bvid, title: q.title, fullTitle: q.fullTitle, artist: q.artist, cover: q.cover })),
-      idx: qidx,
-    });
+  // ---- 状态流驱动 HTMLAudio（web 播放引擎）：bvid 变→载源；playing 变→播放/暂停 ----
+  function driveAudio() {
+    const p = pb();
+    if (p.source !== 'web' || !p.bvid) return; // 音箱模式：web 音频不动
+    if (p.bvid !== lastBvid) {
+      lastBvid = p.bvid;
+      const streamURL = '/api/v1/music/stream/' + p.bvid + '?quality=' + quality;
+      audio.src = streamURL;
+      if (p.playing) audio.play().catch(() => {});
+      else audio.load();
+    } else if (p.playing && audio.paused) {
+      audio.play().catch(() => {});
+    } else if (!p.playing && !audio.paused) {
+      audio.pause();
+    }
   }
-  function notify(d) { // 切歌系统通知（一次性请求权限，失败静默）
-    try {
-      if (!('Notification' in window)) return;
-      if (Notification.permission === 'granted') {
-        new Notification(d.title || '', { body: d.artist || '', icon: d.cover || undefined, silent: true });
-      } else if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    } catch (e) {}
-  }
-  function rememberRecent(d) { // 最近播放（去重保序，最多 30 首）
-    try {
-      let list = JSON.parse(localStorage.getItem('hc:recent') || '[]');
-      list = list.filter((x) => x && x.bvid !== d.bvid);
-      list.unshift({ bvid: d.bvid, title: d.title || '', fullTitle: d.fullTitle || '', artist: d.artist || '', cover: d.cover || '', duration: d.duration || 0 });
-      if (list.length > 30) list = list.slice(0, 30);
-      localStorage.setItem('hc:recent', JSON.stringify(list));
-    } catch (e) {}
-  }
-  function loadSong(d) {
-    song = d;
-    notify(d);
-    rememberRecent(d);
-    hcBus.emit('now', d); // 歌词页/其他孤岛取当前曲
-    // dock 主标题：新数据已是短名，旧数据（完整标题）也清洗兜底（与 queue/recent 一致）
-    el.title.textContent = window.hcTitle ? window.hcTitle(d.title) : d.title;
-    el.title.title = d.fullTitle || d.title; // dock 标题 hover 显示完整名
-    el.artist.textContent = d.artist || '未知作者';
-    el.cover.src = d.cover || '';
-    el.cover.alt = d.title;
-    // 播放源：后端 Stream 端点（优先缓存秒开；未命中转发 B站流并边播边落盘缓存）
-    const streamURL = '/api/v1/music/stream/' + d.bvid + '?quality=' + quality;
-    audio.src = streamURL;
-    audio.play().catch(() => {});
-    setState('loading');
-    hcBus.emit('nowplaying', { bvid: d.bvid });
-    saveP();
-  }
-  function rememberLast(d) { // 「上次在听」永久保留（手动点播才写；自动切歌/播完不覆盖；刷新/播完都在）
-    try {
-      const prev = JSON.parse(localStorage.getItem('hc:last') || 'null');
-      localStorage.setItem('hc:last', JSON.stringify({
-        bvid: d.bvid, title: d.title || '', fullTitle: d.fullTitle || '', artist: d.artist || '', cover: d.cover || '',
-        duration: d.duration || 0,
-        at: (prev && prev.bvid === d.bvid && typeof prev.at === 'number') ? prev.at : 0,
-        ts: Date.now(),
-      }));
-    } catch (e) {}
-  }
-  function play(data) { // 外部点播：去重后进队尾并播放
-    rememberLast(data);
-    const i = queue.findIndex((q) => q.bvid === data.bvid);
-    if (i >= 0) queue.splice(i, 1);
-    queue.push({ bvid: data.bvid, title: data.title, fullTitle: data.fullTitle, artist: data.artist, cover: data.cover });
-    qidx = queue.length - 1;
-    loadSong(data);
-    emitQueue();
-  }
-  function playNext(data) { // 「下一首播放」：插到当前歌后面，不打断播放
-    if (!song) { play(data); return; }
-    const i = queue.findIndex((q) => q.bvid === data.bvid);
-    if (i >= 0) queue.splice(i, 1);
-    queue.splice(qidx + 1, 0, { bvid: data.bvid, title: data.title, fullTitle: data.fullTitle, artist: data.artist, cover: data.cover });
-    emitQueue();
-  }
-  function step(dir) { // 队列走位：next 向后 / prev 向前（循环；prev 播放中先回秒）
-    if (queue.length < 2) return;
-    if (dir === 'prev' && audio.currentTime > 3) { audio.currentTime = 0; return; }
-    qidx = (qidx + (dir === 'next' ? 1 : -1) + queue.length) % queue.length;
-    const t = queue[qidx];
-    if (t) loadSong(t);
-    emitQueue();
-  }
-  // 音响让位（用户拍板 A）：音响推送播放时 web audio 暂停，播放器面板控制音响
-  let spkDid = ''; // 音响播放目标 did（非空=音响模式，播放器面板控音响）
-  let spkState = 'idle'; // 音响播放状态（SSE /speaker/events 更新；playing/paused/idle）
+
+  // ---- 命令转发（用户点击 → 后端） ----
   function toggle() {
-    if (!song) return;
-    if (spkDid) { // 音响模式：播放/暂停控制音响（非 web audio）
-      const action = spkState === 'playing' ? 'pause' : 'play'; // 播放中→暂停，否则播放
-      fetch('/api/v1/speaker/control', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ did: spkDid, action }),
-      }).catch(() => {});
+    const p = pb();
+    if (!p.bvid) return;
+    if (p.source === 'speaker') {
+      // 音箱模式：暂停/恢复走音箱控制
+      window.hcState.cmd(p.playing ? 'pause' : 'resume');
       return;
     }
-    audio.paused ? audio.play().catch(() => {}) : audio.pause();
+    window.hcState.cmd(p.playing ? 'pause' : 'resume');
   }
-  function seek(pct) { if (!song || !audio.duration) return; audio.currentTime = (pct / 100) * audio.duration; }
-  function setQuality(q) { // 切换后若在播则按新音质重载（Vue 版同逻辑）
+  function seek(pct) {
+    if (!pb().bvid) return;
+    if (pb().source === 'speaker') return; // 音箱 seek 未接，忽略
+    const sec = (pct / 100) * (pb().duration || audio.duration || 0);
+    seeking = true;
+    audio.currentTime = sec; // 本地即时（高频 UI），随后上报后端
+    window.hcState.progress(sec, pb().duration, !audio.paused);
+    render();
+  }
+  function step(dir) {
+    window.hcState.cmd(dir === 'prev' ? 'prev' : 'next');
+  }
+  function cycleMode() {
+    const order = ['order', 'loop', 'single', 'random'];
+    const cur = order.indexOf(pb().play_mode) || 0;
+    const next = order[(cur + 1) % order.length];
+    window.hcState.cmd('mode', { mode: next });
+    try { localStorage.setItem('hc:mode', next); } catch (e) {}
+    hcBus.emit('toast', { msg: { order: '顺序播放', loop: '列表循环', single: '单曲循环', random: '随机播放' }[next] });
+  }
+  function setQuality(q) {
     quality = q;
     try { localStorage.setItem('hc:quality', String(q)); } catch (e) {}
     if (el.qualityBtn) el.qualityBtn.textContent = q + 'k';
-    if (song) loadSong(song);
+    const p = pb();
+    if (p.bvid && p.source === 'web') {
+      // 重载音频源（同曲新音质）；状态不变，仅音频源变
+      lastBvid = '';
+      audio.src = '/api/v1/music/stream/' + p.bvid + '?quality=' + quality;
+      if (p.playing) audio.play().catch(() => {});
+    }
     hcBus.emit('toast', { msg: '音质 ' + q + 'k' });
   }
-  // 静音状态用 JS 变量维护（WebKit 的 audio.muted 赋值后同帧读取可能返回旧值，
-  // 导致 mute() 里判断失真——偶发「点两次才生效」根因）。
-  let volMuted = false;
   function setVol(v) {
     audio.volume = v / 100;
-    volMuted = v === 0; // 拖到 0 = 静音（JS 状态源）
+    volMuted = v === 0;
     audio.muted = volMuted;
     try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
     renderMute();
   }
-  function setState(s) {
-    state = s;
-    render();
-    hcBus.emit('state', { state, song });
-    updateMediaMeta();
-  }
-
-  // ---- MediaSession：系统媒体键 / 媒体栏可见（YesPlayMusic 同款） ----
-  function updateMediaMeta() {
-    if (!('mediaSession' in navigator)) return;
-    if (song) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: song.title || '',
-        artist: song.artist || '',
-        artwork: song.cover ? [{ src: song.cover, sizes: '512x512' }] : [],
-      });
-    }
-    const acting = { playing: !audio.paused, paused: audio.paused, previoustrack: true, nexttrack: true };
-    navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
-    try {
-      navigator.mediaSession.setActionHandler('play', () => audio.play().catch(() => {}));
-      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-      navigator.mediaSession.setActionHandler('previoustrack', () => step('prev'));
-      navigator.mediaSession.setActionHandler('nexttrack', () => step('next'));
-    } catch (e) {}
-  }
-
-  // ---- widget 上报（节流 5s；桌面挂件轮询用，薄封装直连 API） ----
-  function reportWidget() {
-    if (!song) return;
-    fetch('/api/v1/widget/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bvid: song.bvid, title: song.title, artist: song.artist || '',
-        current_time: audio.currentTime, duration: audio.duration || 0,
-        playing: !audio.paused,
-      }),
-    }).catch(() => {});
-  }
-
-  // ---- widget 下行控制（SSE 推送，非轮询）：挂件 ⏸ 按钮 → POST toggle →
-  // 后端 SSE 广播 → 前端 EventSource 即时收到 → audio.toggle()。零轮询、暂停也即时。
-  try {
-    const es = new EventSource('/api/v1/widget/events');
-    es.addEventListener('toggle', () => toggle());
-    es.addEventListener('prev', () => step('prev'));
-    es.addEventListener('next', () => step('next'));
-    // 歌词当前行统一走后端（SSE lyric-state 带 line）→ hcBus 广播给歌词页/字幕条，
-    // 显示层纯渲染（不再各自 sec<=t 本地定位——数据流统一一份住后端）。
-    es.addEventListener('lyric-state', (ev) => {
-      try { const d = JSON.parse(ev.data); if (d && typeof d.line === 'string') hcBus.emit('lyric-line', d.line); } catch (e) {}
-    });
-    // 断线自动重连（EventSource 内建）；onerror 忽略，重连后继续收
-    es.onerror = () => {};
-  } catch (e) {}
-
-  // ---- audio 事件 → 状态机 ----
-  audio.addEventListener('play', () => setState('playing'));
-  audio.addEventListener('pause', () => { setState(audio.ended ? 'ended' : 'paused'); if (el.eq) el.eq.style.display = 'none'; });
-  audio.addEventListener('ended', () => { if (el.eq) el.eq.style.display = 'none'; });
-  audio.addEventListener('error', () => { if (el.eq) el.eq.style.display = 'none'; });
-  audio.addEventListener('ended', () => {
-    setState('ended');
-    if (playMode === 'single' && song) { audio.currentTime = 0; audio.play().catch(() => {}); return; } // 单曲循环
-    if (playMode === 'random') { // 随机下一首（不重复当前）
-      if (queue.length < 2) return;
-      let n;
-      do { n = Math.floor(Math.random() * queue.length); } while (n === qidx);
-      qidx = n;
-      loadSong(queue[qidx]);
-      emitQueue();
-      return;
-    }
-    step('next'); // order/loop：走队（循环）
-  });
-  audio.addEventListener('loadedmetadata', () => { el.dur.textContent = fmt(audio.duration); });
-  audio.addEventListener('timeupdate', () => {
-    if (!song) return;
-    if (!spkDid) { // 音响模式：进度由 /speaker/events SSE 推（不覆盖 web）
-      el.cur.textContent = fmt(audio.currentTime);
-      const d = audio.duration || 1;
-      el.prog.value = Math.round((audio.currentTime / d) * 1000);
-    }
-    const now = Date.now();
-    if (now - lastSaveAt > 5000) { lastSaveAt = now; saveP(); }
-    if (now - lastWidgetReport > 250) { lastWidgetReport = now; reportWidget(); } // widget 250ms 上报（~4Hz，对齐 web timeupdate 实时性；桌面/安卓歌词挂件 SSE 跟得上 web，不卡顿）
-  });
-  audio.addEventListener('play', () => reportWidget());
-  audio.addEventListener('pause', () => reportWidget());
-
-  // ---- 控制 ----
-  el.prog.addEventListener('change', () => seek((el.prog.value / 1000) * 100));
-  el.vol.addEventListener('input', () => setVol(el.vol.value));
-  el.toggle.addEventListener('click', toggle);
-  el.prev.addEventListener('click', () => step('prev'));
-  el.next.addEventListener('click', () => step('next'));
-  el.cover.addEventListener('click', () => {
-    if (!song) return;
-    // 封面点击 toggle：展开歌词面板 / 已展开则缩回（可展开可缩回去）
-    const lyp = document.getElementById('lyric-panel');
-    if (lyp && !lyp.classList.contains('ly-hidden')) {
-      hcBus.emit('lyric-close');
-    } else {
-      hcBus.emit('lyric-open', song);
-    }
-  });
-
-  if (el.mode) el.mode.addEventListener('click', cycleMode);
-  if (el.qualityBtn) el.qualityBtn.addEventListener('click', () => {
-    setQuality(quality === 64 ? 128 : quality === 128 ? 192 : 64);
-  });
-  // 静音图标（未静音=喇叭，静音=喇叭带斜杠）+ 静音时音量条禁用
-  // 只认 audio.muted 单一状态源（不再 OR volume===0——否则音量拖到 0 后
-  // 静音按钮翻转 muted 但图标永远斜杠，按钮失效）
-  function renderMute() {
-    if (!el.muteBtn) return;
-    const muted = volMuted;
-    el.muteBtn.innerHTML = muted
-      ? '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>'
-      : '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
-    if (el.vol) {
-      el.vol.classList.toggle('opacity-40', muted); // 静音时变灰，但仍可拖（拖>0 自动取消静音）
-    }
-  }
   function mute() {
-    // 统一状态机：当前静音（volMuted 或音量拖到 0）→ 恢复音量；否则 → 静音
     if (volMuted || audio.volume === 0) {
       volMuted = false;
-      if (audio.volume === 0) { // 音量被拖到 0 的静音：恢复默认音量
+      if (audio.volume === 0) {
         const def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
         audio.volume = def / 100;
         if (el.vol) el.vol.value = def;
@@ -376,137 +157,182 @@
     } else {
       volMuted = true;
     }
-    audio.muted = volMuted; // 同步到 audio（异步生效不影响 JS 状态源）
+    audio.muted = volMuted;
     renderMute();
   }
-  if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
-  const initVol = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
-  audio.volume = initVol / 100;
-  volMuted = false;
-  audio.muted = false;
-  if (el.vol) el.vol.value = initVol; // 滑杆与实际音量一致（localStorage 可能非 80）
-  renderMute();
+  function renderMute() {
+    if (!el.muteBtn) return;
+    const muted = volMuted;
+    el.muteBtn.innerHTML = muted
+      ? '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>'
+      : '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
+    if (el.vol) el.vol.classList.toggle('opacity-40', muted);
+  }
 
-  // ---- 总线 ----
-  hcBus.on('play', play);
+  // ---- MediaSession ----
+  function updateMediaMeta() {
+    if (!('mediaSession' in navigator)) return;
+    const p = pb();
+    if (p.bvid) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: p.title || '', artist: p.artist || '',
+        artwork: p.cover ? [{ src: p.cover, sizes: '512x512' }] : [],
+      });
+    }
+    navigator.mediaSession.playbackState = p.playing ? 'playing' : 'paused';
+    try {
+      navigator.mediaSession.setActionHandler('play', () => window.hcState.cmd('resume'));
+      navigator.mediaSession.setActionHandler('pause', () => window.hcState.cmd('pause'));
+      navigator.mediaSession.setActionHandler('previoustrack', () => window.hcState.cmd('prev'));
+      navigator.mediaSession.setActionHandler('nexttrack', () => window.hcState.cmd('next'));
+    } catch (e) {}
+  }
+
+  // ---- audio 事件：播放物理结束 → 后端 next（状态流驱动）----
+  audio.addEventListener('ended', () => {
+    const p = pb();
+    if (p.play_mode === 'single' && p.bvid) { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+    window.hcState.cmd('next'); // order/loop/random 走后端
+  });
+  audio.addEventListener('loadedmetadata', () => {
+    const p = pb();
+    if (p.duration !== audio.duration) window.hcState.progress(p.position, audio.duration, !audio.paused);
+  });
+  audio.addEventListener('timeupdate', () => {
+    const p = pb();
+    if (!p.bvid || p.source !== 'web') return;
+    // 高频 UI：本地进度条即时（不等待 SSE 往返）
+    if (!seeking) {
+      el.cur.textContent = fmt(audio.currentTime);
+      const d = audio.duration || 1;
+      el.prog.value = Math.round((audio.currentTime / d) * 1000);
+      el.dur.textContent = fmt(audio.duration || 0);
+    }
+    // 上报后端（低频 250ms）
+    const now = Date.now();
+    if (now - lastReport > 250) {
+      lastReport = now;
+      window.hcState.progress(audio.currentTime, audio.duration || 0, !audio.paused);
+    }
+  });
+  let lastReport = 0;
+
+  // ---- 控制事件 ----
+  el.prog.addEventListener('change', () => {
+    seeking = false;
+    seek((el.prog.value / 1000) * 100);
+  });
+  el.prog.addEventListener('input', () => {
+    // 拖动中本地即时反馈（高频 UI），松手 change 才 seek+上报
+    const d = pb().duration || audio.duration || 1;
+    el.cur.textContent = fmt((el.prog.value / 1000) * d);
+  });
+  el.vol.addEventListener('input', () => setVol(el.vol.value));
+  el.toggle.addEventListener('click', toggle);
+  el.prev.addEventListener('click', () => step('prev'));
+  el.next.addEventListener('click', () => step('next'));
+  el.cover.addEventListener('click', () => {
+    const p = pb();
+    if (!p.bvid) return;
+    const lyp = document.getElementById('lyric-panel');
+    if (lyp && !lyp.classList.contains('ly-hidden')) hcBus.emit('lyric-close');
+    else hcBus.emit('lyric-open', { bvid: p.bvid, title: p.title, artist: p.artist, cover: p.cover });
+  });
+  if (el.mode) el.mode.addEventListener('click', cycleMode);
+  if (el.qualityBtn) el.qualityBtn.addEventListener('click', () => {
+    setQuality(quality === 64 ? 128 : quality === 128 ? 192 : 64);
+  });
+  if (el.muteBtn) el.muteBtn.addEventListener('click', mute);
+
+  // ---- 外部点播桥接（其他页面 hcBus 'play'）→ 发后端命令 ----
+  hcBus.on('play', (d) => {
+    if (!d || !d.bvid) return;
+    window.hcState.cmd('play', { bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '' });
+  });
   hcBus.on('toggle', toggle);
-  hcBus.on('seek', (d) => seek(d.pct));
+  hcBus.on('seek', (d) => { if (d && typeof d.pct === 'number') seek(d.pct); });
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
-  hcBus.on('play-next', playNext);
-  hcBus.on('play-fav-all', async () => { // 收藏夹播放全部（直连 JSON API，薄封装）
+  hcBus.on('play-next', (d) => { if (d && d.bvid) window.hcState.cmd('play', { bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '' }); });
+  hcBus.on('mode-cycle', cycleMode);
+  hcBus.on('mode', (d) => { if (d && d.m) window.hcState.cmd('mode', { mode: d.m }); });
+  hcBus.on('mute', mute);
+  hcBus.on('queue-clear', () => window.hcState.cmd('clear'));
+  hcBus.on('queue-remove', (d) => { if (d && d.bvid) window.hcState.cmd('remove', { bvid: d.bvid }); });
+  hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
+  hcBus.on('play-all-list', (d) => {
+    const items = ((d && d.items) || []).filter((x) => x && x.bvid);
+    if (!items.length) return;
+    window.hcState.cmd('queue', { queue: items.map((x) => ({ bvid: x.bvid, title: x.title, artist: x.artist, cover: x.cover })), qidx: 0 });
+  });
+  hcBus.on('play-fav-all', async () => {
     try {
       const j = await (await fetch('/api/v1/fav/list')).json();
       const items = j.data || [];
       if (!items.length) { hcBus.emit('toast', { msg: '收藏夹是空的' }); return; }
-      queue = items.map((x) => ({ bvid: x.bvid, title: x.title, fullTitle: x.fullTitle, artist: x.artist, cover: x.cover }));
-      qidx = 0;
-      loadSong(queue[0]);
-      emitQueue();
+      window.hcState.cmd('queue', { queue: items.map((x) => ({ bvid: x.bvid, title: x.title, artist: x.artist, cover: x.cover })), qidx: 0 });
     } catch (e) { hcBus.emit('toast', { msg: '加载失败' }); }
   });
-  hcBus.on('play-all-list', (d) => { // 任意列表「播放全部」（调用侧从 DOM 收集数据）
-    const items = ((d && d.items) || []).filter((x) => x && x.bvid);
-    if (!items.length) return;
-    queue = items;
-    qidx = 0;
-    rememberLast(queue[0]);
-    loadSong(queue[0]);
-    emitQueue();
-  });
-  hcBus.on('queue-clear', () => { // 清空队列：保留当前歌继续播，其余移除
-    queue = [];
-    qidx = -1;
-    emitQueue();
-    render();
-    hcBus.emit('toast', { msg: '队列已清空' });
-  });
-  hcBus.on('queue-remove', (d) => { // 从队列删除：删当前则自动切下一首，删空则收 dock
-    const i = queue.findIndex((q) => q.bvid === d.bvid);
-    if (i < 0) return;
-    queue.splice(i, 1);
-    if (i < qidx) qidx--;
-    else if (i === qidx) {
-      if (queue.length) {
-        qidx = Math.min(qidx, queue.length - 1);
-        loadSong(queue[qidx]);
-      } else {
-        song = null;
-        audio.pause();
-        setState('idle');
-        hcBus.emit('nowplaying', { bvid: '' });
-      }
-    }
-    emitQueue();
-  });
-  hcBus.on('mute', mute);
-  hcBus.on('mode-cycle', cycleMode);
-  hcBus.on('mode', (d) => { if (d && d.m) setPlayMode(d.m); });
 
-  hcBus.on('request-now', () => { if (song) hcBus.emit('now', song); }); // 歌词页初始化拉当前曲
-  hcBus.on('quality', (d) => { if (d && d.q) setQuality(d.q); });
-
-  // ---- 投送桥接：cast 页按钮只广播 hc:cast-play，这里持当前歌调后端投送 ----
+  // ---- 投送桥接（cast/speaker）：player 持当前歌（Alpine store）调后端 ----
   hcBus.on('cast-play', (d) => {
-    if (!song) {
-      hcBus.emit('cast-result', { ok: false, udn: d.udn, msg: '请先播放一首歌' });
-      return;
-    }
-    const body = new URLSearchParams({ bvid: song.bvid, udn: d.udn, title: song.title });
+    const p = pb();
+    if (!p.bvid) { hcBus.emit('cast-result', { ok: false, udn: d.udn, msg: '请先播放一首歌' }); return; }
+    const body = new URLSearchParams({ bvid: p.bvid, udn: d.udn, title: p.title });
     fetch('/hx/cast/play', { method: 'POST', body })
       .then((r) => r.text())
       .then((t) => hcBus.emit('cast-result', { ok: t.includes('成功'), udn: d.udn, msg: '投送失败' }))
       .catch(() => hcBus.emit('cast-result', { ok: false, udn: d.udn, msg: '网络错误' }));
   });
-
-  // ---- 音箱投送桥接：同 cast 模式，player 持当前歌调后端 ----
-  // 带 title/duration/next_bvid：服务端建本地模拟进度 + 播完自动连播队列下一首（不打小米云轮询）
-  // 音响进度（speaker.js /speaker/events SSE 广播）：音响模式播放器面板显示音响进度
-  hcBus.on('speaker-progress', (all) => {
-    if (!spkDid || !all || !all[spkDid]) return;
-    const p = all[spkDid];
-    spkState = p.state || 'idle';
-    if (spkState === 'idle' || spkState === 'stopped') { spkDid = ''; render(); return; } // 音响停 → 回 web 模式
-    el.cur.textContent = fmt(p.position || 0);
-    const dur = p.duration || 1;
-    el.prog.value = Math.round(((p.position || 0) / dur) * 1000);
-    el.dur.textContent = fmt(p.duration || 0);
-    render(); // 播放按钮图标随音响状态
-  });
   hcBus.on('speaker-play', (d) => {
-    if (!song) {
-      hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '请先播放一首歌' });
-      return;
-    }
+    const p = pb();
+    if (!p.bvid) { hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '请先播放一首歌' }); return; }
     const body = new URLSearchParams({
-      bvid: song.bvid,
-      did: d.did,
-      title: song.title || '',
-      duration: String(song.duration || 0),
-      next_bvid: nextBVID() || '',
+      bvid: p.bvid, did: d.did, title: p.title || '',
+      duration: String(p.duration || 0), next_bvid: nextBVID() || '',
     });
     fetch('/hx/speaker/play', { method: 'POST', body })
       .then((r) => r.text())
       .then((t) => {
         const ok = t.includes('音箱播放');
-        if (ok) { // 音响让位：web audio 暂停，播放器面板切音响模式
-          try { audio.pause(); } catch (e) {}
-          spkDid = d.did;
-          render();
-        }
+        if (ok) window.hcState.cmd('switch_speaker', { did: d.did }); // 切音箱模式（后端统一）
         hcBus.emit('speaker-result', { ok, did: d.did, msg: ok ? '音箱播放' : '投送失败' });
       })
       .catch(() => hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '网络错误' }));
   });
-
-  // 队列下一首（循环语义，与 step() 一致）：推送模式播完自动连播用
   function nextBVID() {
-    if (!song || queue.length < 2) return '';
-    const i = queue.findIndex((q) => q.bvid === song.bvid);
-    if (i < 0) return queue[0].bvid;
-    return queue[(i + 1) % queue.length].bvid;
+    const p = pb();
+    if (!p.bvid || !p.queue || p.queue.length < 2) return '';
+    const i = p.queue.findIndex((q) => q.bvid === p.bvid);
+    if (i < 0) return p.queue[0].bvid;
+    return p.queue[(i + 1) % p.queue.length].bvid;
   }
 
-  restoreP();
+  // ---- 状态流变化 → 驱动音频 + 渲染（state.js 已写 Alpine.store）----
+  // 订阅 Alpine store 变化（Alpine 3 用 effect，这里简单轮询 + 事件）
+  if (window.Alpine) {
+    // Alpine 3: Alpine.effect 在组件外不可用，用 store 监听事件（Alpine 触发 'alpine:store'）
+    let last = '';
+    setInterval(() => {
+      const p = pb();
+      const key = p.bvid + '|' + p.playing + '|' + p.source + '|' + p.play_mode + '|' + p.queue.length;
+      if (key !== last) {
+        last = key;
+        driveAudio();
+        render();
+        updateMediaMeta();
+      }
+    }, 120);
+  }
+
+  // ---- 音量/静音初始化（本地设备偏好）----
+  const initVol = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+  audio.volume = initVol / 100;
+  volMuted = false;
+  audio.muted = false;
+  if (el.vol) el.vol.value = initVol;
+  renderMute();
+
+  // 初始渲染（无歌隐藏 dock）
   render();
 })();
