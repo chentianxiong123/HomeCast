@@ -262,7 +262,9 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 	s.playing[did] = proxyURL
 	s.mu.Unlock()
 
-	// 部分硬件走 play_by_music_url（miservice-go 统一 PlayerPlayUrl）
+	// 硬件分文：需要 music API 的设备（LX05A/L07A 等）用 play_by_music_url（带 audio_id），
+	// 否则 play_by_url——对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API 分支
+	s.Auth.Hardware = device.Hardware
 	ret, err := s.Auth.PlayURL(device.DeviceID, proxyURL)
 	if err != nil {
 		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
@@ -375,11 +377,13 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 	)
 	switch action {
 	case "pause":
+		s.Auth.Hardware = device.Hardware
 		ret, err = s.Auth.Pause(device.DeviceID)
 		if err == nil {
 			s.pauseProgress(did)
 		}
 	case "stop":
+		s.Auth.Hardware = device.Hardware
 		s.mu.Lock()
 		delete(s.playing, did)
 		s.stopProgressLocked(did)
@@ -387,6 +391,7 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 		ret, err = s.Auth.Stop(device.DeviceID)
 	case "resume", "play":
 		if u, ok := s.playing[did]; ok {
+			s.Auth.Hardware = device.Hardware
 			ret, err = s.Auth.PlayURL(device.DeviceID, u)
 			if err == nil {
 				s.resumeProgress(did)

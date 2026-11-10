@@ -33,10 +33,11 @@ type SpeakerDevice struct {
 	IsOnline bool   `json:"is_online"`
 }
 
-// 部分硬件需要用 play_music_api（对齐 Python NEED_USE_PLAY_MUSIC_API）
+// 部分硬件需要用 play_music_api（对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API）
 var needUsePlayMusicAPI = map[string]bool{
 	"X08C": true, "X08E": true, "X8F": true, "X4B": true,
-	"LX05": true, "OH2": true, "OH2P": true, "X6A": true,
+	"LX05": true, "LX05A": true, "L07A": true, "OH2": true,
+	"OH2P": true, "X6A": true, "L15A": true,
 }
 
 // NeedPlayMusicAPI 硬件是否走 music API
@@ -50,6 +51,7 @@ type SpeakerAuth struct {
 	client    *miservice.Client
 	tokenPath string
 	loggedIn  bool
+	Hardware  string // 当前操作设备硬件（PlayURL 按硬件分文 play_by_music_url / play_by_url）
 	lastRefresh time.Time // 上次刷新 serviceToken 的时间（启动/登录/失败重刷时更新）
 }
 
@@ -366,7 +368,12 @@ func (a *SpeakerAuth) ListDevices() ([]SpeakerDevice, error) {
 // （"online" 才在线；offline/空/未知均为不在线——小爱音箱待机 presence=offline 属正常）
 func presenceOnline(p string) bool { return p == "online" }
 
-// PlayURL 播放 URL（deviceId 是设备 hardware ID）
+// DefaultAudioID 默认音频 ID（play_by_music_url 需要；对齐 MiAir DEFAULT_AUDIO_ID）
+const DefaultAudioID = "448161862632079419"
+
+// PlayURL 播放 URL（deviceId 是设备 hardware ID）。
+// 硬件分文：需要 music API 的设备（LX05A/L07A 等）用 play_by_music_url（带 audio_id），
+// 否则用 play_by_url——对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API 分支。
 func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 	if a.client == nil {
 		return nil, nil
@@ -374,7 +381,11 @@ func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 	var res any
 	if err := a.retryOnAuth(func() error {
 		var e error
-		res, e = a.client.PlayerPlayUrl(deviceID, url)
+		if NeedPlayMusicAPI(a.Hardware) {
+			res, e = a.PlayerPlayMusicUrl(deviceID, url, DefaultAudioID)
+		} else {
+			res, e = a.client.PlayerPlayUrl(deviceID, url)
+		}
 		return e
 	}); err != nil {
 		return nil, err
@@ -382,7 +393,25 @@ func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
 	return res, nil
 }
 
+// PlayerPlayMusicUrl 自实现 play_by_music_url（miservice-go 库没有该方法）。
+// 对齐 Python miservice minaservice.play_by_music_url：ubus mediaplayer.player_play_music
+// 带 audio_id（LX05A/L07A 等需要 music API 的硬件）。
+func (a *SpeakerAuth) PlayerPlayMusicUrl(deviceID, url, audioID string) (any, error) {
+	if a.client == nil {
+		return nil, nil
+	}
+	var res miservice.H = make(map[string]any)
+	if err := a.client.RemoteUbusCall(deviceID, "mediaplayer.player_play_music", miservice.H{
+		"url": url, "audio_id": audioID, "type": 2, "media": "app_ios",
+	}, res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 // Pause 暂停
+// 对齐 MiAir：需要 music API 的设备（LX05A/L07A 等）调用 pause 后 API 状态不会
+// 正确更新为 paused（status=2），需改用 player_stop 实现暂停语义（workaround）。
 func (a *SpeakerAuth) Pause(deviceID string) (any, error) {
 	if a.client == nil {
 		return nil, nil
@@ -390,7 +419,11 @@ func (a *SpeakerAuth) Pause(deviceID string) (any, error) {
 	var res any
 	if err := a.retryOnAuth(func() error {
 		var e error
-		res, e = a.client.PlayerPause(deviceID)
+		if NeedPlayMusicAPI(a.Hardware) {
+			res, e = a.client.PlayerStop(deviceID) // 暂停语义：music API 设备用 stop
+		} else {
+			res, e = a.client.PlayerPause(deviceID)
+		}
 		return e
 	}); err != nil {
 		return nil, err
