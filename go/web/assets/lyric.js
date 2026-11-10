@@ -159,26 +159,13 @@
   let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲
   let loadGen = 0; // 换歌竞态保护：旧请求晚到直接丢弃（music.py bvid 校验同款，bili-music generation 同款）
 
-  // ---- 歌词缓存（localStorage LRU 50 首）----
-  const LY_CACHE_KEY = 'hc:lyc:cache';
-  function lycGet(bvid) {
-    try {
-      const m = JSON.parse(localStorage.getItem(LY_CACHE_KEY) || '{}');
-      const row = m[bvid];
-      if (row) { row.at = Date.now(); m[bvid] = row; localStorage.setItem(LY_CACHE_KEY, JSON.stringify(m)); }
-      return row || null;
-    } catch (e) { return null; }
-  }
-  function lycSet(bvid, row) {
-    try {
-      const m = JSON.parse(localStorage.getItem(LY_CACHE_KEY) || '{}');
-      row.at = Date.now();
-      m[bvid] = row;
-      const keys = Object.keys(m).sort((a, b) => (m[a].at || 0) - (m[b].at || 0));
-      while (keys.length > 50) delete m[keys.shift()]; // LRU 淘汰最旧
-      localStorage.setItem(LY_CACHE_KEY, JSON.stringify(m));
-    } catch (e) {}
-    // 同步 selMeta（当前高亮跟随本次选择）
+  let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲
+  let loadGen = 0; // 换歌竞态保护：旧请求晚到直接丢弃（music.py bvid 校验同款，bili-music generation 同款）
+
+  // 歌词行缓存已搬后端（lyriccache，与音频同逻辑；/api/v1/music/lyric 透明缓存），
+  // 前端不再 localStorage 缓存歌词行（旧 hc:lyc:cache 数据弃用）。
+  // 选源上报（SQLite 持久化 + OnSelectChange 广播）——原 lycSet 的 select 部分保留：
+  function selectSource(bvid, row) {
     selMeta = { sid: row && row.id, name: row && row.name, artist: row && row.artist, duration: (row && (row.duration || row.dur)) || 0, offset: selMeta ? selMeta.offset : 0 };
     // 上报后端持久化“选的是哪个候选”（SQLite，增删改查；安卓壳丢 POST body，参数走 query）
     fetch('/api/v1/lyric/select?bvid=' + encodeURIComponent(bvid) +
@@ -213,7 +200,7 @@
         const d = j && j.data;
         if (!d || !d.lines || !d.lines.length) { setSource(null); return; }
         c.lines = d.lines;
-        lycSet(currentSong.bvid, c); // 回写 localStorage（下次直接命中，不用再懒拉）
+        selectSource(currentSong.bvid, c); // 选源上报后端（持久化 + 广播）
         renderFromCand(c);
         renderCandBar();
       })
@@ -228,7 +215,7 @@
     }
     candList.innerHTML = '';
     // 当前选中高亮：后端已存 sid（SQLite 持久化）优先，localStorage 缓存兜底；无则第一个
-    const curId = (selMeta && selMeta.sid) || (lycGet(currentSong.bvid) || {}).id || 0;
+    const curId = (selMeta && selMeta.sid) || 0; // 后端已存 sid（SQLite 持久化）优先；歌词缓存已搬后端
     let chosen = null; // 无选中时自动用的候选：第一个带正文的（保“自动选第一有词源”语义）
     let needLazy = null; // 已选候选但无正文（懒拉场景：跨设备/缓存被清，只有 SQLite sid 记忆）
     let first = true;
@@ -245,7 +232,7 @@
         '<span class="block text-xs text-gray-500 truncate mt-0.5">' + (c.artist || '') + ' · ' + candDur(c) + '</span>';
       it.addEventListener('click', () => {
         const gen = loadGen;
-        lycSet(currentSong.bvid, c); // 选定即记选择（sid 持久化；music.py lyric_map 同款记忆）
+        selectSource(currentSong.bvid, c); // 选定即记选择（sid 持久化；music.py lyric_map 同款记忆）
         // 统一数据流：选源上报后端（SQLite 持久化 + OnSelectChange 广播），
         // 行列表权威走后端 /music/lyric?bvid=（同挂件，不前端选源）。
         fetch('/api/v1/lyric/select?bvid=' + encodeURIComponent(currentSong.bvid) +
@@ -294,10 +281,8 @@
       selMeta = (mj && mj.data) || null;
     } catch (e) {}
     setOffset(selMeta ? (parseFloat(selMeta.offset) || 0) : 0);
-    // 先查缓存（同歌秒显，离线可看）；同时后台刷新候选栏（选中项=已存档 sid）
-    const cached = lycGet(song.bvid);
-    if (cached && cached.lines) renderFromCand(cached);
-    // 行列表权威来源 = 后端 /music/lyric?bvid=（选定源，同桌面挂件 lyricSource）。
+    // 先查缓存（同歌秒显，离线可看）——后端 lyriccache 已透明缓存，无需前端缓存；
+    // 歌词行权威 = 后端 /music/lyric?bvid=（选定源，同桌面挂件 lyricSource）。
     // 统一数据流：选源逻辑一份住后端（SelectedSID 或 LyricKeywords+GetLyricLines），
     // 歌词页不再用 cands[0].lines 前端选源（那是造轮子、会跟挂件不同源）。
     loadBackendLyric(song, gen);
@@ -328,7 +313,6 @@
       if (!d || !d.lines || !d.lines.length) { if (!lines.length) { linesEl.innerHTML = '<div class="h-full flex items-center justify-center"><p class="text-gray-400">未找到歌词</p></div>'; } return; }
       lines = d.lines; // [[sec,text,dur]]
       if (typeof d.offset === 'number') setOffset(d.offset);
-      lycSet(song.bvid, { id: 0, name: currentSong.title, artist: currentSong.artist, duration: 0, lines: d.lines }); // 秒显缓存
       renderLines(); lastIdx = -1; sync(audio.currentTime);
       setSource({ name: currentSong.title, artist: currentSong.artist });
     } catch (e) { /* 后端行失败：candidates 兜底（renderFromCand） */ }

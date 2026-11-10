@@ -6,12 +6,14 @@ import (
 	"net/http"
 
 	"homecast/internal/service/cache"
+	"homecast/internal/service/lyriccache"
 )
 
 // CacheHandler 音频缓存端点
 type CacheHandler struct {
-	Cache    *cache.CacheService
-	FavTable string // 收藏表名（ClearUnfav 用）
+	Cache      *cache.CacheService
+	LyricCache *lyriccache.LyricCache // 歌词行缓存（跟音频同逻辑；clear 一起清）
+	FavTable   string                  // 收藏表名（ClearUnfav 用）
 }
 
 // Stats GET /api/v1/cache/stats —— 已用大小/条数/上限
@@ -23,13 +25,19 @@ func (h *CacheHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ClearAll POST /api/v1/cache/clear?mode=all|unfav —— 全清 / 只清未收藏
+// ClearAll POST /api/v1/cache/clear?mode=all|unfav —— 全清 / 只清未收藏（音频+歌词一起清，统一入口）
 func (h *CacheHandler) ClearAll(w http.ResponseWriter, r *http.Request) {
 	mode := r.URL.Query().Get("mode")
 	if mode == "unfav" {
 		h.Cache.ClearUnfav(h.FavTable)
+		if h.LyricCache != nil {
+			h.LyricCache.ClearUnfav(h.FavTable)
+		}
 	} else {
 		h.Cache.ClearAll()
+		if h.LyricCache != nil {
+			h.LyricCache.ClearAll()
+		}
 	}
 	ok(w, true)
 }

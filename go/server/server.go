@@ -17,6 +17,7 @@ import (
 	"homecast/internal/service/cast"
 	"homecast/internal/service/fav"
 	"homecast/internal/service/lyric"
+	"homecast/internal/service/lyriccache"
 	"homecast/internal/service/music"
 	"homecast/internal/service/playback"
 	"homecast/internal/service/playlist"
@@ -63,6 +64,7 @@ func New() http.Handler {
 		lyric.LyricSchema,
 		cache.CacheSchema,
 		cache.SettingsSchema,
+		lyriccache.CacheSchema,
 	}, map[string]string{
 		fav.FavTable:     filepath.Join(dataDir, "favorites.json"),
 		playlist.PlaylistTable: filepath.Join(dataDir, "playlist.json"),
@@ -76,7 +78,9 @@ func New() http.Handler {
 	musicHandler := api.NewMusicHandler(musicSvc)
 	musicHandler.Cache = cacheSvc
 	favHandler := &api.FavHandler{Fav: fav.NewFavService(db)}
-	lyricHandler := &api.LyricHandler{Lyric: lyric.NewLyricStore(db), Music: musicSvc}
+	// 歌词行缓存（后端持有，与音频同逻辑；透明：/api/v1/music/lyric 命中直接返回）
+	lyricCache := lyriccache.NewLyricCache(db, -1)
+	lyricHandler := &api.LyricHandler{Lyric: lyric.NewLyricStore(db), Music: musicSvc, LyricCache: lyricCache}
 	// offset 变更 → 挂件重定位广播（闭包引用 widgetStateGlobal，server 建完再赋值）
 	lyricHandler.OnOffsetChange = func() {
 		if widgetStateGlobal != nil {
@@ -106,7 +110,7 @@ func New() http.Handler {
 	widgetStateGlobal = widgetState
 	widgetHandler := &api.WidgetHandler{State: widgetState}
 
-	cacheHandler := &api.CacheHandler{Cache: cacheSvc, FavTable: fav.FavTable}
+	cacheHandler := &api.CacheHandler{Cache: cacheSvc, LyricCache: lyricCache, FavTable: fav.FavTable}
 
 	// 统一播放状态源（SSOT）：业务状态唯一住后端，前端订阅 /api/v1/state/stream 渲染
 	playbackState := playback.NewPlaybackState()

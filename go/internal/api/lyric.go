@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"homecast/internal/service/lyric"
+	"homecast/internal/service/lyriccache"
 	"homecast/internal/service/music"
 )
 
@@ -14,6 +15,7 @@ import (
 type LyricHandler struct {
 	Lyric *lyric.LyricStore
 	Music *music.MusicService // bvid → 分P标题作搜索关键词（B 站合集痛点；带 view 缓存）
+	LyricCache *lyriccache.LyricCache // 歌词行缓存（后端持有，与音频同逻辑；透明：命中直接返回）
 	// OnOffsetChange 对齐偏移变更回调（offset 改了 → 挂件/显示层需重新定位广播；
 	// 由 server 注入，handler 不依赖 widget 域，保持解耦）
 	OnOffsetChange func()
@@ -36,6 +38,7 @@ func (h *LyricHandler) keywordsFor(bvid, keyword string) []string {
 // Get GET /api/v1/music/lyric?keyword=&sid=&bvid=
 // bvid 优先：有已选歌词源（前端切源上报持久化）就用已选源——桌面歌词挂件（只带 bvid/keyword）
 // 与歌词页（切源后）拿到同一份歌词，两端同步；bvid 模式同时返回本歌存档的对齐偏移。
+// 透明缓存：bvid 非空先查 lyric_cache（命中直接返回，秒显/离线可看）；未命中拉取后 Put。
 func (h *LyricHandler) Get(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	sid, _ := strconv.Atoi(q.Get("sid"))
@@ -49,6 +52,19 @@ func (h *LyricHandler) Get(w http.ResponseWriter, r *http.Request) {
 		if sel := h.Lyric.SelectedSID(bvid); sel > 0 {
 			sid = sel
 		}
+		// 透明缓存命中：直接返回（不动选源/偏移逻辑，纯数据快照）
+		if h.LyricCache != nil {
+			if e, hit := h.LyricCache.Get(bvid); hit {
+				var res lyric.LyricResult
+				if lyriccache.Unmarshal(e.Data, &res) == nil && len(res.Lines) > 0 {
+					if sel, sok := h.Lyric.Get(bvid); sok {
+						res.Offset = sel.Offset // 偏移始终取当前存档（缓存行+实时偏移）
+					}
+					ok(w, res)
+					return
+				}
+			}
+		}
 	}
 	res := lyric.GetLyricLines(keywords, sid)
 	if res == nil {
@@ -59,6 +75,10 @@ func (h *LyricHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if bvid != "" {
 		if sel, ok := h.Lyric.Get(bvid); ok {
 			res.Offset = sel.Offset
+		}
+		// 命中后才写缓存（res 含 lines；bvid 键）
+		if h.LyricCache != nil && len(res.Lines) > 0 {
+			h.LyricCache.Put(bvid, lyriccache.Marshal(res))
 		}
 	}
 	ok(w, res)
@@ -118,7 +138,10 @@ func (h *LyricHandler) Select(w http.ResponseWriter, r *http.Request) {
 		BVID: body.BVID, SID: body.SID, Name: body.Name,
 		Artist: body.Artist, Cover: body.Cover, Duration: body.Duration,
 	})
-	// 选源变了 → 清缓存重拉 + SSE 广播新 line（显示层纯渲染，同 offset 链路）
+	// 选源变了 → 清该歌歌词缓存 + SSE 广播新 line（显示层纯渲染，同 offset 链路）
+	if h.LyricCache != nil {
+		h.LyricCache.Remove(body.BVID)
+	}
 	if h.OnSelectChange != nil {
 		h.OnSelectChange()
 	}
@@ -144,6 +167,10 @@ func (h *LyricHandler) Offset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Lyric.SetOffset(bvid, offset)
+	// offset 变了 → 清该歌歌词缓存（行时间戳含 offset，重拉）+ 挂件重新定位
+	if h.LyricCache != nil {
+		h.LyricCache.Remove(bvid)
+	}
 	if h.OnOffsetChange != nil {
 		h.OnOffsetChange() // offset 变了 → 触发挂件重新定位（SSE 广播带新 line）
 	}
