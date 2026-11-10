@@ -18,6 +18,7 @@ import (
 	"homecast/internal/service/fav"
 	"homecast/internal/service/lyric"
 	"homecast/internal/service/music"
+	"homecast/internal/service/playback"
 	"homecast/internal/service/playlist"
 	"homecast/internal/service/sites"
 	spk "homecast/internal/service/speaker"
@@ -106,9 +107,16 @@ func New() http.Handler {
 	widgetHandler := &api.WidgetHandler{State: widgetState}
 
 	cacheHandler := &api.CacheHandler{Cache: cacheSvc, FavTable: fav.FavTable}
+
+	// 统一播放状态源（SSOT）：业务状态唯一住后端，前端订阅 /api/v1/state/stream 渲染
+	playbackState := playback.NewPlaybackState()
+	playbackStateGlobal = playbackState
+	stateHandler := &api.StateHandler{Pb: playbackState}
+
 	mux := api.NewMux(
 		musicHandler, favHandler, lyricHandler, playlistHandler,
 		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler, cacheHandler,
+		stateHandler,
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
@@ -131,6 +139,7 @@ func WidgetStateSnapshot() (bvid, title, artist string, currentTime, duration fl
 }
 
 var widgetStateGlobal *widget.WidgetState
+var playbackStateGlobal *playback.PlaybackState
 
 // withCORS 允许任意来源（本地单用户服务；桌面壳 wails:// 域跨域访问）
 func withCORS(h http.Handler) http.Handler {

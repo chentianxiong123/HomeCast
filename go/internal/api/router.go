@@ -12,7 +12,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // NewMux 组装全部路由（对齐 Python /api/v1 前缀）
-func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist *PlaylistHandler, cast *CastHandler, proxy *ProxyHandler, speaker *SpeakerHandler, sites *SitesHandler, widget *WidgetHandler, cache *CacheHandler) http.Handler {
+func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist *PlaylistHandler, cast *CastHandler, proxy *ProxyHandler, speaker *SpeakerHandler, sites *SitesHandler, widget *WidgetHandler, cache *CacheHandler, state *StateHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/music/search", music.Search)
 	mux.HandleFunc("GET /api/v1/music/stream/{bvid}", music.Stream)
@@ -69,5 +69,9 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("POST /api/v1/cache/clear", cache.ClearAll)
 	mux.HandleFunc("GET /api/v1/cache/limit", cache.Limit)
 	mux.HandleFunc("POST /api/v1/cache/limit", cache.SetLimit)
+	mux.HandleFunc("GET /api/v1/state", state.Get)
+	mux.HandleFunc("GET /api/v1/state/stream", state.Stream)
+	mux.HandleFunc("POST /api/v1/state/command", state.Command)
+	mux.HandleFunc("POST /api/v1/state/progress", state.Progress)
 	return mux
 }
