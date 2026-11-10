@@ -60,13 +60,54 @@
   try {
     const es = new EventSource('/api/v1/state/stream');
     es.addEventListener('state', (ev) => {
-      try { applyState(JSON.parse(ev.data)); } catch (e) {}
+      try {
+        const s = JSON.parse(ev.data);
+        applyState(s);
+        migrateLegacy(s); // 一次性：旧 localStorage 队列 → 后端（仅后端空队列时）
+      } catch (e) {}
     });
     es.addEventListener('progress', (ev) => {
       try { applyProgress(JSON.parse(ev.data)); } catch (e) {}
     });
     es.onerror = () => {}; // 自动重连
   } catch (e) {}
+
+  // 一次性迁移：旧前端 localStorage（hc:queue / hc:song）→ 后端队列（阶段4）。
+  // 仅当后端队列为空 且 localStorage 有旧数据时导入一次；导入后清除旧键，避免重复。
+  let migrated = false;
+  function migrateLegacy(s) {
+    if (migrated) return;
+    migrated = true;
+    try {
+      const qraw = localStorage.getItem('hc:queue');
+      const qd = qraw ? JSON.parse(qraw) : null;
+      const oldQueue = qd && Array.isArray(qd.list) && qd.list.length ? qd.list : [];
+      // 后端已有队列：不覆盖，仅清理旧键
+      if (s && s.queue && s.queue.length) {
+        localStorage.removeItem('hc:queue');
+        return;
+      }
+      // 后端空：导入旧队列（若 hc:queue 有，用它；否则单曲 hc:song）
+      // 用独立 fetch（EventSource 首事件可能早于 window.hcState 定义，不依赖它）
+      function postCmd(op, body) {
+        fetch('/api/v1/state/command', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.assign({ op: op }, body || {})),
+        }).catch(function () {});
+      }
+      if (oldQueue.length) {
+        postCmd('queue', { queue: oldQueue.map(function (x) { return { bvid: x.bvid, title: x.title, artist: x.artist, cover: x.cover, duration: x.duration }; }), qidx: typeof qd.idx === 'number' ? qd.idx : 0 });
+      } else {
+        const sraw = localStorage.getItem('hc:song');
+        if (sraw) {
+          const sc = JSON.parse(sraw);
+          if (sc && sc.bvid) postCmd('play', { bvid: sc.bvid, title: sc.title, artist: sc.artist, cover: sc.cover });
+        }
+      }
+      localStorage.removeItem('hc:queue');
+      localStorage.removeItem('hc:song');
+    } catch (e) {}
+  }
 
   // 命令入口：供 player.js / 其他孤岛发命令到后端（统一走后端）
   window.hcState = {

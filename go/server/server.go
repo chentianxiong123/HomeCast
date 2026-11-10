@@ -110,6 +110,8 @@ func New() http.Handler {
 
 	// 统一播放状态源（SSOT）：业务状态唯一住后端，前端订阅 /api/v1/state/stream 渲染
 	playbackState := playback.NewPlaybackState()
+	playbackState.SetDB(db)     // 持久化（settings kv，变更即存）
+	playbackState.Restore(db)   // 启动恢复：队列/模式/上次歌（不自动播）
 	playbackStateGlobal = playbackState
 	stateHandler := &api.StateHandler{Pb: playbackState}
 

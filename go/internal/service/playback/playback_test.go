@@ -1,8 +1,11 @@
 package playback
 
 import (
+	"database/sql"
 	"testing"
 	"time"
+
+	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
 func TestPlayQueueAndNext(t *testing.T) {
@@ -81,8 +84,8 @@ func TestRemoveClearQueue(t *testing.T) {
 	}
 	p.ClearQueue()
 	s = p.Snapshot()
-	if len(s.Queue) != 0 {
-		t.Fatalf("clear: %d", len(s.Queue))
+	if len(s.Queue) != 0 || s.BVID != "" {
+		t.Fatalf("clear: q=%d bvid=%s", len(s.Queue), s.BVID)
 	}
 }
 
@@ -150,5 +153,32 @@ func TestSetSpeakerProgress(t *testing.T) {
 	s = p.Snapshot()
 	if s.Playing || s.Position != 0 {
 		t.Fatalf("stopped wrong: %+v", s)
+	}
+}
+
+func TestPersistRestore(t *testing.T) {
+	// 临时 SQLite
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	p := NewPlaybackState()
+	p.SetDB(db)
+	p.SetQueue([]Song{{BVID: "A", Title: "a"}, {BVID: "B", Title: "b"}}, 1)
+	p.SetMode("random")
+	p.Save(db) // 主动触发（SetQueue/SetMode 经 bcastSnapshot 已自动存，此处显式保底）
+	// 新实例恢复
+	p2 := NewPlaybackState()
+	p2.Restore(db)
+	s := p2.Snapshot()
+	if len(s.Queue) != 2 || s.QIdx != 1 || s.BVID != "B" || s.PlayMode != "random" {
+		t.Fatalf("restore wrong: queue=%d qidx=%d cur=%s mode=%s", len(s.Queue), s.QIdx, s.BVID, s.PlayMode)
+	}
+	if s.Playing {
+		t.Fatal("restore should not auto-play")
 	}
 }

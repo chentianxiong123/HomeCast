@@ -6,6 +6,7 @@
 package playback
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"sync"
@@ -48,6 +49,7 @@ type PlaybackState struct {
 	mu   sync.Mutex
 	cur  State
 	subs map[chan SSEMsg]struct{}
+	db   *sql.DB // 持久化（settings kv），可选注入
 }
 
 // NewPlaybackState 构造
@@ -58,7 +60,12 @@ func NewPlaybackState() *PlaybackState {
 	}
 }
 
-// Subscribe 注册 SSE 订阅者
+// SetDB 注入持久化句柄（变更即 Save）
+func (p *PlaybackState) SetDB(db *sql.DB) {
+	p.mu.Lock()
+	p.db = db
+	p.mu.Unlock()
+}
 func (p *PlaybackState) Subscribe() chan SSEMsg {
 	ch := make(chan SSEMsg, 16)
 	p.mu.Lock()
@@ -95,11 +102,12 @@ func (p *PlaybackState) Snapshot() State {
 	return s
 }
 
-// bcastSnapshot 广播全量快照（state 事件）
+// bcastSnapshot 广播全量快照（state 事件）+ 持久化
 func (p *PlaybackState) bcastSnapshot() {
 	s := p.Snapshot()
 	b, _ := json.Marshal(s)
 	p.broadcast(SSEMsg{Name: "state", Data: string(b)})
+	p.persistNow()
 }
 
 // bcastProgress 广播进度（progress 事件，高频但轻量，只带 position/duration/playing）
@@ -112,6 +120,20 @@ func (p *PlaybackState) bcastProgress() {
 		"position": s.Position, "duration": s.Duration, "spk_did": s.SpkDID,
 	})
 	p.broadcast(SSEMsg{Name: "progress", Data: string(b)})
+}
+
+// persistNow 立即持久化（若已注入 db）
+func (p *PlaybackState) persistNow() {
+	p.mu.Lock()
+	db := p.db
+	p.mu.Unlock()
+	if db == nil {
+		return
+	}
+	b := p.persist()
+	if _, err := db.Exec(`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, stateKey, string(b)); err != nil {
+		log.Printf("[playback] save state: %v", err)
+	}
 }
 
 // ---- 命令（前端发命令 → 后端改状态 → 广播） ----
@@ -301,11 +323,18 @@ func (p *PlaybackState) RemoveQueue(bvid string) {
 	p.bcastSnapshot()
 }
 
-// ClearQueue 清空队列（保留当前歌继续播）
+// ClearQueue 清空队列（含当前歌——队列空则无歌可播）
 func (p *PlaybackState) ClearQueue() {
 	p.mu.Lock()
 	p.cur.Queue = []Song{}
 	p.cur.QIdx = -1
+	p.cur.BVID = ""
+	p.cur.Title = ""
+	p.cur.Artist = ""
+	p.cur.Cover = ""
+	p.cur.Playing = false
+	p.cur.Position = 0
+	p.cur.Duration = 0
 	p.mu.Unlock()
 	p.bcastSnapshot()
 }
@@ -359,4 +388,71 @@ func (p *PlaybackState) SetSpeakerStopped(did string) {
 	}
 	p.mu.Unlock()
 	p.bcastProgress()
+}
+
+// ---- 持久化（settings kv，key=playback_state）：存队列/播放模式/上次歌，重启恢复 ----
+
+// stateKey settings 表键
+const stateKey = "playback_state"
+
+// persist 序列化持久态（队列/模式/当前歌，不含 position/playing——播放态不跨重启）
+func (p *PlaybackState) persist() []byte {
+	s := p.Snapshot()
+	v := map[string]any{
+		"play_mode": s.PlayMode,
+		"qidx":      s.QIdx,
+		"queue":     s.Queue,
+	}
+	b, _ := json.Marshal(v)
+	return b
+}
+
+// Save 持久化当前队列/模式到 settings（变更后调用；失败仅日志，不阻塞播放）
+// 已由 bcastSnapshot → persistNow 自动调用，此处保留兼容导出（供外部主动存）
+func (p *PlaybackState) Save(db *sql.DB) {
+	p.persistNow()
+}
+
+// Restore 启动恢复：读 settings 回队列/模式/当前歌（playing=false，不自动播）。
+// 无持久化数据则保留默认（Source=web, PlayMode=order, 空队列）。
+func (p *PlaybackState) Restore(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	var v string
+	if err := db.QueryRow(`SELECT value FROM settings WHERE key=?`, stateKey).Scan(&v); err != nil {
+		return // 无历史，保留默认
+	}
+	var d struct {
+		PlayMode string `json:"play_mode"`
+		QIdx     int    `json:"qidx"`
+		Queue    []Song `json:"queue"`
+	}
+	if json.Unmarshal([]byte(v), &d) != nil {
+		return
+	}
+	p.mu.Lock()
+	p.cur.PlayMode = d.PlayMode
+	if d.PlayMode == "" {
+		p.cur.PlayMode = "order"
+	}
+	if len(d.Queue) > 0 {
+		p.cur.Queue = d.Queue
+		// 上次歌恢复（qidx 越界钳制）；不自动播
+		if d.QIdx >= 0 && d.QIdx < len(d.Queue) {
+			p.cur.QIdx = d.QIdx
+		} else {
+			p.cur.QIdx = 0
+		}
+		p.cur.BVID = p.cur.Queue[p.cur.QIdx].BVID
+		p.cur.Title = p.cur.Queue[p.cur.QIdx].Title
+		p.cur.Artist = p.cur.Queue[p.cur.QIdx].Artist
+		p.cur.Cover = p.cur.Queue[p.cur.QIdx].Cover
+		p.cur.Playing = false
+		p.cur.Position = 0
+	}
+	p.mu.Unlock()
+	if len(d.Queue) > 0 {
+		log.Printf("[playback] restore queue=%d qidx=%d cur=%s mode=%s", len(d.Queue), p.Snapshot().QIdx, p.Snapshot().BVID, p.Snapshot().PlayMode)
+	}
 }
