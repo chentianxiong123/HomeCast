@@ -236,6 +236,13 @@
       reportWidget(); // widget 250ms 上报（~4Hz，桌面/安卓歌词挂件跟得上 web）
     }
   });
+  // seek 完成后重置 seeking（否则 render/timeupdate 的 !seeking 检查永久跳过，进度/时长远停）
+  audio.addEventListener('seeked', () => {
+    if (seeking) {
+      seeking = false;
+      render();
+    }
+  });
   let lastReport = 0;
 
   // ---- widget 上报（桌面歌词挂件：后端 widgetState 读，SSE lyric-state 推行） ----
@@ -272,6 +279,7 @@
   });
   el.prog.addEventListener('input', () => {
     // 拖动中本地即时反馈（高频 UI），松手 change 才 seek+上报
+    seeking = true; // 防 timeupdate 覆盖拖动中的进度条
     const d = pb().duration || audio.duration || 1;
     el.cur.textContent = fmt((el.prog.value / 1000) * d);
   });
