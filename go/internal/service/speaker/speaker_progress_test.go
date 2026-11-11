@@ -61,7 +61,7 @@ func newTestSpeaker(t *testing.T, withClient bool) *SpeakerService {
 		t.Cleanup(srv.Close)
 		client = bilibili.NewClient(srv.URL, "TestUA/1.0", "https://ref.example.com", 5*time.Second)
 	}
-	s := NewSpeakerService(&speaker.SpeakerAuth{}, client, token.NewTokenStore())
+	s := NewSpeakerService(&speaker.SpeakerAuth{}, client, token.NewTokenStore(), nil)
 	s.mu.Lock()
 	s.devices["did1"] = speaker.SpeakerDevice{DID: "did1", DeviceID: "dev-1", Name: "测试音箱", Hardware: "lx05a"}
 	s.mu.Unlock()
