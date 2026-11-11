@@ -116,6 +116,7 @@ func New() http.Handler {
 	playbackState := playback.NewPlaybackState()
 	playbackState.SetDB(db)     // 持久化（settings kv，变更即存）
 	playbackState.Restore(db)   // 启动恢复：队列/模式/上次歌（不自动播）
+	playbackState.SetSpeaker(&speakerControllerAdapter{svc: speakerSvc}) // 音箱让位模式：暂停/恢复/切歌真调音箱 API
 	playbackStateGlobal = playbackState
 	stateHandler := &api.StateHandler{Pb: playbackState}
 
@@ -134,6 +135,21 @@ func New() http.Handler {
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)
 	return withCORS(outer)
+}
+
+// speakerControllerAdapter 把 SpeakerService 适配成 playback.SpeakerController（避免循环依赖）
+type speakerControllerAdapter struct {
+	svc *spk.SpeakerService
+}
+
+func (a *speakerControllerAdapter) Control(did, action string, volume int) (map[string]any, error) {
+	return a.svc.Control(did, action, volume)
+}
+
+func (a *speakerControllerAdapter) Play(bvid, did string, req playback.SpkPlayReq) (map[string]any, error) {
+	return a.svc.Play(bvid, did, 30280, spk.PlayOpts{
+		Title: req.Title, Duration: req.Duration, NextBVID: req.NextBVID,
+	})
 }
 
 // WidgetStateRef 挂件（同进程）读取播放状态用

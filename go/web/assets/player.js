@@ -13,7 +13,7 @@
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
     cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
-    qualityBtn: $('d-quality'), eq: $('d-eq'), fav: $('d-fav'),
+    qualityBtn: $('d-quality'), eq: $('d-eq'), fav: $('d-fav'), spkMode: $('d-spk-mode'),
   };
   if (!el.dock || !el.toggle) return;
 
@@ -21,7 +21,6 @@
   let quality = parseInt(localStorage.getItem('hc:quality') || '192', 10); // 64/128/192
   if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
   let volMuted = false; // 静音（WebKit audio.muted 同帧读取旧值，用 JS 变量）
-  let lastBvid = '';    // 上次加载的 audio.src（避免重复设）
   let seeking = false;  // 拖动进度条中（暂停上报，松手再上报）
 
   const fmt = (s) => {
@@ -52,6 +51,8 @@
       if (el.artist.textContent !== p.artist) el.artist.textContent = p.artist || '未知作者';
       if (el.cover.getAttribute('src') !== p.cover) { el.cover.src = p.cover || ''; el.cover.alt = p.title || ''; }
       if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
+      // 音箱模式徽标：source=speaker 时显示（点击切回网页播放）
+      if (el.spkMode) el.spkMode.classList.toggle('hidden', p.source !== 'speaker');
       renderMode(p.play_mode);
       // 收藏按钮同步：data-* 属性更新 + 状态刷新（统一 hcFav）
       const favBtn = el.fav;
@@ -96,6 +97,10 @@
   function driveAudio() {
     const p = pb();
     if (p.source !== 'web' || !p.bvid) return; // 音箱模式：web 音频不动
+    // 从音箱模式切回 web：强制重载当前歌（lastBvid 在音箱模式下可能已被音箱桥更新到同 bvid，
+    // 或 audio.src 还停在旧歌——必须重置 lastBvid 让下面载源分支无条件执行）
+    if (prevSource !== 'web') lastBvid = '';
+    prevSource = p.source;
     if (p.bvid !== lastBvid) {
       lastBvid = p.bvid;
       const streamURL = '/api/v1/music/stream/' + p.bvid + '?quality=' + quality;
@@ -108,6 +113,8 @@
       audio.pause();
     }
   }
+  let prevSource = 'web'; // 上一个 source（切回 web 时强制重载）
+  let lastBvid = '';
 
   // ---- 命令转发（用户点击 → 后端） ----
   function toggle() {
@@ -159,25 +166,62 @@
     hcBus.emit('toast', { msg: '音质 ' + q + 'k' });
   }
   function setVol(v) {
-    audio.volume = v / 100;
     volMuted = v === 0;
-    audio.muted = volMuted;
+    // 音箱模式：音量走音箱 API（设备实际音量）；web 模式仍走本地 audio
+    if (pb().source === 'speaker') {
+      const did = pb().spk_did;
+      if (did) {
+        fetch('/api/v1/speaker/volume', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ did, volume: v }),
+        }).catch(() => {});
+      }
+    } else {
+      audio.volume = v / 100;
+      audio.muted = volMuted;
+    }
     try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
     renderMute();
   }
   function mute() {
-    if (volMuted || audio.volume === 0) {
-      volMuted = false;
-      if (audio.volume === 0) {
+    // 音箱模式：静音=音量 0 走音箱 API；web 模式仍走本地 audio.muted
+    if (pb().source === 'speaker') {
+      const did = pb().spk_did;
+      const wasMuted = volMuted || audio.volume === 0;
+      if (wasMuted) {
+        // 取消静音 → 恢复上次音量
+        volMuted = false;
         const def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
-        audio.volume = def / 100;
-        if (el.vol) el.vol.value = def;
-        try { localStorage.setItem('hc:vol', String(def)); } catch (e) {}
+        if (did && def > 0) {
+          fetch('/api/v1/speaker/volume', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ did, volume: def }),
+          }).catch(() => {});
+        }
+      } else {
+        // 静音 → 音量 0
+        volMuted = true;
+        if (did) {
+          fetch('/api/v1/speaker/volume', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ did, volume: 0 }),
+          }).catch(() => {});
+        }
       }
     } else {
-      volMuted = true;
+      if (volMuted || audio.volume === 0) {
+        volMuted = false;
+        if (audio.volume === 0) {
+          const def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+          audio.volume = def / 100;
+          if (el.vol) el.vol.value = def;
+          try { localStorage.setItem('hc:vol', String(def)); } catch (e) {}
+        }
+      } else {
+        volMuted = true;
+      }
+      audio.muted = volMuted;
     }
-    audio.muted = volMuted;
     renderMute();
   }
   function renderMute() {
@@ -285,6 +329,8 @@
   });
   el.vol.addEventListener('input', () => setVol(el.vol.value));
   el.toggle.addEventListener('click', toggle);
+  // 音箱模式徽标 → 切回网页播放
+  if (el.spkMode) el.spkMode.addEventListener('click', () => window.hcState.cmd('switch_web'));
   el.prev.addEventListener('click', () => step('prev'));
   el.next.addEventListener('click', () => step('next'));
   el.cover.addEventListener('click', () => {
