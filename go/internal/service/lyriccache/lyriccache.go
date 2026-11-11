@@ -16,6 +16,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"homecast/internal/service/conv"
 )
 
 // CacheTable lyric_cache 表名
@@ -50,25 +52,10 @@ func NewLyricCache(db *sql.DB, limit int) *LyricCache {
 	s := &LyricCache{db: db, limit: DefaultLimit}
 	if limit >= 0 {
 		s.limit = limit
-	} else if v, err := s.loadLimit(); err == nil {
+	} else if v, err := conv.LoadLimit(s.db, limitKey, DefaultLimit); err == nil {
 		s.limit = v
 	}
 	return s
-}
-
-func (s *LyricCache) loadLimit() (int, error) {
-	var v string
-	if err := s.db.QueryRow(`SELECT value FROM settings WHERE key=?`, limitKey).Scan(&v); err != nil {
-		return 0, err
-	}
-	n := 0
-	for _, c := range v {
-		if c < '0' || c > '9' {
-			return DefaultLimit, nil
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
 }
 
 // Limit 当前上限（条目数）
@@ -87,21 +74,10 @@ func (s *LyricCache) SetLimit(v int) {
 	defer s.mu.Unlock()
 	s.limit = v
 	s.db.Exec(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=?`,
-		limitKey, itoa(v), itoa(v))
+		limitKey, conv.Itoa(v), conv.Itoa(v))
 	s.evictLocked() // 降低上限可能触发立即淘汰
 }
 
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := make([]byte, 0, 12)
-	for n > 0 {
-		buf = append([]byte{byte('0' + n%10)}, buf...)
-		n /= 10
-	}
-	return string(buf)
-}
 
 // Get 命中返回 Entry + 刷新 last_used（LRU 触碰）；未命中 ok=false
 func (s *LyricCache) Get(bvid string) (Entry, bool) {
@@ -116,8 +92,11 @@ func (s *LyricCache) Get(bvid string) (Entry, bool) {
 	if e.Data == "" {
 		return Entry{}, false
 	}
+	// LRU 触碰降频（同上：命中高频，写库降频到 ≥60s 一次）
 	now := time.Now().UnixMilli()
-	s.db.Exec(`UPDATE lyric_cache SET last_used=? WHERE bvid=?`, now, bvid)
+	if now-lastUsed >= 60000 {
+		s.db.Exec(`UPDATE lyric_cache SET last_used=? WHERE bvid=?`, now, bvid)
+	}
 	return e, true
 }
 
@@ -218,8 +197,12 @@ func (s *LyricCache) ClearAll() {
 	s.db.Exec(`DELETE FROM lyric_cache`)
 }
 
-// ClearUnfav 只清不在 favs 表（未收藏）的歌
+// ClearUnfav 只清不在 favs 表（未收藏）的歌；表名拼接前白名单校验（防 SQL 注入，同 cache.ClearUnfav）
 func (s *LyricCache) ClearUnfav(favTable string) {
+	favTable = conv.ValidateTableName(favTable)
+	if favTable == "" {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Exec(`DELETE FROM lyric_cache WHERE bvid NOT IN (SELECT bvid FROM ` + favTable + `)`)

@@ -89,16 +89,20 @@ func (p *PlaylistService) Get() PlaylistResult {
 	return PlaylistResult{List: cp}
 }
 
-// Add 加一首（已存在返回现有条目不重复添加）
+// Add 加一首（已存在返回现有条目不重复添加）。
+// 网络 I/O（GetVideoInfo）移出锁：先锁内查重，未命中解锁去拉，再拿锁 append+save——
+// 避免持 p.mu 做网络请求（慢/超时会卡住全部歌单操作）——review 性能 #8。
 func (p *PlaylistService) Add(bvid string) (*PlaylistItem, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	for i := range p.list {
 		if p.list[i].BVID == bvid {
 			it := p.list[i]
+			p.mu.Unlock()
 			return &it, nil
 		}
 	}
+	p.mu.Unlock()
+	// 网络 I/O：锁外执行
 	info, err := p.client.GetVideoInfo(bvid)
 	if err != nil {
 		return nil, err
@@ -111,8 +115,10 @@ func (p *PlaylistService) Add(bvid string) (*PlaylistItem, error) {
 		Duration:    FormatDuration(info.Duration),
 		DurationSec: info.Duration,
 	}
+	p.mu.Lock()
 	p.list = append(p.list, item)
 	p.save()
+	p.mu.Unlock()
 	return &item, nil
 }
 

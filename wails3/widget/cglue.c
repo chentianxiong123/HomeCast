@@ -26,6 +26,14 @@ extern int pointer_global(int *x, int *y);
 void hc_get_pos(int *x, int *y);
 static gboolean _map_cb(GtkWidget *w, GdkEvent *ev, gpointer u);
 
+// Xlib 多线程安全（review 跨线程 #7）：time.AfterFunc 回调（非 GTK 主线程）会调
+// hc_keep_above/hc_move 等 Xlib 调用，共享 GDK 的 Display 连接。必须在进程首次任何
+// Xlib 调用之前初始化 XInitThreads（开启 Xlib 内部多线程锁），否则并发 Xlib 调用
+// 数据竞争/崩溃。构造函数在库加载即执行，早于 goInit/hc_move。
+__attribute__((constructor)) static void _hc_xlib_threads_init(void) {
+	XInitThreads();
+}
+
 static GtkWidget *g_win = NULL;
 static GtkWidget *g_fixed = NULL;
 static GtkWidget *g_ctrl = NULL;

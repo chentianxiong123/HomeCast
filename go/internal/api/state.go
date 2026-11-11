@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"homecast/internal/service/playback"
+	"homecast/internal/service/widget"
 )
 
 // StateHandler 统一播放状态端点（SSOT：后端唯一状态源）
 type StateHandler struct {
-	Pb *playback.PlaybackState
+	Pb     *playback.PlaybackState
+	Widget *widget.WidgetState // 顺手写挂件（前端 progress 合并 widget 上报：双 POST → 单 POST）
 }
 
 // Get GET /api/v1/state —— 当前快照
@@ -133,5 +135,11 @@ func (h *StateHandler) Progress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Pb.SetProgress(body.Position, body.Duration, body.Playing)
+	// 顺手写挂件（原前端 reportWidget 单独 POST；这里合并：
+	// 同频 4Hz 的 progress 已含全部 payload，widget 免第二个请求）
+	if h.Widget != nil {
+		snap := h.Pb.Snapshot()
+		h.Widget.Set(snap.BVID, snap.Title, snap.Artist, body.Position, body.Duration, body.Playing)
+	}
 	ok(w, true)
 }

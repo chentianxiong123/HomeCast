@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -133,5 +132,3 @@ func decodeData(v any, target any) error {
 	}
 	return json.Unmarshal(b, target)
 }
-
-var _ = io.Discard // 占位：io 可能后续用到

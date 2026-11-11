@@ -70,11 +70,13 @@
     // 进度显示（音箱模式进度由 SSE 推，web 由 timeupdate 推）
     // 总时长用 audio.duration 优先——store duration 切歌瞬间可能残留旧值（queue 恢复的歌 duration=0），
     // 用 store 会卡旧歌时长（如都是 3:04）。audio.duration 是真实当前音频时长，最准。
-    const dispDur = (pb().source === 'web' && audio.duration) ? audio.duration : pb().duration;
+    const isWeb = pb().source === 'web';
+    const dispDur = (isWeb && audio.duration) ? audio.duration : pb().duration;
     if (!seeking && dispDur > 0) {
-      el.cur.textContent = fmt(pb().source === 'web' ? audio.currentTime : p.position);
+      const curT = isWeb ? audio.currentTime : p.position;
+      el.cur.textContent = fmt(curT);
       el.dur.textContent = fmt(dispDur);
-      el.prog.value = Math.round(((pb().source === 'web' ? audio.currentTime : p.position) / dispDur) * 1000);
+      el.prog.value = Math.round((curT / dispDur) * 1000);
     }
   }
 
@@ -166,6 +168,7 @@
     hcBus.emit('toast', { msg: '音质 ' + q + 'k' });
   }
   function setVol(v) {
+    v = Number(v) || 0; // range input value 是字符串，后端 Volume int 解码数字必须转
     volMuted = v === 0;
     // 音箱模式：音量走音箱 API（设备实际音量）；web 模式仍走本地 audio
     if (pb().source === 'speaker') {
@@ -272,12 +275,11 @@
       el.prog.value = Math.round((audio.currentTime / d) * 1000);
       el.dur.textContent = fmt(audio.duration || 0);
     }
-    // 上报后端（低频 250ms）
+    // 上报后端（低频 250ms；widget 已由后端 progress handler 顺手写，不再单独 POST）
     const now = Date.now();
     if (now - lastReport > 250) {
       lastReport = now;
       window.hcState.progress(audio.currentTime, audio.duration || 0, !audio.paused);
-      reportWidget(); // widget 250ms 上报（~4Hz，桌面/安卓歌词挂件跟得上 web）
     }
   });
   // seek 完成后重置 seeking（否则 render/timeupdate 的 !seeking 检查永久跳过，进度/时长远停）
@@ -288,20 +290,6 @@
     }
   });
   let lastReport = 0;
-
-  // ---- widget 上报（桌面歌词挂件：后端 widgetState 读，SSE lyric-state 推行） ----
-  function reportWidget() {
-    const p = pb();
-    if (!p.bvid) return;
-    fetch('/api/v1/widget/state', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bvid: p.bvid, title: p.title, artist: p.artist || '',
-        current_time: audio.currentTime, duration: audio.duration || 0,
-        playing: !audio.paused,
-      }),
-    }).catch(() => {});
-  }
 
   // ---- widget 下行控制（SSE 推送，非轮询）：挂件 ⏸/◀/▶ 按钮 → 前端即时消费 ----
   try {
@@ -411,20 +399,11 @@
   }
 
   // ---- 状态流变化 → 驱动音频 + 渲染（state.js 已写 Alpine.store）----
-  // 订阅 Alpine store 变化（Alpine 3 用 effect，这里简单轮询 + 事件）
-  if (window.Alpine) {
-    // Alpine 3: Alpine.effect 在组件外不可用，用 store 监听事件（Alpine 触发 'alpine:store'）
-    let last = '';
-    setInterval(() => {
-      const p = pb();
-      const key = p.bvid + '|' + p.playing + '|' + p.source + '|' + p.play_mode + '|' + p.queue.length;
-      if (key !== last) {
-        last = key;
-        driveAudio();
-        render();
-        updateMediaMeta();
-      }
-    }, 120);
+  // ---- 状态流变化 → 驱动音频 + 渲染（事件驱动，不轮询）----
+  // state.js applyState/applyProgress 更新 Alpine.store 后 emit 'state'（含进度变化），
+  // 音箱模式 bvid/playing/source 不变、position 每秒变化 → 直接依赖该事件触发重绘。
+  if (window.hcBus) {
+    hcBus.on('state', () => { driveAudio(); render(); updateMediaMeta(); });
   }
 
   // ---- 音量/静音初始化（本地设备偏好）----

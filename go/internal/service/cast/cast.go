@@ -27,12 +27,11 @@ type Episode struct {
 	Thumbnail string `json:"thumbnail,omitempty"`
 }
 
-// SniffResult 嗅探返回
+// SniffResult 嗅探返回（EpisodesList 曾声明未填充，已删——死字段）
 type SniffResult struct {
-	Title        string    `json:"title"`
-	Episodes     []Episode `json:"episodes"`
-	EpisodesList []Episode `json:"episodes_list"`
-	SniffMethod  string    `json:"sniff_method"`
+	Title       string    `json:"title"`
+	Episodes    []Episode `json:"episodes"`
+	SniffMethod string    `json:"sniff_method"`
 }
 
 var (
@@ -68,7 +67,7 @@ func NewCastService(client *bilibili.Client, tokens *token.TokenStore) *CastServ
 
 // Discover 发现 DLNA 设备（SSDP）
 func (c *CastService) Discover() []*dlna.Device {
-	devices := dlna.Search(context.Background(), 5*time.Second, "")
+	devices := dlna.Search(context.Background(), 5*time.Second)
 	c.mu.Lock()
 	c.devices = map[string]*dlna.Device{}
 	for _, d := range devices {
@@ -104,15 +103,12 @@ func (c *CastService) Sniff(urlStr string) *SniffResult {
 			return res
 		}
 	}
-	// 直链视频
-	ext := strings.ToLower(urlStr)
-	for _, e := range videoExts {
-		if strings.Contains(ext, e) {
-			return &SniffResult{
-				Title:    "视频",
-				Episodes: []Episode{{Index: 1, Title: "视频", URL: urlStr}},
-				SniffMethod: "direct",
-			}
+	// 直链视频（复用 isDirectVideoURL，不再内联重复循环）
+	if isDirectVideoURL(urlStr) {
+		return &SniffResult{
+			Title:      "视频",
+			Episodes:   []Episode{{Index: 1, Title: "视频", URL: urlStr}},
+			SniffMethod: "direct",
 		}
 	}
 	return &SniffResult{Title: "", Episodes: nil}
@@ -243,29 +239,40 @@ func escapeXML(s string) string {
 }
 
 // controller 获取/创建设备控制句柄
+// 网络 I/O（拉设备描述 XML）移出锁：首次对设备操作时用 double-check，
+// 避免在 c.mu 锁内做网络请求（设备离线会挂起至超时，整服务锁死）——review 性能 #2。
 func (c *CastService) controller(udn string) (*deviceController, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if dc, ok := c.controllers[udn]; ok {
+	dc, ok := c.controllers[udn]
+	dev, devOK := c.devices[udn]
+	c.mu.Unlock()
+	if ok {
 		return dc, nil
 	}
-	dev, ok := c.devices[udn]
-	if !ok {
+	if !devOK {
 		return nil, fmt.Errorf("device not found: %s", udn)
 	}
 	u, err := url.Parse(dev.Location)
 	if err != nil {
 		return nil, err
 	}
+	// 网络调用：锁外执行
 	avs, err := av1.NewAVTransport1ClientsByURL(u)
 	if err != nil || len(avs) == 0 {
 		return nil, fmt.Errorf("no AVTransport service: %v", err)
 	}
-	dc := &deviceController{av: avs[0]}
+	dc = &deviceController{av: avs[0]}
 	if rcs, err := av1.NewRenderingControl1ClientsByURL(u); err == nil && len(rcs) > 0 {
 		dc.rc = rcs[0]
 	}
-	c.controllers[udn] = dc
+	// 拿锁写缓存（double-check：期间别人可能已建，以先建的为准）
+	c.mu.Lock()
+	if existing, ok := c.controllers[udn]; ok {
+		dc = existing
+	} else {
+		c.controllers[udn] = dc
+	}
+	c.mu.Unlock()
 	return dc, nil
 }
 

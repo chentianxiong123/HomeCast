@@ -22,6 +22,13 @@ func Open(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 并发配置（review 性能 #12：裸打开并发写可能 BUSY/锁死）
+	//   - 单连接：SQLite 同进程多连接写会互相锁，业务全走单连接 + busy_timeout 等待
+	//   - WAL：读写不互斥，写不阻塞读（播放进度高频写不再卡读）
+	//   - busy_timeout：写碰撞等 5s 而非立刻 BUSY 报错
+	db.SetMaxOpenConns(1)
+	db.Exec(`PRAGMA journal_mode=WAL`)
+	db.Exec(`PRAGMA busy_timeout=5000`)
 	return db, nil
 }
 

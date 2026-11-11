@@ -47,11 +47,13 @@ func Funcs() template.FuncMap {
 	}
 }
 
+// shortTitleRe 标题清洗正则（热路径：模板每行×3-4 次调用；提包级，严禁每次 MustCompile）
+var shortTitleRe = regexp.MustCompile(`《([^》]+)》|（([^）]+)）|【([^】]+)】|「([^」]+)」|\[([^\]]+)\]`)
+
 // ShortTitle 标题清洗（导出纯函数，可单测；与前端 title.js hcTitle 同规则）
 func ShortTitle(t string) string {
 	var parts []string
-	re := regexp.MustCompile(`《([^》]+)》|（([^）]+)）|【([^】]+)】|「([^」]+)」|\[([^\]]+)\]`)
-	for _, m := range re.FindAllStringSubmatch(t, -1) {
+	for _, m := range shortTitleRe.FindAllStringSubmatch(t, -1) {
 		for i := 1; i < len(m); i++ {
 			if m[i] != "" && strings.TrimSpace(m[i]) != "" {
 				parts = append(parts, strings.TrimSpace(m[i]))

@@ -118,7 +118,7 @@ func New() http.Handler {
 	playbackState.Restore(db)   // 启动恢复：队列/模式/上次歌（不自动播）
 	playbackState.SetSpeaker(&speakerControllerAdapter{svc: speakerSvc}) // 音箱让位模式：暂停/恢复/切歌真调音箱 API
 	playbackStateGlobal = playbackState
-	stateHandler := &api.StateHandler{Pb: playbackState}
+	stateHandler := &api.StateHandler{Pb: playbackState, Widget: widgetState}
 
 	// 后端桥：音箱本地模拟进度 1s tick → 统一状态流（音箱播放状态并入 SSOT）
 	go bridgeSpeakerProgress(speakerSvc, playbackState)
@@ -147,7 +147,11 @@ func (a *speakerControllerAdapter) Control(did, action string, volume int) (map[
 }
 
 func (a *speakerControllerAdapter) Play(bvid, did string, req playback.SpkPlayReq) (map[string]any, error) {
-	return a.svc.Play(bvid, did, 30280, spk.PlayOpts{
+	q := req.Quality
+	if q == 0 {
+		q = bilibili.Audio192K // 默认 192k（调用方未指定音质时）
+	}
+	return a.svc.Play(bvid, did, q, spk.PlayOpts{
 		Title: req.Title, Duration: req.Duration, NextBVID: req.NextBVID,
 	})
 }
@@ -204,6 +208,9 @@ func bridgeSpeakerProgress(svc *spk.SpeakerService, pb *playback.PlaybackState) 
 	defer tick.Stop()
 	for range tick.C {
 		all := svc.AllProgress()
+		if len(all) == 0 {
+			continue // 无音箱在播，跳过空转（避免每秒白加两把锁+遍历）
+		}
 		for did, d := range all {
 			if d == nil {
 				continue

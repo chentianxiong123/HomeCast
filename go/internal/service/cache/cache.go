@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"homecast/internal/service/conv"
 )
 
 // CacheTable audio_cache 表名
@@ -60,7 +62,7 @@ func NewCacheService(db *sql.DB, audioDir string, limitMB int) *CacheService {
 	s := &CacheService{db: db, audioDir: audioDir, limitMB: DefaultLimitMB}
 	if limitMB >= 0 {
 		s.limitMB = limitMB
-	} else if v, err := s.loadLimit(); err == nil {
+	} else if v, err := conv.LoadLimit(s.db, limitKey, DefaultLimitMB); err == nil {
 		s.limitMB = v
 	}
 	s.ensureHashColumn()
@@ -115,22 +117,6 @@ func headHash(path string) (int64, error) {
 	return int64(hh.Sum64() & 0x7fffffff), nil
 }
 
-// loadLimit 从 settings 读上限
-func (s *CacheService) loadLimit() (int, error) {
-	var v string
-	if err := s.db.QueryRow(`SELECT value FROM settings WHERE key=?`, limitKey).Scan(&v); err != nil {
-		return 0, err
-	}
-	n := 0
-	for _, c := range v {
-		if c < '0' || c > '9' {
-			return DefaultLimitMB, nil
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
-}
-
 // LimitMB 当前上限（MB，0=关）
 func (s *CacheService) LimitMB() int {
 	s.mu.Lock()
@@ -146,21 +132,9 @@ func (s *CacheService) SetLimitMB(v int) {
 	s.mu.Lock()
 	s.limitMB = v
 	s.db.Exec(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=?`,
-		limitKey, itoa(v), itoa(v))
+		limitKey, conv.Itoa(v), conv.Itoa(v))
 	s.evictLocked() // 降低上限可能触发立即淘汰
 	s.mu.Unlock()
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := make([]byte, 0, 12)
-	for n > 0 {
-		buf = append([]byte{byte('0' + n%10)}, buf...)
-		n /= 10
-	}
-	return string(buf)
 }
 
 // filePath 音频缓存文件路径
@@ -177,9 +151,9 @@ func (s *CacheService) Get(bvid string) (size int64, quality int, ok bool) {
 	if err != nil || fi.Size() == 0 {
 		return 0, 0, false
 	}
-	var q, dbHash int64
+	var q, dbHash, lastUsed int64
 	dbSize := fi.Size()
-	if err := s.db.QueryRow(`SELECT size, quality, hash FROM audio_cache WHERE bvid=?`, bvid).Scan(&dbSize, &q, &dbHash); err == nil {
+	if err := s.db.QueryRow(`SELECT size, quality, hash, last_used FROM audio_cache WHERE bvid=?`, bvid).Scan(&dbSize, &q, &dbHash, &lastUsed); err == nil {
 		if dbSize > fi.Size() {
 			// 文件比元数据小 → 下载中断/截断，serve 后浏览器 seek 到超出实际长度位置会 416
 			// → 音频跳末尾触发 ended 误切歌。删记录返回未命中，让 stream 重拉完整文件。
@@ -199,11 +173,17 @@ func (s *CacheService) Get(bvid string) (size int64, quality int, ok bool) {
 		if dbSize != fi.Size() { // 元数据过期（文件变大）→ 按实际
 			s.db.Exec(`UPDATE audio_cache SET size=? WHERE bvid=?`, fi.Size(), bvid)
 		}
+		// LRU 触碰降频（review 性能 #4：GET 命中每次都写库是写放大——206 分片高频
+		// 请求每秒多次触碰。只在距上次触碰 ≥60s 才写 last_used，淘汰粒度秒级足够）
+		now := time.Now().UnixMilli()
+		if now-lastUsed >= 60000 {
+			s.db.Exec(`UPDATE audio_cache SET size=?, last_used=? WHERE bvid=?`, fi.Size(), now, bvid)
+		}
+	} else {
+		// 文件在但元数据缺（旧库/异常）→ 补插，保持淘汰表完整
+		s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,hash,last_used) VALUES (?,?,?,?,?)`,
+			bvid, fi.Size(), q, dbHash, time.Now().UnixMilli())
 	}
-	now := time.Now().UnixMilli()
-	s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,hash,last_used) VALUES (?,?,?,?,?)
-		ON CONFLICT(bvid) DO UPDATE SET size=?, quality=?, last_used=?`,
-		bvid, fi.Size(), q, dbHash, now, fi.Size(), q, now)
 	return fi.Size(), int(q), true
 }
 
@@ -321,9 +301,11 @@ func (s *CacheService) ClearAll() {
 
 // StreamAndCache 边写 w（响应流）边落盘缓存（temp→rename，防半截文件）；
 // 小流（<64KB）不缓存。供 Stream handler 未命中时调用。
-// StreamAndCache 边转发给浏览器边 tee 落盘。contentLength 是上游声明的完整音频字节数，
-// 只有 n == contentLength（完整下载）才缓存——下载中断（浏览器 seek/切歌断连）会产生截断文件，
-// 截断文件被 serve 后浏览器 seek 超范围→416→跳末尾→误切歌。故不完整一律丢弃，不污染缓存。
+// StreamAndCache 边转发给浏览器边 tee 落盘。contentLength 是上游声明的完整音频字节数
+// （chunked 响应为 -1/0，见 http.Response.ContentLength）。完整性双判：
+//   - 有 Content-Length：字节数 == contentLength（下载中断/seek 断连的截断文件直接丢弃，不污染缓存）；
+//   - chunked/未知长度：io.Copy 无错误返回即读到完整 EOF（客户端断开会写 w 失败返回 err）才缓存；
+//  否则一律丢弃（截断文件被 serve 后浏览器 seek 超范围→416→跳末尾→误切歌）。
 func (s *CacheService) StreamAndCache(w io.Writer, bvid string, quality int, body io.Reader, contentLength int64) {
 	tmp := s.filePath(bvid) + ".tmp"
 	if err := os.MkdirAll(s.audioDir, 0o755); err != nil {
@@ -335,10 +317,16 @@ func (s *CacheService) StreamAndCache(w io.Writer, bvid string, quality int, bod
 		_, _ = io.Copy(w, body)
 		return
 	}
-	n, _ := io.Copy(io.MultiWriter(w, f), body)
+	n, copyErr := io.Copy(io.MultiWriter(w, f), body)
 	f.Close()
-	// 只有完整下载（字节数 == 上游 Content-Length）才缓存；不完整（截断）直接丢弃
-	if contentLength > 0 && n == contentLength {
+	complete := false
+	switch {
+	case contentLength > 0: // 上游声明完整长度：字节数必须一致（防截断）
+		complete = n == contentLength
+	default: // chunked / 未知长度：读到完整 EOF（copyErr==nil）才算完整下载
+		complete = copyErr == nil
+	}
+	if complete {
 		os.Rename(tmp, s.filePath(bvid))
 		s.Put(bvid, quality, nil) // 已落盘，只写元数据 + 淘汰（Put 会读文件大小）
 	} else {
@@ -346,8 +334,13 @@ func (s *CacheService) StreamAndCache(w io.Writer, bvid string, quality int, bod
 	}
 }
 
-// ClearUnfav 只清不在 favs 表（未收藏）的歌。favTable 为收藏表名（跨域引用，避免循环依赖）
+// ClearUnfav 只清不在 favs 表（未收藏）的歌。favTable 为收藏表名（跨域引用，避免循环依赖）；
+// 拼接前白名单校验（review 前后不一 #2：字符串拼接进 SQL 虽两处一致，但风格危险）。
 func (s *CacheService) ClearUnfav(favTable string) {
+	favTable = conv.ValidateTableName(favTable)
+	if favTable == "" {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.db.Query(`SELECT bvid, size FROM audio_cache

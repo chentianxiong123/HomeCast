@@ -53,7 +53,6 @@ type SpeakerAuth struct {
 	client    *miservice.Client
 	tokenPath string
 	loggedIn  bool
-	Hardware  string // 当前操作设备硬件（PlayURL 按硬件分文 play_by_music_url / play_by_url）
 	lastRefresh time.Time // 上次刷新 serviceToken 的时间（启动/登录/失败重刷时更新）
 }
 
@@ -376,14 +375,15 @@ const DefaultAudioID = "448161862632079419"
 // PlayURL 播放 URL（deviceId 是设备 hardware ID）。
 // 硬件分文：需要 music API 的设备（xiaomusic NEED_USE_PLAY_MUSIC_API 列表）
 // 用 play_by_music_url（带 audio_id），否则用 play_by_url——对齐 xiaomusic 分支。
-func (a *SpeakerAuth) PlayURL(deviceID, url string) (any, error) {
+// hardware 作为参数传入：共享字段在多设备并发下会互相覆盖（review 低能 #1）。
+func (a *SpeakerAuth) PlayURL(deviceID, url, hardware string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
 	var res any
 	if err := a.retryOnAuth(func() error {
 		var e error
-		if NeedPlayMusicAPI(a.Hardware) {
+		if NeedPlayMusicAPI(hardware) {
 			res, e = a.PlayerPlayMusicUrl(deviceID, url, DefaultAudioID)
 		} else {
 			res, e = a.client.PlayerPlayUrl(deviceID, url)
@@ -414,14 +414,15 @@ func (a *SpeakerAuth) PlayerPlayMusicUrl(deviceID, url, audioID string) (any, er
 // Pause 暂停
 // 对齐 xiaomusic：需要 music API 的设备（NEED_USE_PLAY_MUSIC_API 列表）调用 pause 后
 // API 状态不会正确更新为 paused（status=2），需改用 player_stop 实现暂停语义（workaround）。
-func (a *SpeakerAuth) Pause(deviceID string) (any, error) {
+// hardware 参数化（同 PlayURL，避免共享字段并发串）。
+func (a *SpeakerAuth) Pause(deviceID, hardware string) (any, error) {
 	if a.client == nil {
 		return nil, nil
 	}
 	var res any
 	if err := a.retryOnAuth(func() error {
 		var e error
-		if NeedPlayMusicAPI(a.Hardware) {
+		if NeedPlayMusicAPI(hardware) {
 			res, e = a.client.PlayerStop(deviceID) // 暂停语义：music API 设备用 stop
 		} else {
 			res, e = a.client.PlayerPause(deviceID)

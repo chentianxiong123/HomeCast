@@ -67,6 +67,10 @@ type WidgetState struct {
 	Playing     bool    `json:"playing"`
 	subs        map[chan SSEMsg]struct{} // SSE 订阅者（事件名+payload）
 
+	// 日志去重（BroadcastLyricState 每次 Set 触发，250ms 一条；只打变化）
+	lastLogBVID   string
+	lastLogPlaying bool
+
 	// 歌词行缓存（切歌才拉一次，低频；位置→行 定位唯一一份，住后端）
 	lineSrc   LyricSource
 	cacheBvid string
@@ -223,10 +227,17 @@ func PickLine(lines [][3]any, t float64) string { return pickLineAny(lines, t) }
 
 // BroadcastLyricState 歌词状态变化（Set 时触发）：推送最新快照给挂件订阅者，
 // 带后端算好的当前行 line（多平台统一：显示层只渲染 line，不本地定位）。
+// 日志只在歌曲或播放态变化时打（Set 每 250ms 触发一次，全打是日志洪）。
 func (w *WidgetState) BroadcastLyricState() {
 	bvid, title, artist, ct, dur, playing := w.Get()
 	line, offset := w.currentLine2(bvid, ct)
-	log.Printf("[widget] BroadcastLyricState bvid=%s ct=%.1f line=%q offset=%.1f", bvid, ct, line, offset)
+	if bvid != w.lastLogBVID || playing != w.lastLogPlaying {
+		log.Printf("[widget] BroadcastLyricState bvid=%s ct=%.1f line=%q offset=%.1f", bvid, ct, line, offset)
+		w.mu.Lock()
+		w.lastLogBVID = bvid
+		w.lastLogPlaying = playing
+		w.mu.Unlock()
+	}
 	payload := map[string]any{
 		"bvid": bvid, "title": title, "artist": artist,
 		"current_time": ct, "duration": dur, "playing": playing,

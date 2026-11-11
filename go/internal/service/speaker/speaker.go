@@ -32,11 +32,12 @@ type SpeakerService struct {
 type SpeakerProgress struct {
 	BVID     string    `json:"bvid"`
 	Title    string    `json:"title,omitempty"`
-	Duration float64   `json:"duration"`      // 秒（前端已知优先，否则 B 站 view duration）
-	NextBVID string    `json:"next_bvid,omitempty"` // 播完自动连播的下一首
-	Started  time.Time `json:"-"`             // 本次播放开始（本地时钟基准）
-	PausedAt time.Time `json:"-"`             // 暂停开始；零值=未暂停
-	Paused   float64   `json:"-"`             // 累计暂停秒（恢复时补偿）
+	Duration float64   `json:"duration"`             // 秒（前端已知优先，否则 B 站 view duration）
+	NextBVID string    `json:"next_bvid,omitempty"`  // 播完自动连播的下一首
+	Quality  int       `json:"-"`                    // 本次播放音质（自动连播/恢复沿用，删硬编码 30280）
+	Started  time.Time `json:"-"`                    // 本次播放开始（本地时钟基准）
+	PausedAt time.Time `json:"-"`                    // 暂停开始；零值=未暂停
+	Paused   float64   `json:"-"`                    // 累计暂停秒（恢复时补偿）
 	timer    *time.Timer `json:"-"`
 	stopped  bool      `json:"-"`
 }
@@ -264,8 +265,7 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 
 	// 硬件分文：需要 music API 的设备（LX05A/L07A 等）用 play_by_music_url（带 audio_id），
 	// 否则 play_by_url——对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API 分支
-	s.Auth.Hardware = device.Hardware
-	ret, err := s.Auth.PlayURL(device.DeviceID, proxyURL)
+	ret, err := s.Auth.PlayURL(device.DeviceID, proxyURL, device.Hardware)
 	if err != nil {
 		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
 	}
@@ -301,6 +301,7 @@ func (s *SpeakerService) startProgress(did, bvid string, opts PlayOpts, quality 
 		Title:    title,
 		Duration: duration,
 		NextBVID: opts.NextBVID,
+		Quality:  quality,
 		Started:  time.Now(),
 	}
 	if duration > 0 && opts.NextBVID != "" {
@@ -318,6 +319,22 @@ func (s *SpeakerService) playNextAuto(did, nextBVID string, quality int) {
 	s.Play(nextBVID, did, quality, PlayOpts{}) // 递归建立新进度；title/duration 回退 B 站 view
 }
 
+// progressMap 组装进度 map（Progress/AllProgress 共用，删重复）
+func sprogressMap(p *SpeakerProgress) map[string]any {
+	pos := p.Position()
+	if pos < 0 {
+		pos = 0
+	}
+	return map[string]any{
+		"state":     p.State(),
+		"bvid":      p.BVID,
+		"title":     p.Title,
+		"position":  pos,
+		"duration":  p.Duration,
+		"next_bvid": p.NextBVID,
+	}
+}
+
 // Progress 本地模拟进度（前端轮询本端点，不打小米云）
 func (s *SpeakerService) Progress(did string) map[string]any {
 	s.mu.Lock()
@@ -326,18 +343,7 @@ func (s *SpeakerService) Progress(did string) map[string]any {
 	if p == nil || p.stopped {
 		return map[string]any{"state": "idle", "bvid": "", "position": 0, "duration": 0}
 	}
-	pos := p.Position()
-	if pos < 0 {
-		pos = 0
-	}
-	return map[string]any{
-		"state":    p.State(),
-		"bvid":     p.BVID,
-		"title":    p.Title,
-		"position": pos,
-		"duration": p.Duration,
-		"next_bvid": p.NextBVID,
-	}
+	return sprogressMap(p)
 }
 
 // AllProgress 所有设备本地模拟进度（{did: progress}，SSE 单流推所有，不打小米云）
@@ -349,18 +355,7 @@ func (s *SpeakerService) AllProgress() map[string]map[string]any {
 		if p == nil || p.stopped {
 			continue
 		}
-		pos := p.Position()
-		if pos < 0 {
-			pos = 0
-		}
-		out[did] = map[string]any{
-			"state":    p.State(),
-			"bvid":     p.BVID,
-			"title":    p.Title,
-			"position": pos,
-			"duration": p.Duration,
-			"next_bvid": p.NextBVID,
-		}
+		out[did] = sprogressMap(p)
 	}
 	return out
 }
@@ -377,13 +372,11 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 	)
 	switch action {
 	case "pause":
-		s.Auth.Hardware = device.Hardware
-		ret, err = s.Auth.Pause(device.DeviceID)
+		ret, err = s.Auth.Pause(device.DeviceID, device.Hardware)
 		if err == nil {
 			s.pauseProgress(did)
 		}
 	case "stop":
-		s.Auth.Hardware = device.Hardware
 		s.mu.Lock()
 		delete(s.playing, did)
 		s.stopProgressLocked(did)
@@ -391,8 +384,7 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 		ret, err = s.Auth.Stop(device.DeviceID)
 	case "resume", "play":
 		if u, ok := s.playing[did]; ok {
-			s.Auth.Hardware = device.Hardware
-			ret, err = s.Auth.PlayURL(device.DeviceID, u)
+			ret, err = s.Auth.PlayURL(device.DeviceID, u, device.Hardware)
 			if err == nil {
 				s.resumeProgress(did)
 			}
@@ -442,7 +434,7 @@ func (s *SpeakerService) resumeProgress(did string) {
 		remaining := p.Duration - p.Position()
 		if remaining > 0 {
 			p.timer = time.AfterFunc(time.Duration(remaining*float64(time.Second)), func() {
-				s.playNextAuto(did, p.NextBVID, 30280)
+				s.playNextAuto(did, p.NextBVID, p.Quality)
 			})
 		}
 	}

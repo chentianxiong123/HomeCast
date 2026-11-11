@@ -211,7 +211,7 @@ func (p *PlaybackState) Pause() {
 			log.Printf("[playback] 音箱 pause → %s", did)
 		}
 	}
-	p.bcastProgress()
+	p.bcastSnapshot()
 }
 
 // Resume 恢复
@@ -227,14 +227,26 @@ func (p *PlaybackState) Resume() {
 			log.Printf("[playback] 音箱 resume → %s", did)
 		}
 	}
-	p.bcastProgress()
+	p.bcastSnapshot()
 }
 
-// Toggle 播放/暂停切换
+// Toggle 播放/暂停切换（音箱让位模式：真调音箱 API，与 Pause/Resume 对齐）
 func (p *PlaybackState) Toggle() {
 	p.mu.Lock()
 	p.cur.Playing = !p.cur.Playing
+	target := p.cur.Playing
 	p.mu.Unlock()
+	if spk, did := p.spkActive(); spk != nil {
+		action := "pause"
+		if target {
+			action = "resume"
+		}
+		if _, err := spk.Control(did, action, 0); err != nil {
+			log.Printf("[playback] 音箱 toggle %s 失败: %v", action, err)
+		} else {
+			log.Printf("[playback] 音箱 toggle %s → %s", action, did)
+		}
+	}
 	p.bcastProgress()
 }
 
@@ -270,6 +282,33 @@ func (p *PlaybackState) SetProgress(position, duration float64, playing bool) {
 	p.bcastProgress()
 }
 
+// rollbackLocked 回滚到旧状态（调用方持锁）：恢复队列位置+当前歌+进度+播放态，
+// 避免音箱投送失败后 UI/后端/音箱三方分裂（review #1：回滚不完整会把进度清零闪一下子）。
+func (p *PlaybackState) rollbackLocked(snap songSnapshot) {
+	p.cur.QIdx = snap.QIdx
+	p.applyLocked(snap.Song)
+	p.cur.Position = snap.Position
+	p.cur.Duration = snap.Duration
+}
+
+// songSnapshot 切换前状态快照（音箱投送失败回滚用）
+type songSnapshot struct {
+	QIdx     int
+	Song     Song
+	Position float64
+	Duration float64
+}
+
+// songIndexLocked 找 bvid 在队列中的位置（-1 未找到；调用方持锁）
+func songIndexLocked(q []Song, bvid string) int {
+	for i, s := range q {
+		if s.BVID == bvid {
+			return i
+		}
+	}
+	return -1
+}
+
 // Next / Prev 队列走位（循环）
 func (p *PlaybackState) Next() {
 	p.mu.Lock()
@@ -277,19 +316,30 @@ func (p *PlaybackState) Next() {
 		p.mu.Unlock()
 		return
 	}
+	old := songSnapshot{
+		QIdx:     p.cur.QIdx,
+		Song:     p.cur.Queue[p.cur.QIdx],
+		Position: p.cur.Position,
+		Duration: p.cur.Duration,
+	}
 	p.cur.QIdx = (p.cur.QIdx + 1) % len(p.cur.Queue)
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
 	nextBVID := p.nextBVIDLocked()
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
 	p.mu.Unlock()
-	if isSpk {
-		// 音箱让位模式：真投下一曲（重新 play_by_url，带 NextBVID 自动连播）
-		if spk, _ := p.spkActive(); spk != nil {
-			_, _ = spk.Play(song.BVID, did, SpkPlayReq{
-				Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
-			})
+	// 音箱让位模式：真投下一曲（重新 play_by_url，带 NextBVID 自动连播）
+	if spk, did := p.spkActive(); spk != nil {
+		res, err := spk.Play(song.BVID, did, SpkPlayReq{
+			Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
+		})
+		if err != nil {
+			log.Printf("[playback] 音箱 next 投送失败 bvid=%s did=%s err=%v → 回滚继续播旧歌", song.BVID, did, err)
+			// 回滚：音箱还在播旧歌，状态三方归位（QIdx/当前歌/进度回切前）
+			p.mu.Lock()
+			p.rollbackLocked(old)
+			p.mu.Unlock()
+		} else {
+			log.Printf("[playback] 音箱 next 投送 bvid=%s did=%s code=%v", song.BVID, did, res)
 		}
 	}
 	p.bcastSnapshot()
@@ -309,19 +359,29 @@ func (p *PlaybackState) Prev() {
 		p.mu.Unlock()
 		return
 	}
+	old := songSnapshot{
+		QIdx:     p.cur.QIdx,
+		Song:     p.cur.Queue[p.cur.QIdx],
+		Position: p.cur.Position,
+		Duration: p.cur.Duration,
+	}
 	p.cur.QIdx = (p.cur.QIdx - 1 + len(p.cur.Queue)) % len(p.cur.Queue)
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
 	nextBVID := p.nextBVIDLocked()
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
 	p.mu.Unlock()
-	if isSpk {
-		// 音箱让位模式：真投上一曲
-		if spk, _ := p.spkActive(); spk != nil {
-			_, _ = spk.Play(song.BVID, did, SpkPlayReq{
-				Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
-			})
+	// 音箱让位模式：真投上一曲
+	if spk, did := p.spkActive(); spk != nil {
+		_, err := spk.Play(song.BVID, did, SpkPlayReq{
+			Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
+		})
+		if err != nil {
+			log.Printf("[playback] 音箱 prev 投送失败 bvid=%s did=%s err=%v → 回滚继续播旧歌", song.BVID, did, err)
+			p.mu.Lock()
+			p.rollbackLocked(old)
+			p.mu.Unlock()
+		} else {
+			log.Printf("[playback] 音箱 prev 投送 bvid=%s did=%s", song.BVID, did)
 		}
 	}
 	p.bcastSnapshot()
@@ -470,11 +530,22 @@ func (p *PlaybackState) SetSpeakerProgress(did, bvid, title string, position, du
 	p.mu.Lock()
 	isSpk := p.cur.Source == "speaker" && p.cur.SpkDID == did
 	if isSpk && bvid != "" {
+		// BVID/QIdx 同步：自动连播后音箱桥推新 bvid，队头必须对齐
+		// （否则队列高亮错位 + Next() 从旧 QIdx 走位，SSOT 内部自相矛盾）
+		if p.cur.BVID != bvid {
+			if idx := songIndexLocked(p.cur.Queue, bvid); idx >= 0 {
+				p.cur.QIdx = idx
+			}
+		}
 		p.cur.BVID = bvid
 		if title != "" {
 			p.cur.Title = title
 		}
-		p.cur.Position = position
+		// position 校验：来源可信才覆盖（playing 或 非零位置），
+		// 防偶发 position=0 上报把正在播的进度砸回 0（review 低能 #5）
+		if playing || position > 0 || !p.cur.Playing {
+			p.cur.Position = position
+		}
 		if duration > 0 {
 			p.cur.Duration = duration
 		}

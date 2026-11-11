@@ -249,7 +249,11 @@ func (h *SpeakerHandler) SetVolume(w http.ResponseWriter, r *http.Request) {
 		DID    string `json:"did"`
 		Volume int    `json:"volume"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.DID == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		errResp(w, http.StatusBadRequest, "invalid body: "+err.Error())
+		return
+	}
+	if body.DID == "" {
 		errResp(w, http.StatusBadRequest, "did required")
 		return
 	}

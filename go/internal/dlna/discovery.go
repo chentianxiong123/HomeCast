@@ -32,7 +32,8 @@ var searchTypes = []string{
 }
 
 // Search 多播搜索 DLNA 设备（对齐 Python SSDP 搜索语义）
-func Search(ctx context.Context, timeout time.Duration, targetIP string) []*Device {
+// 3 类搜索类型并行 + friendlyName 拉取并行（review 性能 #1：串行最坏 N×3s 卡界面）
+func Search(ctx context.Context, timeout time.Duration) []*Device {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -46,33 +47,47 @@ func Search(ctx context.Context, timeout time.Duration, targetIP string) []*Devi
 	seen := map[string]*Device{}
 	var mu sync.Mutex
 
+	// 3 类搜索并行（每类内部 3 次尝试；串行最坏 3×3×timeout）
+	var wg sync.WaitGroup
 	for _, st := range searchTypes {
-		responses, err := ssdp.RawSearch(ctx, httpuClient, st, 3)
-		if err != nil {
-			continue
-		}
-		for _, resp := range responses {
-			dev := parseHTTPResponse(resp)
-			if dev == nil {
-				continue
+		wg.Add(1)
+		go func(st string) {
+			defer wg.Done()
+			responses, err := ssdp.RawSearch(ctx, httpuClient, st, 3)
+			if err != nil {
+				return
 			}
-			mu.Lock()
-			if _, dup := seen[dev.UDN]; !dup {
-				seen[dev.UDN] = dev
+			for _, resp := range responses {
+				dev := parseHTTPResponse(resp)
+				if dev == nil {
+					continue
+				}
+				mu.Lock()
+				if _, dup := seen[dev.UDN]; !dup {
+					seen[dev.UDN] = dev
+				}
+				mu.Unlock()
 			}
-			mu.Unlock()
-		}
+		}(st)
 	}
+	wg.Wait()
 
-	// 补充 friendlyName（从描述 XML；Python 同步逻辑）
+	// 补充 friendlyName（从描述 XML；并行拉取，每台离线最多 3s 不阻塞其他）
+	var fg sync.WaitGroup
 	for _, d := range seen {
-		if n := fetchFriendlyName(d.Location); n != "" {
-			d.Name = n
-		}
-		if d.Name == "" {
-			d.Name = "Unknown"
-		}
+		fg.Add(1)
+		go func(d *Device) {
+			defer fg.Done()
+			if n := fetchFriendlyName(d.Location); n != "" {
+				d.Name = n
+			}
+			if d.Name == "" {
+				d.Name = "Unknown"
+			}
+		}(d)
 	}
+	fg.Wait()
+
 	out := make([]*Device, 0, len(seen))
 	for _, d := range seen {
 		out = append(out, d)

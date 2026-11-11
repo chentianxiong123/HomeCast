@@ -258,7 +258,9 @@ func (c *cairoCanvas) Clear() {
 
 func (c *cairoCanvas) TextSize(text string, size float64) (float64, float64) {
 	layout := C.pango_cairo_create_layout(c.cr)
-	desc := C.pango_font_description_from_string(C.CString(fmt.Sprintf("Microsoft YaHei %d", int(size))))
+	descStr := C.CString(fmt.Sprintf("Microsoft YaHei %d", int(size)))
+	desc := C.pango_font_description_from_string(descStr)
+	C.free(unsafe.Pointer(descStr)) // pango 拷字符串后需主动 free CString
 	C.pango_layout_set_font_description(layout, desc)
 	cs := C.CString(text)
 	C.pango_layout_set_text(layout, cs, -1)
@@ -272,7 +274,9 @@ func (c *cairoCanvas) TextSize(text string, size float64) (float64, float64) {
 
 func (c *cairoCanvas) Text(x, y float64, text string, size float64, r, g, b, a float64) {
 	layout := C.pango_cairo_create_layout(c.cr)
-	desc := C.pango_font_description_from_string(C.CString(fmt.Sprintf("Microsoft YaHei %d", int(size))))
+	descStr := C.CString(fmt.Sprintf("Microsoft YaHei %d", int(size)))
+	desc := C.pango_font_description_from_string(descStr)
+	C.free(unsafe.Pointer(descStr)) // pango 拷字符串后需主动 free CString
 	C.pango_layout_set_font_description(layout, desc)
 	cs := C.CString(text)
 	C.pango_layout_set_text(layout, cs, -1)

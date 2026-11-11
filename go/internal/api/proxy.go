@@ -29,7 +29,7 @@ func (h *ProxyHandler) stream(w http.ResponseWriter, r *http.Request, token, kin
 		errResp(w, http.StatusNotFound, "token expired or invalid")
 		return
 	}
-	req, err := http.NewRequest(http.MethodGet, entry.URL, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, entry.URL, nil)
 	if err != nil {
 		errResp(w, http.StatusInternalServerError, err.Error())
 		return

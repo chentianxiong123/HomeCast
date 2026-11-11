@@ -40,13 +40,11 @@ func TestNeedPlayMusicAPI(t *testing.T) {
 // TestPlayURLBranch 验证 PlayURL 按硬件分文（PlayURL 无网络时 client=nil 返回 nil，仅测分支不崩）
 func TestPlayURLBranch(t *testing.T) {
 	a := &SpeakerAuth{client: nil}
-	// client=nil → 返回 nil,nil（不崩），分支代码路径可达
-	a.Hardware = "L07A"
-	if _, err := a.PlayURL("did", "http://x"); err != nil {
+	// client=nil → 返回 nil,nil（不崩），分支代码路径可达（hardware 参数化，不再依赖共享字段）
+	if _, err := a.PlayURL("did", "http://x", "L07A"); err != nil {
 		t.Fatalf("PlayURL(nil client) should not err: %v", err)
 	}
-	a.Hardware = "unknown"
-	if _, err := a.PlayURL("did", "http://x"); err != nil {
+	if _, err := a.PlayURL("did", "http://x", "unknown"); err != nil {
 		t.Fatalf("PlayURL unknown hw should not err: %v", err)
 	}
 }
