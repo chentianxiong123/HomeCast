@@ -100,7 +100,7 @@ func New() http.Handler {
 	castSvc := cast.NewCastService(client, tokenStore)
 	castHandler := &api.CastHandler{Cast: castSvc}
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
-	speakerSvc := spk.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore, cacheSvc)
+	speakerSvc := spk.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
 	speakerQR := speaker.NewQRLogin()
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speakerQR}
 	sitesHandler := &api.SitesHandler{Sites: sites.NewSitesService("")}

@@ -12,7 +12,6 @@ import (
 
 	"homecast/internal/service/token"
 	"homecast/internal/service/memstream"
-	"homecast/internal/service/cache"
 	"homecast/internal/bilibili"
 	"homecast/internal/speaker"
 )
@@ -22,7 +21,6 @@ type SpeakerService struct {
 	Auth   *speaker.SpeakerAuth
 	client *bilibili.Client
 	tokens *token.TokenStore
-	cache  *cache.CacheService // 音频缓存（命中则 seek 用真实码率 Size×8/时长）
 	mu     sync.Mutex
 	devices  map[string]speaker.SpeakerDevice
 	playing  map[string]string // did -> url
@@ -64,7 +62,7 @@ func (p *SpeakerProgress) State() string {
 }
 
 // NewSpeakerService 构造
-func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, tokens *token.TokenStore, cacheSvc *cache.CacheService) *SpeakerService {
+func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, tokens *token.TokenStore) *SpeakerService {
 	port := os.Getenv("HC_PORT")
 	if port == "" {
 		port = "28976"
@@ -73,7 +71,6 @@ func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, token
 		Auth:    auth,
 		client:  client,
 		tokens:  tokens,
-		cache:   cacheSvc,
 		devices: map[string]speaker.SpeakerDevice{},
 		playing: map[string]string{},
 		progress: map[string]*SpeakerProgress{},
@@ -223,9 +220,6 @@ func scoreAddr(ip net.IP, flags net.Flags) int {
 }
 
 // proxyAudioURL 音箱可访问的代理 URL（局域网 IP + token）
-// proxyAudioURL 音箱可访问的代理 URL（局域网 IP + token）。
-// 真实码率存 token metadata "bitrate"（seek 时间→字节用）：
-// 缓存命中=文件 Size×8/时长（精确）；本体流=DASH Bandwidth÷1000（B 站真实平均码率）。
 func (s *SpeakerService) proxyAudioURL(bvid string, quality int, device speaker.SpeakerDevice) (string, string, error) {
 	info, err := s.client.GetVideoInfo(bvid)
 	if err != nil {
@@ -235,20 +229,6 @@ func (s *SpeakerService) proxyAudioURL(bvid string, quality int, device speaker.
 	if err != nil {
 		return "", "", err
 	}
-	// 真实码率（kbps）：缓存命中优先用 Size×8/时长（精确）；否则 DASH Bandwidth
-	bitrateKbps := 0
-	if s.cache != nil {
-		if size, _, ok := s.cache.Get(bvid); ok && size > 0 && info.Duration > 0 {
-			bitrateKbps = int(size * 8 / int64(info.Duration) / 1000)
-		}
-	}
-	if bitrateKbps <= 0 && stream.Bandwidth > 0 {
-		bitrateKbps = stream.Bandwidth / 1000
-	}
-	if bitrateKbps <= 0 {
-		bitrateKbps = 128 // 兜底（不该到这：Bandwidth 总有值）
-	}
-	log.Printf("[speaker] 码率 bvid=%s 缓存=%v bitrate=%dkbps", bvid, s.cache != nil, bitrateKbps)
 	token := s.tokens.Store(stream.URL, map[string]string{
 		"content_type": stream.MimeType,
 		"original_url": stream.URL,
@@ -256,7 +236,6 @@ func (s *SpeakerService) proxyAudioURL(bvid string, quality int, device speaker.
 		"hardware":     device.Hardware,
 		"mime_type":    stream.MimeType,
 		"bvid":         bvid,
-		"bitrate":      fmt.Sprintf("%d", bitrateKbps),
 	})
 	proxyURL := fmt.Sprintf("http://%s:%s/api/v1/proxy/audio/%s", localIP(), s.port, token)
 	return proxyURL, stream.MimeType, nil
@@ -312,7 +291,7 @@ func (s *SpeakerService) Seek(did string, sec float64, quality int) (map[string]
 			token = url[j+1:]
 		}
 	}
-	if !memstream.Seek(token, sec) {
+	if !memstream.Seek(token, sec, 128) {
 		return map[string]any{"code": 500, "message": "流未就绪（seek 失败）"}, nil
 	}
 	// 重下发同 URL → 音箱清缓冲重建连接 → 从新 offset 拉（固件 2-3s 起播延迟）
