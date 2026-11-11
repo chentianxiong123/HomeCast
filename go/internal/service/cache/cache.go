@@ -124,16 +124,24 @@ func (s *CacheService) Get(bvid string) (size int64, quality int, ok bool) {
 		return 0, 0, false
 	}
 	var q int
-	fileSize := fi.Size()
-	_ = s.db.QueryRow(`SELECT size, quality FROM audio_cache WHERE bvid=?`, bvid).Scan(&fileSize, &q)
-	if fileSize != fi.Size() { // 元数据失配（文件被外部改动）→ 按实际
-		fileSize = fi.Size()
+	dbSize := fi.Size()
+	if err := s.db.QueryRow(`SELECT size, quality FROM audio_cache WHERE bvid=?`, bvid).Scan(&dbSize, &q); err == nil {
+		if dbSize > fi.Size() {
+			// 文件比元数据小 → 下载中断/截断，serve 后浏览器 seek 到超出实际长度位置会 416
+			// → 音频跳末尾触发 ended 误切歌。删记录返回未命中，让 stream 重拉完整文件。
+			s.db.Exec(`DELETE FROM audio_cache WHERE bvid=?`, bvid)
+			os.Remove(path)
+			return 0, 0, false
+		}
+		if dbSize != fi.Size() { // 元数据过期（文件变大）→ 按实际
+			s.db.Exec(`UPDATE audio_cache SET size=? WHERE bvid=?`, fi.Size(), bvid)
+		}
 	}
 	now := time.Now().UnixMilli()
 	s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,last_used) VALUES (?,?,?,?)
 		ON CONFLICT(bvid) DO UPDATE SET size=?, quality=?, last_used=?`,
-		bvid, fileSize, q, now, fileSize, q, now)
-	return fileSize, q, true
+		bvid, fi.Size(), q, now, fi.Size(), q, now)
+	return fi.Size(), q, true
 }
 
 // FilePath 暴露给 handler 直接 serve 文件（命中时）
@@ -248,7 +256,10 @@ func (s *CacheService) ClearAll() {
 
 // StreamAndCache 边写 w（响应流）边落盘缓存（temp→rename，防半截文件）；
 // 小流（<64KB）不缓存。供 Stream handler 未命中时调用。
-func (s *CacheService) StreamAndCache(w io.Writer, bvid string, quality int, body io.Reader) {
+// StreamAndCache 边转发给浏览器边 tee 落盘。contentLength 是上游声明的完整音频字节数，
+// 只有 n == contentLength（完整下载）才缓存——下载中断（浏览器 seek/切歌断连）会产生截断文件，
+// 截断文件被 serve 后浏览器 seek 超范围→416→跳末尾→误切歌。故不完整一律丢弃，不污染缓存。
+func (s *CacheService) StreamAndCache(w io.Writer, bvid string, quality int, body io.Reader, contentLength int64) {
 	tmp := s.filePath(bvid) + ".tmp"
 	if err := os.MkdirAll(s.audioDir, 0o755); err != nil {
 		_, _ = io.Copy(w, body)
@@ -261,7 +272,8 @@ func (s *CacheService) StreamAndCache(w io.Writer, bvid string, quality int, bod
 	}
 	n, _ := io.Copy(io.MultiWriter(w, f), body)
 	f.Close()
-	if n > 1024*64 { // 有效音频流才缓存
+	// 只有完整下载（字节数 == 上游 Content-Length）才缓存；不完整（截断）直接丢弃
+	if contentLength > 0 && n == contentLength {
 		os.Rename(tmp, s.filePath(bvid))
 		s.Put(bvid, quality, nil) // 已落盘，只写元数据 + 淘汰（Put 会读文件大小）
 	} else {

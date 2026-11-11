@@ -86,6 +86,7 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. 缓存命中：直接 serve 本地文件（秒开，支持 Range）
+	// 完整性由 StreamAndCache 保证（只有完整下载才落盘），命中即完整文件，seek 任意位置都合法
 	if h.Cache != nil {
 		if _, _, ok := h.Cache.Get(bvid); ok {
 			serveFile(w, r, h.Cache.FilePath(bvid))
@@ -137,9 +138,10 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. 回写缓存：上限开启且非 Range（全量流）时，边转发边 tee 落盘
-	if h.Cache != nil && h.Cache.LimitMB() > 0 && r.Header.Get("Range") == "" {
-		h.Cache.StreamAndCache(w, bvid, quality, upResp.Body)
+	// 3. 回写缓存：仅全量 200 响应（非 Range/206）才 tee 落盘，且 StreamAndCache 内部校验
+	// 字节数 == 上游 Content-Length 才落盘（下载中断的截断文件直接丢弃，不污染缓存）
+	if h.Cache != nil && h.Cache.LimitMB() > 0 && r.Header.Get("Range") == "" && upResp.StatusCode == http.StatusOK {
+		h.Cache.StreamAndCache(w, bvid, quality, upResp.Body, upResp.ContentLength)
 	} else {
 		_, _ = io.Copy(w, upResp.Body)
 	}
