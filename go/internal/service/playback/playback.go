@@ -51,6 +51,8 @@ type PlaybackState struct {
 	subs map[chan SSEMsg]struct{}
 	db   *sql.DB // 持久化（settings kv），可选注入
 	spk  SpeakerController // 音箱控制（可选注入；音箱让位模式下真调音箱 API）
+
+	prevWebPlaying bool // 切走前 web 播放态（SwitchWeb 续播用，非持久化）
 }
 
 // SpkPlayReq 音箱投送请求（playback 包自包含，避免 → speaker 循环依赖）
@@ -426,6 +428,8 @@ func (p *PlaybackState) SetQueue(list []Song, startIdx int) {
 // SwitchSpeaker 切音箱播放（source=speaker，记录 did）
 func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.mu.Lock()
+	// 记住切走前 web 的播放态：切回 web 时续播同一首（音箱在播→切回 web 继续播）
+	p.prevWebPlaying = p.cur.Playing
 	p.cur.Source = "speaker"
 	p.cur.SpkDID = did
 	// 清进度：切模式瞬间不残留 web 旧 position/duration，等音箱进度桥（1s tick）推新值覆盖
@@ -435,6 +439,7 @@ func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.bcastSnapshot()
 }
 
+// prevWebPlaying 切走前 web 的播放态（SwitchWeb 恢复用；非持久化）
 // SwitchWeb 切回 web
 func (p *PlaybackState) SwitchWeb() {
 	p.mu.Lock()
@@ -443,6 +448,9 @@ func (p *PlaybackState) SwitchWeb() {
 	// 切回 web：等浏览器加载后由 loadedmetadata/progress 推真实值，先清避免残留音箱旧进度
 	p.cur.Position = 0
 	p.cur.Duration = 0
+	// 续播：沿用切走前 web 的播放态（切走时在播→切回继续播；切走时暂停→切回暂停）
+	// 前端 driveAudio 在切回 web 时会强制重载源，p.playing=true → audio.play() 真续播
+	p.cur.Playing = p.prevWebPlaying
 	p.mu.Unlock()
 	p.bcastSnapshot()
 }
