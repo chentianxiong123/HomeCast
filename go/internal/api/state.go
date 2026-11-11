@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -67,6 +68,7 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 		Title  string  `json:"title"`
 		Artist string  `json:"artist"`
 		Cover  string  `json:"cover"`
+		Duration float64 `json:"duration"`
 		Sec    float64 `json:"sec"`
 		Mode   string  `json:"mode"`
 		Did    string  `json:"did"`
@@ -77,9 +79,10 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 		errResp(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+	log.Printf("[command] op=%s bvid=%s did=%s sec=%.1f qidx=%d", body.Op, body.BVID, body.Did, body.Sec, body.QIdx) // 临时诊断
 	switch body.Op {
 	case "play":
-		h.Pb.Play(playback.Song{BVID: body.BVID, Title: body.Title, Artist: body.Artist, Cover: body.Cover})
+		h.Pb.Play(playback.Song{BVID: body.BVID, Title: body.Title, Artist: body.Artist, Cover: body.Cover, Duration: body.Duration})
 	case "pause":
 		h.Pb.Pause()
 	case "resume":
@@ -112,15 +115,21 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 }
 
 // Progress POST /api/v1/state/progress —— web 位置上报（高频，只更新进度，广播 progress）
-// body: {position, duration, playing}
+// body: {position, duration, playing, bvid}
+// bvid 校验：非空且 ≠ 当前播放歌 → 丢弃（多客户端：旧客户端/旧歌的进度不覆盖新歌）
 func (h *StateHandler) Progress(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Position float64 `json:"position"`
 		Duration float64 `json:"duration"`
 		Playing  bool    `json:"playing"`
+		BVID     string  `json:"bvid"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		errResp(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.BVID != "" && body.BVID != h.Pb.Snapshot().BVID {
+		ok(w, true) // 静默丢弃旧客户端/旧歌进度
 		return
 	}
 	h.Pb.SetProgress(body.Position, body.Duration, body.Playing)

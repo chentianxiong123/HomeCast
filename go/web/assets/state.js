@@ -123,7 +123,8 @@
     progress(position, duration, playing) {
       fetch('/api/v1/state/progress', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position, duration, playing }),
+        // 带 bvid：后端只接受匹配当前播放歌的进度，防多客户端旧歌进度覆盖新歌
+        body: JSON.stringify({ position, duration, playing, bvid: this.get().bvid || '' }),
       }).catch(() => {});
     },
     // 当前播放快照（读 Alpine store）

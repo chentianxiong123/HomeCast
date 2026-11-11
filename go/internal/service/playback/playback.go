@@ -201,11 +201,20 @@ func (p *PlaybackState) Seek(sec float64) {
 func (p *PlaybackState) SetProgress(position, duration float64, playing bool) {
 	p.mu.Lock()
 	p.cur.Position = position
+	needPersist := false
 	if duration > 0 {
 		p.cur.Duration = duration
+		// 回写 queue 里当前歌的真实时长（音箱模式切歌用 queue[k].Duration，必须准确）
+		if p.cur.QIdx >= 0 && p.cur.QIdx < len(p.cur.Queue) && p.cur.Queue[p.cur.QIdx].Duration != duration {
+			p.cur.Queue[p.cur.QIdx].Duration = duration
+			needPersist = true
+		}
 	}
 	p.cur.Playing = playing
 	p.mu.Unlock()
+	if needPersist {
+		p.persistNow() // 锁已释放，安全调（内部自己加锁）
+	}
 	p.bcastProgress()
 }
 
@@ -275,6 +284,9 @@ func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.mu.Lock()
 	p.cur.Source = "speaker"
 	p.cur.SpkDID = did
+	// 清进度：切模式瞬间不残留 web 旧 position/duration，等音箱进度桥（1s tick）推新值覆盖
+	p.cur.Position = 0
+	p.cur.Duration = 0
 	p.mu.Unlock()
 	p.bcastSnapshot()
 }
@@ -284,6 +296,9 @@ func (p *PlaybackState) SwitchWeb() {
 	p.mu.Lock()
 	p.cur.Source = "web"
 	p.cur.SpkDID = ""
+	// 切回 web：等浏览器加载后由 loadedmetadata/progress 推真实值，先清避免残留音箱旧进度
+	p.cur.Position = 0
+	p.cur.Duration = 0
 	p.mu.Unlock()
 	p.bcastSnapshot()
 }
@@ -353,7 +368,15 @@ func (p *PlaybackState) NextBVID() string {
 func (p *PlaybackState) SetDuration(d float64) {
 	p.mu.Lock()
 	p.cur.Duration = d
+	needPersist := false
+	if p.cur.QIdx >= 0 && p.cur.QIdx < len(p.cur.Queue) && p.cur.Queue[p.cur.QIdx].Duration != d {
+		p.cur.Queue[p.cur.QIdx].Duration = d
+		needPersist = true
+	}
 	p.mu.Unlock()
+	if needPersist {
+		p.persistNow() // 锁已释放，安全调（内部自己加锁）
+	}
 	p.bcastProgress()
 }
 

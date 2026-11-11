@@ -16,10 +16,12 @@ package cache
 
 import (
 	"database/sql"
+	"hash/fnv"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,8 +30,11 @@ import (
 const CacheTable = "audio_cache"
 
 // CacheSchema audio_cache 表定义（表结构归业务域；建表执行在 store.Migrate 统一跑）
+// hash 列：落盘时记文件头 4KB 的 FNV-1a hash（低31位），Get 时校验——文件损坏（非截断）也能检测，
+// 命中后 seek 超范围/花屏崩坏这类诡异问题直接删缓存重拉。旧表无 hash 列由 ensureHashColumn 幂等 ALTER。
 const CacheSchema = `CREATE TABLE IF NOT EXISTS audio_cache (
 	bvid TEXT PRIMARY KEY, size INTEGER DEFAULT 0, quality INTEGER DEFAULT 0,
+	hash INTEGER DEFAULT 0,
 	last_used INTEGER DEFAULT 0, created_at INTEGER DEFAULT 0)`
 
 // SettingsSchema settings kv 表（存缓存上限等）
@@ -58,7 +63,56 @@ func NewCacheService(db *sql.DB, audioDir string, limitMB int) *CacheService {
 	} else if v, err := s.loadLimit(); err == nil {
 		s.limitMB = v
 	}
+	s.ensureHashColumn()
+	s.cleanupTmp()
 	return s
+}
+
+// cleanupTmp 启动时清 .tmp 残留（上次进程被杀，StreamAndCache 未走完 Remove(tmp) 的孤儿）
+func (s *CacheService) cleanupTmp() {
+	entries, err := os.ReadDir(s.audioDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			os.Remove(filepath.Join(s.audioDir, e.Name()))
+		}
+	}
+}
+
+// ensureHashColumn 幂等加 hash 列（旧库 ALTER，新库建表已含；每次启动调一次，开销可忽略）
+func (s *CacheService) ensureHashColumn() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.Query(`PRAGMA table_info(audio_cache)`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt any
+		if rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk) == nil && name == "hash" {
+			return
+		}
+	}
+	s.db.Exec(`ALTER TABLE audio_cache ADD COLUMN hash INTEGER DEFAULT 0`)
+}
+
+// headHash 文件头 4KB 的 FNV-1a hash（低31位；读取失败返回 0 视为未知，不拦截）
+func headHash(path string) (int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	buf := make([]byte, 4096)
+	n, _ := io.ReadFull(f, buf)
+	hh := fnv.New64a()
+	hh.Write(buf[:n])
+	return int64(hh.Sum64() & 0x7fffffff), nil
 }
 
 // loadLimit 从 settings 读上限
@@ -123,9 +177,9 @@ func (s *CacheService) Get(bvid string) (size int64, quality int, ok bool) {
 	if err != nil || fi.Size() == 0 {
 		return 0, 0, false
 	}
-	var q int
+	var q, dbHash int64
 	dbSize := fi.Size()
-	if err := s.db.QueryRow(`SELECT size, quality FROM audio_cache WHERE bvid=?`, bvid).Scan(&dbSize, &q); err == nil {
+	if err := s.db.QueryRow(`SELECT size, quality, hash FROM audio_cache WHERE bvid=?`, bvid).Scan(&dbSize, &q, &dbHash); err == nil {
 		if dbSize > fi.Size() {
 			// 文件比元数据小 → 下载中断/截断，serve 后浏览器 seek 到超出实际长度位置会 416
 			// → 音频跳末尾触发 ended 误切歌。删记录返回未命中，让 stream 重拉完整文件。
@@ -133,15 +187,24 @@ func (s *CacheService) Get(bvid string) (size int64, quality int, ok bool) {
 			os.Remove(path)
 			return 0, 0, false
 		}
+		// headHash 校验：落盘写过 hash 且现文件头对不上 → 文件损坏，删缓存重拉
+		if dbHash != 0 {
+			cur, err := headHash(path)
+			if err == nil && cur != dbHash {
+				s.db.Exec(`DELETE FROM audio_cache WHERE bvid=?`, bvid)
+				os.Remove(path)
+				return 0, 0, false
+			}
+		}
 		if dbSize != fi.Size() { // 元数据过期（文件变大）→ 按实际
 			s.db.Exec(`UPDATE audio_cache SET size=? WHERE bvid=?`, fi.Size(), bvid)
 		}
 	}
 	now := time.Now().UnixMilli()
-	s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,last_used) VALUES (?,?,?,?)
+	s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,hash,last_used) VALUES (?,?,?,?,?)
 		ON CONFLICT(bvid) DO UPDATE SET size=?, quality=?, last_used=?`,
-		bvid, fi.Size(), q, now, fi.Size(), q, now)
-	return fi.Size(), q, true
+		bvid, fi.Size(), q, dbHash, now, fi.Size(), q, now)
+	return fi.Size(), int(q), true
 }
 
 // FilePath 暴露给 handler 直接 serve 文件（命中时）
@@ -166,9 +229,11 @@ func (s *CacheService) Put(bvid string, quality int, data []byte) error {
 		return err
 	}
 	now := time.Now().UnixMilli()
-	_, err := s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,last_used,created_at)
-		VALUES (?,?,?,?,?) ON CONFLICT(bvid) DO UPDATE SET size=?, quality=?, last_used=?`,
-		bvid, size, quality, now, now, size, quality, now)
+	// 落盘时算文件头 hash（完整性校验用；hash 0=未知，仅 Put/StreamAndCache 落盘后写）
+	hsh, _ := headHash(path)
+	_, err := s.db.Exec(`INSERT INTO audio_cache (bvid,size,quality,hash,last_used,created_at)
+		VALUES (?,?,?,?,?,?) ON CONFLICT(bvid) DO UPDATE SET size=?, quality=?, hash=?, last_used=?`,
+		bvid, size, quality, hsh, now, now, size, quality, hsh, now)
 	if err != nil {
 		return err
 	}

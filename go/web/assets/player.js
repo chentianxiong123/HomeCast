@@ -295,13 +295,13 @@
   // ---- 外部点播桥接（其他页面 hcBus 'play'）→ 发后端命令 ----
   hcBus.on('play', (d) => {
     if (!d || !d.bvid) return;
-    window.hcState.cmd('play', { bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '' });
+    window.hcState.cmd('play', { bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '', duration: Number(d.duration) || 0 });
   });
   hcBus.on('toggle', toggle);
   hcBus.on('seek', (d) => { if (d && typeof d.pct === 'number') seek(d.pct); });
   hcBus.on('prev', () => step('prev'));
   hcBus.on('next', () => step('next'));
-  hcBus.on('play-next', (d) => { if (d && d.bvid) window.hcState.cmd('play', { bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '' }); });
+  hcBus.on('play-next', (d) => { if (d && d.bvid) window.hcState.cmd('play', { bvid: d.bvid, title: d.title || '', artist: d.artist || '', cover: d.cover || '', duration: Number(d.duration) || 0 }); });
   hcBus.on('mode-cycle', cycleMode);
   hcBus.on('mode', (d) => { if (d && d.m) window.hcState.cmd('mode', { mode: d.m }); });
   hcBus.on('mute', mute);
