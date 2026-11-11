@@ -67,10 +67,13 @@
       }
     }
     // 进度显示（音箱模式进度由 SSE 推，web 由 timeupdate 推）
-    if (!seeking && p.duration > 0) {
-      el.cur.textContent = fmt(p.position);
-      el.dur.textContent = fmt(p.duration);
-      el.prog.value = Math.round((p.position / p.duration) * 1000);
+    // 总时长用 audio.duration 优先——store duration 切歌瞬间可能残留旧值（queue 恢复的歌 duration=0），
+    // 用 store 会卡旧歌时长（如都是 3:04）。audio.duration 是真实当前音频时长，最准。
+    const dispDur = (pb().source === 'web' && audio.duration) ? audio.duration : pb().duration;
+    if (!seeking && dispDur > 0) {
+      el.cur.textContent = fmt(pb().source === 'web' ? audio.currentTime : p.position);
+      el.dur.textContent = fmt(dispDur);
+      el.prog.value = Math.round(((pb().source === 'web' ? audio.currentTime : p.position) / dispDur) * 1000);
     }
   }
 
@@ -120,10 +123,15 @@
   function seek(pct) {
     if (!pb().bvid) return;
     if (pb().source === 'speaker') return; // 音箱 seek 未接，忽略
-    const sec = (pct / 100) * (pb().duration || audio.duration || 0);
+    // 用 audio.duration（真实当前音频时长）优先——store duration 可能滞后于切歌，
+    // 用它算 sec 会跳到旧歌末尾→立即 ended→误切歌（点进度条切歌 bug 根因）
+    const d = audio.duration || pb().duration || 0;
+    if (d <= 0) return;
+    const sec = (pct / 100) * d;
+    if (sec >= d) return; // 防越界（跳到末尾会触发 ended 误切歌）
     seeking = true;
     audio.currentTime = sec; // 本地即时（高频 UI），随后上报后端
-    window.hcState.progress(sec, pb().duration, !audio.paused);
+    window.hcState.progress(sec, d, !audio.paused);
     render();
   }
   function step(dir) {
