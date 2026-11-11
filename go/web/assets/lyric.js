@@ -159,9 +159,6 @@
   let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲
   let loadGen = 0; // 换歌竞态保护：旧请求晚到直接丢弃（music.py bvid 校验同款，bili-music generation 同款）
 
-  let currentSong = null; // 侧栏操作（收藏/开B站/复制）作用的当前曲
-  let loadGen = 0; // 换歌竞态保护：旧请求晚到直接丢弃（music.py bvid 校验同款，bili-music generation 同款）
-
   // 歌词行缓存已搬后端（lyriccache，与音频同逻辑；/api/v1/music/lyric 透明缓存），
   // 前端不再 localStorage 缓存歌词行（旧 hc:lyc:cache 数据弃用）。
   // 选源上报（SQLite 持久化 + OnSelectChange 广播）——原 lycSet 的 select 部分保留：
