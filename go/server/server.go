@@ -117,8 +117,6 @@ func New() http.Handler {
 	playbackState.SetDB(db)     // 持久化（settings kv，变更即存）
 	playbackState.Restore(db)   // 启动恢复：队列/模式/上次歌（不自动播）
 	playbackStateGlobal = playbackState
-	// 音箱控制注入：音箱让位模式下 pause/resume/next/prev 真调音箱 API（不只是改状态）
-	playbackState.SetSpeaker(&speakerControllerAdapter{svc: speakerSvc})
 	stateHandler := &api.StateHandler{Pb: playbackState}
 
 	// 后端桥：音箱本地模拟进度 1s tick → 统一状态流（音箱播放状态并入 SSOT）
@@ -203,24 +201,4 @@ func bridgeSpeakerProgress(svc *spk.SpeakerService, pb *playback.PlaybackState) 
 			pb.SetSpeakerProgress(did, bvid, title, pos, dur, playing)
 		}
 	}
-}
-
-// speakerControllerAdapter 适配器：*spk.SpeakerService → playback.SpeakerController。
-// 让 playback（SSOT）在音箱让位模式下真调音箱 API，而不依赖 speaker 包（避免循环依赖）。
-type speakerControllerAdapter struct {
-	svc *spk.SpeakerService
-}
-
-func (a *speakerControllerAdapter) Control(did, action string, volume int) (map[string]any, error) {
-	return a.svc.Control(did, action, volume)
-}
-
-func (a *speakerControllerAdapter) Play(bvid, did string, req playback.SpkPlayReq) (map[string]any, error) {
-	return a.svc.Play(bvid, did, req.Quality, spk.PlayOpts{
-		Title: req.Title, Duration: req.Duration, NextBVID: req.NextBVID,
-	})
-}
-
-func (a *speakerControllerAdapter) Seek(did string, sec float64) (map[string]any, error) {
-	return a.svc.Seek(did, sec, 30280)
 }

@@ -72,8 +72,6 @@
       el.dur.textContent = fmt(p.duration);
       el.prog.value = Math.round((p.position / p.duration) * 1000);
     }
-    // 音箱模式：进度条可拖（seek 走后端真 seek，不再置灰）
-    if (el.prog) el.prog.classList.toggle('opacity-40', false);
   }
 
   // ---- 播放模式图标 ----
@@ -121,15 +119,8 @@
   }
   function seek(pct) {
     if (!pb().bvid) return;
+    if (pb().source === 'speaker') return; // 音箱 seek 未接，忽略
     const sec = (pct / 100) * (pb().duration || audio.duration || 0);
-    if (pb().source === 'speaker') {
-      // 音箱模式：seek 走后端（改内存 offset + 重下发 URL 触发音箱重拉）
-      seeking = true;
-      window.hcState.cmd('seek', { sec });
-      setTimeout(() => { seeking = false; }, 600);
-      render();
-      return;
-    }
     seeking = true;
     audio.currentTime = sec; // 本地即时（高频 UI），随后上报后端
     window.hcState.progress(sec, pb().duration, !audio.paused);
@@ -160,42 +151,13 @@
     hcBus.emit('toast', { msg: '音质 ' + q + 'k' });
   }
   function setVol(v) {
-    try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
-    if (pb().source === 'speaker') {
-      // 音箱让位模式：音量走音箱 SetVolume API（不打本地 audio）
-      var did = pb().spk_did;
-      if (did) {
-        fetch('/api/v1/speaker/volume', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ did: did, volume: Number(v) })
-        }).catch(function () {});
-      }
-      volMuted = Number(v) === 0;
-      renderMute();
-      return;
-    }
     audio.volume = v / 100;
     volMuted = v === 0;
     audio.muted = volMuted;
+    try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
     renderMute();
   }
   function mute() {
-    if (pb().source === 'speaker') {
-      // 音箱让位模式：静音/取消静音 → 音箱音量 0 / 恢复上次音量
-      var did = pb().spk_did;
-      if (!did) return;
-      var target = volMuted ? (parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80) : 0;
-      if (volMuted && el.vol) el.vol.value = target;
-      fetch('/api/v1/speaker/volume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ did: did, volume: target })
-      }).catch(function () {});
-      volMuted = !volMuted;
-      renderMute();
-      return;
-    }
     if (volMuted || audio.volume === 0) {
       volMuted = false;
       if (audio.volume === 0) {

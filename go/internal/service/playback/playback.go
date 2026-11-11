@@ -50,26 +50,6 @@ type PlaybackState struct {
 	cur  State
 	subs map[chan SSEMsg]struct{}
 	db   *sql.DB // 持久化（settings kv），可选注入
-	spk  SpeakerController // 音箱控制（可选注入；音箱让位模式下真调音箱 API）
-}
-
-// SpkPlayReq 音箱投送请求（playback 包自包含，避免 → speaker 循环依赖）
-type SpkPlayReq struct {
-	Title    string
-	Duration float64
-	NextBVID string
-	Quality  int
-}
-
-// SpeakerController 音箱控制接口（避免 playback → speaker 循环依赖；server 层适配器注入）。
-// 音箱让位模式下 Pause/Resume/Next/Prev 真调音箱 API（不只是改本地状态）。
-type SpeakerController interface {
-	// Control 音箱控制（pause/stop/resume/play）
-	Control(did, action string, volume int) (map[string]any, error)
-	// Play 投送歌曲到音箱（切歌时重新投下一曲）
-	Play(bvid, did string, req SpkPlayReq) (map[string]any, error)
-	// Seek 跳转（音箱模式：改内存 offset + 重下发 URL）
-	Seek(did string, sec float64) (map[string]any, error)
 }
 
 // NewPlaybackState 构造
@@ -85,21 +65,6 @@ func (p *PlaybackState) SetDB(db *sql.DB) {
 	p.mu.Lock()
 	p.db = db
 	p.mu.Unlock()
-}
-
-// SetSpeaker 注入音箱控制（server 层调；音箱让位模式真调音箱 API）
-func (p *PlaybackState) SetSpeaker(s SpeakerController) {
-	p.mu.Lock()
-	p.spk = s
-	p.mu.Unlock()
-}
-
-// spkActive 音箱让位模式生效（source=speaker 且有 did 且已注入控制器）
-func (p *PlaybackState) spkActive() (SpeakerController, string) {
-	if p.cur.Source == "speaker" && p.cur.SpkDID != "" && p.spk != nil {
-		return p.spk, p.cur.SpkDID
-	}
-	return nil, ""
 }
 func (p *PlaybackState) Subscribe() chan SSEMsg {
 	ch := make(chan SSEMsg, 16)
@@ -201,16 +166,7 @@ func (p *PlaybackState) Play(s Song) {
 func (p *PlaybackState) Pause() {
 	p.mu.Lock()
 	p.cur.Playing = false
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
 	p.mu.Unlock()
-	if isSpk {
-		if spk, _ := p.spkActive(); spk != nil {
-			if _, err := spk.Control(did, "pause", 0); err != nil {
-				log.Printf("[playback] 音箱 pause 失败: %v", err)
-			}
-		}
-	}
 	p.bcastProgress()
 }
 
@@ -218,16 +174,7 @@ func (p *PlaybackState) Pause() {
 func (p *PlaybackState) Resume() {
 	p.mu.Lock()
 	p.cur.Playing = true
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
 	p.mu.Unlock()
-	if isSpk {
-		if spk, _ := p.spkActive(); spk != nil {
-			if _, err := spk.Control(did, "resume", 0); err != nil {
-				log.Printf("[playback] 音箱 resume 失败: %v", err)
-			}
-		}
-	}
 	p.bcastProgress()
 }
 
@@ -246,17 +193,7 @@ func (p *PlaybackState) Seek(sec float64) {
 		sec = 0
 	}
 	p.cur.Position = sec
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
 	p.mu.Unlock()
-	if isSpk {
-		// 音箱模式：真 seek（改内存 offset + 重下发 URL 触发音箱重拉）
-		if spk, _ := p.spkActive(); spk != nil {
-			if _, err := spk.Seek(did, sec); err != nil {
-				log.Printf("[playback] 音箱 seek 失败: %v", err)
-			}
-		}
-	}
 	p.bcastProgress()
 }
 
@@ -281,22 +218,7 @@ func (p *PlaybackState) Next() {
 	}
 	p.cur.QIdx = (p.cur.QIdx + 1) % len(p.cur.Queue)
 	p.applyLocked(p.cur.Queue[p.cur.QIdx])
-	song := p.cur.Queue[p.cur.QIdx]
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
-	nextBVID := ""
-	if len(p.cur.Queue) > 1 {
-		nextBVID = p.cur.Queue[(p.cur.QIdx+1)%len(p.cur.Queue)].BVID
-	}
 	p.mu.Unlock()
-	if isSpk {
-		// 音箱模式：真投下一曲到音箱（重新 play_by_url）
-		if spk, _ := p.spkActive(); spk != nil {
-			_, _ = spk.Play(song.BVID, did, SpkPlayReq{
-				Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
-			})
-		}
-	}
 	p.bcastSnapshot()
 }
 
@@ -308,21 +230,7 @@ func (p *PlaybackState) Prev() {
 	}
 	p.cur.QIdx = (p.cur.QIdx - 1 + len(p.cur.Queue)) % len(p.cur.Queue)
 	p.applyLocked(p.cur.Queue[p.cur.QIdx])
-	song := p.cur.Queue[p.cur.QIdx]
-	did := p.cur.SpkDID
-	isSpk := p.cur.Source == "speaker" && did != ""
-	nextBVID := ""
-	if len(p.cur.Queue) > 1 {
-		nextBVID = p.cur.Queue[(p.cur.QIdx+1)%len(p.cur.Queue)].BVID
-	}
 	p.mu.Unlock()
-	if isSpk {
-		if spk, _ := p.spkActive(); spk != nil {
-			_, _ = spk.Play(song.BVID, did, SpkPlayReq{
-				Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
-			})
-		}
-	}
 	p.bcastSnapshot()
 }
 

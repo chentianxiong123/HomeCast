@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"homecast/internal/service/memstream"
 	"homecast/internal/service/token"
 )
 
@@ -20,9 +19,8 @@ func (h *ProxyHandler) Video(w http.ResponseWriter, r *http.Request) {
 }
 
 // Audio GET /api/v1/proxy/audio/{token}
-// 音箱拉流：内存切段喂流（seek=改 offset 重喂，不需音箱 seek API）
 func (h *ProxyHandler) Audio(w http.ResponseWriter, r *http.Request) {
-	memstream.ServeMem(w, r, h.Tokens, r.PathValue("token"), "audio")
+	h.stream(w, r, r.PathValue("token"), "audio")
 }
 
 func (h *ProxyHandler) stream(w http.ResponseWriter, r *http.Request, token, kind string) {

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"homecast/internal/service/token"
-	"homecast/internal/service/memstream"
 	"homecast/internal/bilibili"
 	"homecast/internal/speaker"
 )
@@ -273,78 +272,6 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 	// 播放指令下发成功 → 建立本地进度 + 自动连播定时器
 	s.startProgress(did, bvid, opts, quality)
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
-}
-
-// Seek 跳转到 sec 秒（seek=改内存 offset + 重下发 URL 触发音箱重拉）。
-// 手机是唯一状态源；音箱被动 HTTP 拉流，我们持 URL 控流——不需音箱 seek API。
-func (s *SpeakerService) Seek(did string, sec float64, quality int) (map[string]any, error) {
-	s.mu.Lock()
-	url, playing := s.playing[did]
-	s.mu.Unlock()
-	if !playing || url == "" {
-		return map[string]any{"code": 400, "message": "无进行中的播放"}, nil
-	}
-	// 从 proxyURL 提取 token（/api/v1/proxy/audio/{token}）
-	token := url
-	if i := len("/api/v1/proxy/audio/"); len(url) > i {
-		if j := lastIndexStr(url, "/"); j >= 0 && j+1 < len(url) {
-			token = url[j+1:]
-		}
-	}
-	if !memstream.Seek(token, sec, 128) {
-		return map[string]any{"code": 500, "message": "流未就绪（seek 失败）"}, nil
-	}
-	// 重下发同 URL → 音箱清缓冲重建连接 → 从新 offset 拉（固件 2-3s 起播延迟）
-	device, ok := s.getDevice(did)
-	if !ok {
-		return map[string]any{"code": 404, "message": "设备未找到"}, nil
-	}
-	s.Auth.Hardware = device.Hardware
-	ret, err := s.Auth.PlayURL(device.DeviceID, url)
-	if err != nil {
-		return map[string]any{"code": 500, "message": "seek 重拉失败: " + err.Error()}, err
-	}
-	s.seekProgress(did, sec)
-	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
-}
-
-// seekProgress seek 后对齐本地进度基准（Started = now - sec）+ 重算自动连播定时器
-func (s *SpeakerService) seekProgress(did string, sec float64) {
-	s.mu.Lock()
-	if p := s.progress[did]; p != nil {
-		p.Started = time.Now().Add(-time.Duration(sec * float64(time.Second)))
-		p.Paused = 0
-		p.PausedAt = time.Time{}
-		// 重算自动连播定时器（剩余 = duration - sec）
-		if p.timer != nil {
-			p.timer.Stop()
-			p.timer = nil
-		}
-		if p.Duration > 0 && p.NextBVID != "" {
-			remaining := p.Duration - sec
-			if remaining <= 0 {
-				remaining = 0
-			}
-			bvid := p.BVID
-			next := p.NextBVID
-			p.timer = time.AfterFunc(time.Duration(remaining*float64(time.Second)), func() {
-				s.playNextAuto(did, next, 30280)
-			})
-			_ = bvid
-		}
-	}
-	s.mu.Unlock()
-}
-
-// lastIndexStr 返回 substr 在 s 中最后一次出现的起始下标（无则 -1）
-func lastIndexStr(s, substr string) int {
-	idx := -1
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			idx = i
-		}
-	}
-	return idx
 }
 
 // startProgress 建立本地模拟进度（Started=now + duration 定时器）。
