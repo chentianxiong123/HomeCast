@@ -68,6 +68,7 @@ type AudioStreamResult struct {
 	Size     int
 	MimeType string
 	Codecs   string
+	Bandwidth int // 音频码率bps（DASH bandwidth）——进度=拉流字节/码率 + 分片喂流大小用
 }
 
 // GetAudioStream 纯 DASH 音频模式取流。
@@ -114,7 +115,7 @@ func (c *Client) GetBestAudioURL(bvid string, cid int, preferQuality int) (*Audi
 					u = a.BackupURL[0]
 				}
 				if u != "" {
-					return &AudioStreamResult{URL: u, Quality: qn, Size: a.Size, MimeType: a.MimeType, Codecs: a.Codecs}, nil
+					return &AudioStreamResult{URL: u, Quality: qn, Size: a.Size, MimeType: a.MimeType, Codecs: a.Codecs, Bandwidth: a.Bandwidth}, nil
 				}
 			}
 		}
@@ -123,7 +124,7 @@ func (c *Client) GetBestAudioURL(bvid string, cid int, preferQuality int) (*Audi
 		if u == "" && len(a.BackupURL) > 0 {
 			u = a.BackupURL[0]
 		}
-		return &AudioStreamResult{URL: u, Quality: a.ID, Size: a.Size, MimeType: a.MimeType, Codecs: a.Codecs}, nil
+		return &AudioStreamResult{URL: u, Quality: a.ID, Size: a.Size, MimeType: a.MimeType, Codecs: a.Codecs, Bandwidth: a.Bandwidth}, nil
 	}
 	if len(stream.Durl) > 0 {
 		return &AudioStreamResult{URL: stream.Durl[0].URL, Quality: preferQuality, Size: stream.Durl[0].Size}, nil

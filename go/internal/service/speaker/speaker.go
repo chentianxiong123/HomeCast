@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -22,28 +23,38 @@ type SpeakerService struct {
 	tokens *token.TokenStore
 	mu     sync.Mutex
 	devices  map[string]speaker.SpeakerDevice
-	playing  map[string]string // did -> url
+	playing  map[string]string // did -> url（统一端点 URL）
+	blocked  map[string]bool   // did -> 断源（暂停/停止）：其拉流请求被拒
 	progress map[string]*SpeakerProgress // did -> 本地模拟进度（零小米云轮询）
 	port     string
+	// EndedHook 播完回调（did, nextBVID）——重构后核心自动连播，不再自己递归 Play
+	EndedHook func(did, nextBVID string)
 }
 
-// SpeakerProgress 推送播放的本地模拟进度（xiaomusic/MiAir 同款方法论：
-// 进度 = 本地时钟，自动连播 = 本地定时器，不打小米云）。
+// SpeakerProgress 推送播放的本地进度（用户思路：进度 = 拉流字节/码率，不查音箱）。
+// LoadedBytes = proxy 已发送字节（音箱实际拉了多少流）；Bitrate = 音频码率bps。
+// 分片喂流下拉取≈播放 → 字节/码率 ≈ 真实播放位置。回退本地时钟（无字节/码率时）。
 type SpeakerProgress struct {
 	BVID     string    `json:"bvid"`
 	Title    string    `json:"title,omitempty"`
 	Duration float64   `json:"duration"`             // 秒（前端已知优先，否则 B 站 view duration）
 	NextBVID string    `json:"next_bvid,omitempty"`  // 播完自动连播的下一首
 	Quality  int       `json:"-"`                    // 本次播放音质（自动连播/恢复沿用，删硬编码 30280）
-	Started  time.Time `json:"-"`                    // 本次播放开始（本地时钟基准）
+	Bitrate  int       `json:"-"`                    // 音频码率bps（DASH bandwidth）——字节/码率=进度
+	LoadedBytes int64  `json:"-"`                    // proxy 已发送字节（音箱实际拉流）——用户思路
+	Started  time.Time `json:"-"`                    // 本次播放开始（本地时钟基准，回退用）
 	PausedAt time.Time `json:"-"`                    // 暂停开始；零值=未暂停
 	Paused   float64   `json:"-"`                    // 累计暂停秒（恢复时补偿）
 	timer    *time.Timer `json:"-"`
 	stopped  bool      `json:"-"`
 }
 
-// Position 本地模拟当前位置（秒）：暂停中固定，播放中随本地时钟走
+// Position 当前位置（秒）：优先拉流字节/码率（音箱实际消费，用户思路），
+// 无字节/码率时回退本地时钟（暂停中固定，播放中随本地时钟走）。
 func (p *SpeakerProgress) Position() float64 {
+	if p.Bitrate > 0 && p.LoadedBytes > 0 {
+		return float64(p.LoadedBytes) / float64(p.Bitrate/8) // 字节/字节每秒 = 秒
+	}
 	if !p.PausedAt.IsZero() {
 		return p.PausedAt.Sub(p.Started).Seconds() - p.Paused
 	}
@@ -73,6 +84,7 @@ func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, token
 		tokens:  tokens,
 		devices: map[string]speaker.SpeakerDevice{},
 		playing: map[string]string{},
+		blocked: map[string]bool{},
 		progress: map[string]*SpeakerProgress{},
 		port:    port,
 	}
@@ -219,26 +231,20 @@ func scoreAddr(ip net.IP, flags net.Flags) int {
 	return score
 }
 
-// proxyAudioURL 音箱可访问的代理 URL（局域网 IP + token）
-func (s *SpeakerService) proxyAudioURL(bvid string, quality int, device speaker.SpeakerDevice) (string, string, error) {
-	info, err := s.client.GetVideoInfo(bvid)
-	if err != nil {
-		return "", "", err
-	}
-	stream, err := s.client.GetBestAudioURL(bvid, info.CID, quality)
-	if err != nil {
-		return "", "", err
-	}
-	token := s.tokens.Store(stream.URL, map[string]string{
-		"content_type": stream.MimeType,
-		"original_url": stream.URL,
-		"referer":      "https://www.bilibili.com/",
-		"hardware":     device.Hardware,
-		"mime_type":    stream.MimeType,
-		"bvid":         bvid,
-	})
-	proxyURL := fmt.Sprintf("http://%s:%s/api/v1/proxy/audio/%s", localIP(), s.port, token)
-	return proxyURL, stream.MimeType, nil
+// unifiedAudioURL 音箱可访问的统一音频端点 URL（与 web 播放器同一个）。
+// 源（B站 CDN / 缓存 / 本地文件）全由该端点内部解决，音箱不区分来源、不解析 B站、不用 token。
+// did 带上，供断源闸门识别（暂停/停止 → 拒绝拉流）。
+func (s *SpeakerService) unifiedAudioURL(bvid string, quality int, did string) string {
+	return fmt.Sprintf("http://%s:%s/api/v1/music/stream/%s?quality=%d&did=%s",
+		localIP(), s.port, bvid, quality, url.QueryEscape(did))
+}
+
+// BlockedStream 断源闸门：该 did 暂停/停止中 → 后续拉流被拒（音箱播完缓冲自然停）。
+// 实现 api.StreamGate。
+func (s *SpeakerService) BlockedStream(did string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.blocked[did]
 }
 
 // PlayOpts 推送可选参数（进度/自动连播用）
@@ -255,22 +261,22 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 	if !ok {
 		return map[string]any{"code": 404, "message": "设备未找到，请先刷新设备列表"}, nil
 	}
-	proxyURL, _, err := s.proxyAudioURL(bvid, quality, device)
-	if err != nil {
-		return map[string]any{"code": 500, "message": "获取音频流失败: " + err.Error()}, err
-	}
+	// 统一端点（与 web 播放器同一个）：缓存优先 + 未命中拉B站 + 回写缓存，全在端点内部
+	url := s.unifiedAudioURL(bvid, quality, did)
 	s.mu.Lock()
-	s.playing[did] = proxyURL
+	s.playing[did] = url
+	delete(s.blocked, did) // 重新播放 → 解除断源
 	s.mu.Unlock()
 
 	// 硬件分文：需要 music API 的设备（LX05A/L07A 等）用 play_by_music_url（带 audio_id），
 	// 否则 play_by_url——对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API 分支
-	ret, err := s.Auth.PlayURL(device.DeviceID, proxyURL, device.Hardware)
+	ret, err := s.Auth.PlayURL(device.DeviceID, url, device.Hardware)
 	if err != nil {
 		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
 	}
-	// 播放指令下发成功 → 建立本地进度 + 自动连播定时器
+	// 播放指令下发成功 → 建立本地模拟进度 + 自动连播定时器
 	s.startProgress(did, bvid, opts, quality)
+	log.Printf("[speaker] Play bvid=%s did=%s url=%s", bvid, did, url)
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
 }
 
@@ -313,10 +319,25 @@ func (s *SpeakerService) startProgress(did, bvid string, opts PlayOpts, quality 
 	s.mu.Unlock()
 }
 
-// playNextAuto 自动连播：上一首播完（本地定时器到点）推下一首
+// RecordLoaded 记录音箱已拉流字节（proxy 回调）→ 进度 = 拉流字节/码率（用户思路）
+func (s *SpeakerService) RecordLoaded(did string, bytes int64) {
+	s.mu.Lock()
+	p := s.progress[did]
+	if p != nil {
+		p.LoadedBytes = bytes
+	}
+	s.mu.Unlock()
+}
+
+// playNextAuto 自动连播：上一首播完（本地定时器到点）通知 EndedHook（核心统一走位）
 func (s *SpeakerService) playNextAuto(did, nextBVID string, quality int) {
-	log.Printf("[speaker] 定时器到点（本地模拟播完）→ 自动连播下一首 %s did=%s", nextBVID, did)
-	s.Play(nextBVID, did, quality, PlayOpts{}) // 递归建立新进度；title/duration 回退 B 站 view
+	log.Printf("[speaker] 定时器到点（本地模拟播完）→ 通知核心自动连播 next=%s did=%s", nextBVID, did)
+	s.mu.Lock()
+	hook := s.EndedHook
+	s.mu.Unlock()
+	if hook != nil {
+		hook(did, nextBVID)
+	}
 }
 
 // progressMap 组装进度 map（Progress/AllProgress 共用，删重复）
@@ -372,18 +393,25 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 	)
 	switch action {
 	case "pause":
-		ret, err = s.Auth.Pause(device.DeviceID, device.Hardware)
-		if err == nil {
-			s.pauseProgress(did)
-		}
+		// 音箱 API 无暂停能力 → 断源：拒绝后续拉流，音箱播完已缓冲的自然停。
+		s.mu.Lock()
+		s.blocked[did] = true
+		s.mu.Unlock()
+		s.pauseProgress(did)
+		ret = map[string]any{"paused": true}
 	case "stop":
 		s.mu.Lock()
 		delete(s.playing, did)
+		s.blocked[did] = true // 断源：停止后不再允许拉流
 		s.stopProgressLocked(did)
 		s.mu.Unlock()
 		ret, err = s.Auth.Stop(device.DeviceID)
 	case "resume", "play":
 		if u, ok := s.playing[did]; ok {
+			// 解除断源 + 重新下发播放指令 → 音箱重新拉流
+			s.mu.Lock()
+			delete(s.blocked, did)
+			s.mu.Unlock()
 			ret, err = s.Auth.PlayURL(device.DeviceID, u, device.Hardware)
 			if err == nil {
 				s.resumeProgress(did)
@@ -405,7 +433,7 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
 }
 
-// pauseProgress 暂停：记 PausedAt（恢复时补偿）
+// pauseProgress 暂停：断源 + 记 PausedAt + 停自动连播 timer（否则定时器照走→自动跳下一首）
 func (s *SpeakerService) pauseProgress(did string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -414,6 +442,10 @@ func (s *SpeakerService) pauseProgress(did string) {
 		return
 	}
 	p.PausedAt = time.Now()
+	if p.timer != nil {
+		p.timer.Stop()
+		p.timer = nil
+	}
 }
 
 // resumeProgress 恢复：累计暂停秒 + 重起剩余定时器（播完自动连播仍有效）

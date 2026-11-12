@@ -14,10 +14,14 @@ import (
 
 const port = ":39001"
 
-// wavSilence 生成 1 秒 16-bit 44100Hz 单声道静音 WAV（前端 <audio> 真实可播，audio.playing=true）
-func wavSilence() []byte {
+// wavSilence 生成 seconds 秒 16-bit 44100Hz 单声道静音 WAV（前端 <audio> 真实可播，audio.playing=true）
+// seconds 控制：音箱缓冲行为测试需要足够长的流（拉满→停→播完→重拉周期），默认 300s
+func wavSilence(seconds int) []byte {
+	if seconds <= 0 {
+		seconds = 300
+	}
 	sampleRate := 44100
-	samples := sampleRate // 1 秒
+	samples := sampleRate * seconds
 	dataSize := samples * 2
 	buf := make([]byte, 44+dataSize)
 	// RIFF header
@@ -38,7 +42,7 @@ func wavSilence() []byte {
 	return buf
 }
 
-var wav = wavSilence()
+var wav = wavSilence(300)
 
 // searchItems 固定搜索结果（>=5 条，供 e2e-smoke 步骤2 断言）
 func searchItems() []map[string]any {

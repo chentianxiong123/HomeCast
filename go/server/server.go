@@ -97,10 +97,11 @@ func New() http.Handler {
 	}
 	playlistHandler := &api.PlaylistHandler{Playlist: playlist.NewPlaylistService(client, db)}
 	tokenStore := token.NewTokenStore()
+	speakerSvc := spk.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
+	musicHandler.Gate = speakerSvc // 音箱断源闸门：暂停/停止 → 拒绝其拉流（统一供给端点）
 	castSvc := cast.NewCastService(client, tokenStore)
 	castHandler := &api.CastHandler{Cast: castSvc}
 	proxyHandler := &api.ProxyHandler{Tokens: tokenStore}
-	speakerSvc := spk.NewSpeakerService(speaker.NewSpeakerAuth(), client, tokenStore)
 	speakerQR := speaker.NewQRLogin()
 	speakerHandler := &api.SpeakerHandler{Svc: speakerSvc, QR: speakerQR}
 	sitesHandler := &api.SitesHandler{Sites: sites.NewSitesService("")}
@@ -116,12 +117,14 @@ func New() http.Handler {
 	playbackState := playback.NewPlaybackState()
 	playbackState.SetDB(db)     // 持久化（settings kv，变更即存）
 	playbackState.Restore(db)   // 启动恢复：队列/模式/上次歌（不自动播）
-	playbackState.SetSpeaker(&speakerControllerAdapter{svc: speakerSvc}) // 音箱让位模式：暂停/恢复/切歌真调音箱 API
+	// 对接归位：核心只认 Output。音箱输出工厂（SwitchSpeaker(did) 时创建绑定该 did 的输出）
+	playbackState.SetOutputFactory(func(did string) playback.Output {
+		out := spk.NewSpeakerOutput(speakerSvc, did)
+		out.SetEndedHook(func() { playbackState.Next() }) // 播完→核心统一自动连播
+		return out
+	})
 	playbackStateGlobal = playbackState
 	stateHandler := &api.StateHandler{Pb: playbackState, Widget: widgetState}
-
-	// 后端桥：音箱本地模拟进度 1s tick → 统一状态流（音箱播放状态并入 SSOT）
-	go bridgeSpeakerProgress(speakerSvc, playbackState)
 
 	mux := api.NewMux(
 		musicHandler, favHandler, lyricHandler, playlistHandler,
@@ -135,25 +138,6 @@ func New() http.Handler {
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)
 	return withCORS(outer)
-}
-
-// speakerControllerAdapter 把 SpeakerService 适配成 playback.SpeakerController（避免循环依赖）
-type speakerControllerAdapter struct {
-	svc *spk.SpeakerService
-}
-
-func (a *speakerControllerAdapter) Control(did, action string, volume int) (map[string]any, error) {
-	return a.svc.Control(did, action, volume)
-}
-
-func (a *speakerControllerAdapter) Play(bvid, did string, req playback.SpkPlayReq) (map[string]any, error) {
-	q := req.Quality
-	if q == 0 {
-		q = bilibili.Audio192K // 默认 192k（调用方未指定音质时）
-	}
-	return a.svc.Play(bvid, did, q, spk.PlayOpts{
-		Title: req.Title, Duration: req.Duration, NextBVID: req.NextBVID,
-	})
 }
 
 // WidgetStateRef 挂件（同进程）读取播放状态用
@@ -200,28 +184,3 @@ func ListenAndServe(addr string) error {
 	return http.ListenAndServe(addr, New())
 }
 
-// bridgeSpeakerProgress 音箱本地模拟进度 → 统一状态流（1s tick）。
-// 音箱播放状态（position/duration/playing/bvid/title）并入 PlaybackState（SSOT），
-// 让 player-dock/进度条/图标从 /api/v1/state/stream 统一读，不再靠 speaker 独立事件。
-func bridgeSpeakerProgress(svc *spk.SpeakerService, pb *playback.PlaybackState) {
-	tick := time.NewTicker(1 * time.Second)
-	defer tick.Stop()
-	for range tick.C {
-		all := svc.AllProgress()
-		if len(all) == 0 {
-			continue // 无音箱在播，跳过空转（避免每秒白加两把锁+遍历）
-		}
-		for did, d := range all {
-			if d == nil {
-				continue
-			}
-			bvid, _ := d["bvid"].(string)
-			title, _ := d["title"].(string)
-			pos, _ := d["position"].(float64)
-			dur, _ := d["duration"].(float64)
-			state, _ := d["state"].(string)
-			playing := state == "playing"
-			pb.SetSpeakerProgress(did, bvid, title, pos, dur, playing)
-		}
-	}
-}

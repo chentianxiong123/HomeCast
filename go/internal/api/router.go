@@ -36,7 +36,6 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("POST /api/v1/cast/control", cast.Control)
 	mux.HandleFunc("GET /api/v1/cast/status/{device_udn}", cast.Status)
 	mux.HandleFunc("GET /api/v1/proxy/video/{token}", proxy.Video)
-	mux.HandleFunc("GET /api/v1/proxy/audio/{token}", proxy.Audio)
 	mux.HandleFunc("GET /api/v1/speaker/status", speaker.Status)
 	mux.HandleFunc("POST /api/v1/speaker/login", speaker.Login)
 	mux.HandleFunc("POST /api/v1/speaker/logout", speaker.Logout)

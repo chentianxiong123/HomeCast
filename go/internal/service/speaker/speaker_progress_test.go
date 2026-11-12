@@ -116,20 +116,21 @@ func TestSpeakerPauseResume(t *testing.T) {
 	}
 }
 
-// TestSpeakerAutoNext 自动连播：duration 定时器到点推下一首（mock B 站取流）
+// TestSpeakerAutoNext 自动连播：duration 定时器到点通知 EndedHook（核心统一走位）
 func TestSpeakerAutoNext(t *testing.T) {
 	s := newTestSpeaker(t, true)
+	var gotNext string
+	s.EndedHook = func(did, nextBVID string) { gotNext = nextBVID }
 	s.startProgress("did1", "BV1old", PlayOpts{Duration: 0.15, NextBVID: "BV1next"}, 30280)
-	// 等定时器触发（playNextAuto → Play → startProgress 新进度）
+	// 等定时器触发（playNextAuto → EndedHook 通知核心自动连播）
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
-		p := s.Progress("did1")
-		if b, _ := p["bvid"].(string); b == "BV1next" {
-			return // 自动连播生效
+		if gotNext == "BV1next" {
+			return // 自动连播通知生效
 		}
 	}
-	t.Fatal("自动连播未触发（3s 内 progress.bvid 未变成 BV1next）")
+	t.Fatal("自动连播未触发（3s 内 EndedHook 未收到 BV1next）")
 }
 
 // TestSpeakerStopClears 停止后进度 idle

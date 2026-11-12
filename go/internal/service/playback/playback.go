@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 )
 
 // Song 歌曲（对齐前端 song / fav.FavSong 字段）
@@ -50,34 +51,46 @@ type PlaybackState struct {
 	cur  State
 	subs map[chan SSEMsg]struct{}
 	db   *sql.DB // 持久化（settings kv），可选注入
-	spk  SpeakerController // 音箱控制（可选注入；音箱让位模式下真调音箱 API）
-
+	// out 当前激活的播放后端（web=NullOutput 前端 audio 接管；speaker=SpeakerOutput；cast=CastOutput）
+	// 统一调度：核心只认 Output 接口，不再用 source 分支判断（对接归位）
+	out        Output
+	outFactory OutputFactory // 创建绑定 did 的输出（SwitchSpeaker 用）
 	prevWebPlaying bool // 切走前 web 播放态（SwitchWeb 续播用，非持久化）
-}
-
-// SpkPlayReq 音箱投送请求（playback 包自包含，避免 → speaker 循环依赖）
-type SpkPlayReq struct {
-	Title    string
-	Duration float64
-	NextBVID string
-	Quality  int
-}
-
-// SpeakerController 音箱控制接口（避免 playback → speaker 循环依赖；server 层适配器注入）。
-// 音箱让位模式下 Pause/Resume/Next/Prev 真调音箱 API（不只是改本地状态）。
-// 接口缩小为控制面最小集：暂停/恢复 + 重新投送（切歌）。
-type SpeakerController interface {
-	// Control 音箱控制（pause/resume/volume 等）
-	Control(did, action string, volume int) (map[string]any, error)
-	// Play 投送歌曲到音箱（切歌时重新投下一曲）
-	Play(bvid, did string, req SpkPlayReq) (map[string]any, error)
 }
 
 // NewPlaybackState 构造
 func NewPlaybackState() *PlaybackState {
-	return &PlaybackState{
-		cur: State{Source: "web", PlayMode: "order", QIdx: -1, Queue: []Song{}},
+	p := &PlaybackState{
+		cur:  State{Source: "web", PlayMode: "order", QIdx: -1, Queue: []Song{}},
 		subs: make(map[chan SSEMsg]struct{}),
+		out:  NullOutput{}, // 默认 web：前端 audio 接管
+	}
+	go p.progressLoop() // 后台：音箱本地模拟进度 → SSOT（一切以我为准，不查音箱）
+	return p
+}
+
+// progressLoop 进度轮询（1s tick）：source=speaker 时读当前输出本地模拟进度 → SSOT。
+// web 模式进度由前端 timeupdate 上报（SetProgress），音箱由这里本地模拟——核心统一调度。
+func (p *PlaybackState) progressLoop() {
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		p.mu.Lock()
+		src := p.cur.Source
+		out := p.out
+		p.mu.Unlock()
+		if src != "speaker" || out == nil {
+			continue
+		}
+		pos, dur, playing := out.Position()
+		p.mu.Lock()
+		p.cur.Position = pos
+		if dur > 0 {
+			p.cur.Duration = dur
+		}
+		p.cur.Playing = playing
+		p.mu.Unlock()
+		p.bcastProgress()
 	}
 }
 
@@ -88,21 +101,31 @@ func (p *PlaybackState) SetDB(db *sql.DB) {
 	p.mu.Unlock()
 }
 
-// SetSpeaker 注入音箱控制（server 层调；音箱让位模式真调音箱 API）
-func (p *PlaybackState) SetSpeaker(s SpeakerController) {
+// SetOutputFactory 注入输出工厂（server 层调）：SwitchSpeaker(did) 时创建绑定该 did 的输出
+// （SpeakerOutput/CastOutput），实现"对接归位"——核心只认 Output，不再 source 分支判断。
+type OutputFactory func(did string) Output
+
+func (p *PlaybackState) SetOutputFactory(f OutputFactory) {
 	p.mu.Lock()
-	p.spk = s
+	p.outFactory = f
 	p.mu.Unlock()
 }
 
-// spkActive 音箱让位模式生效（source=speaker 且有 did 且已注入控制器）
-func (p *PlaybackState) spkActive() (SpeakerController, string) {
+// outActive 当前激活输出（无则 NullOutput——web 模式前端 audio 接管）
+func (p *PlaybackState) outActive() Output {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.cur.Source == "speaker" && p.cur.SpkDID != "" && p.spk != nil {
-		return p.spk, p.cur.SpkDID
+	if p.out == nil {
+		return NullOutput{}
 	}
-	return nil, ""
+	return p.out
+}
+
+// SetOutput 直接设当前输出（测试/特殊场景用）
+func (p *PlaybackState) SetOutput(out Output) {
+	p.mu.Lock()
+	p.out = out
+	p.mu.Unlock()
 }
 func (p *PlaybackState) Subscribe() chan SSEMsg {
 	ch := make(chan SSEMsg, 16)
@@ -200,53 +223,44 @@ func (p *PlaybackState) Play(s Song) {
 	p.bcastSnapshot()
 }
 
-// Pause 暂停
+// Pause 暂停（统一：本地状态 + 当前输出真暂停。web=Null 前端 audio 接管；speaker=真调音箱）
 func (p *PlaybackState) Pause() {
 	p.mu.Lock()
 	p.cur.Playing = false
+	out := p.out
 	p.mu.Unlock()
-	// 音箱让位模式：真调音箱 API（不只改本地状态）
-	if spk, did := p.spkActive(); spk != nil {
-		if _, err := spk.Control(did, "pause", 0); err != nil {
-			log.Printf("[playback] 音箱 pause 失败: %v", err)
-		} else {
-			log.Printf("[playback] 音箱 pause → %s", did)
-		}
+	if err := out.Pause(); err != nil && err != ErrUnsupported {
+		log.Printf("[playback] pause: %v", err)
 	}
 	p.bcastSnapshot()
 }
 
-// Resume 恢复
+// Resume 恢复（统一：本地状态 + 当前输出真恢复）
 func (p *PlaybackState) Resume() {
 	p.mu.Lock()
 	p.cur.Playing = true
+	out := p.out
 	p.mu.Unlock()
-	// 音箱让位模式：真调音箱 API（不只改本地状态）
-	if spk, did := p.spkActive(); spk != nil {
-		if _, err := spk.Control(did, "resume", 0); err != nil {
-			log.Printf("[playback] 音箱 resume 失败: %v", err)
-		} else {
-			log.Printf("[playback] 音箱 resume → %s", did)
-		}
+	if err := out.Resume(); err != nil && err != ErrUnsupported {
+		log.Printf("[playback] resume: %v", err)
 	}
 	p.bcastSnapshot()
 }
 
-// Toggle 播放/暂停切换（音箱让位模式：真调音箱 API，与 Pause/Resume 对齐）
+// Toggle 播放/暂停切换（统一：本地状态 + 当前输出）
 func (p *PlaybackState) Toggle() {
 	p.mu.Lock()
 	p.cur.Playing = !p.cur.Playing
 	target := p.cur.Playing
+	out := p.out
 	p.mu.Unlock()
-	if spk, did := p.spkActive(); spk != nil {
-		action := "pause"
-		if target {
-			action = "resume"
+	if target {
+		if err := out.Resume(); err != nil && err != ErrUnsupported {
+			log.Printf("[playback] resume: %v", err)
 		}
-		if _, err := spk.Control(did, action, 0); err != nil {
-			log.Printf("[playback] 音箱 toggle %s 失败: %v", action, err)
-		} else {
-			log.Printf("[playback] 音箱 toggle %s → %s", action, did)
+	} else {
+		if err := out.Pause(); err != nil && err != ErrUnsupported {
+			log.Printf("[playback] pause: %v", err)
 		}
 	}
 	p.bcastProgress()
@@ -328,20 +342,15 @@ func (p *PlaybackState) Next() {
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
 	nextBVID := p.nextBVIDLocked()
+	out := p.out
 	p.mu.Unlock()
-	// 音箱让位模式：真投下一曲（重新 play_by_url，带 NextBVID 自动连播）
-	if spk, did := p.spkActive(); spk != nil {
-		res, err := spk.Play(song.BVID, did, SpkPlayReq{
-			Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
-		})
-		if err != nil {
-			log.Printf("[playback] 音箱 next 投送失败 bvid=%s did=%s err=%v → 回滚继续播旧歌", song.BVID, did, err)
-			// 回滚：音箱还在播旧歌，状态三方归位（QIdx/当前歌/进度回切前）
+	// 当前输出真切歌（web=Null 前端重载；speaker=真投下一曲；失败回滚继续播旧歌）
+	if out != nil {
+		if err := out.Play(song.BVID, PlayOpts{Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280}); err != nil {
+			log.Printf("[playback] next 投送失败 bvid=%s err=%v → 回滚继续播旧歌", song.BVID, err)
 			p.mu.Lock()
 			p.rollbackLocked(old)
 			p.mu.Unlock()
-		} else {
-			log.Printf("[playback] 音箱 next 投送 bvid=%s did=%s code=%v", song.BVID, did, res)
 		}
 	}
 	p.bcastSnapshot()
@@ -371,19 +380,15 @@ func (p *PlaybackState) Prev() {
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
 	nextBVID := p.nextBVIDLocked()
+	out := p.out
 	p.mu.Unlock()
-	// 音箱让位模式：真投上一曲
-	if spk, did := p.spkActive(); spk != nil {
-		_, err := spk.Play(song.BVID, did, SpkPlayReq{
-			Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280,
-		})
-		if err != nil {
-			log.Printf("[playback] 音箱 prev 投送失败 bvid=%s did=%s err=%v → 回滚继续播旧歌", song.BVID, did, err)
+	// 当前输出真切上一曲（web=Null 前端重载；speaker=真投上一曲）
+	if out != nil {
+		if err := out.Play(song.BVID, PlayOpts{Title: song.Title, Duration: song.Duration, NextBVID: nextBVID, Quality: 30280}); err != nil {
+			log.Printf("[playback] prev 投送失败 bvid=%s err=%v → 回滚继续播旧歌", song.BVID, err)
 			p.mu.Lock()
 			p.rollbackLocked(old)
 			p.mu.Unlock()
-		} else {
-			log.Printf("[playback] 音箱 prev 投送 bvid=%s did=%s", song.BVID, did)
 		}
 	}
 	p.bcastSnapshot()
@@ -425,22 +430,25 @@ func (p *PlaybackState) SetQueue(list []Song, startIdx int) {
 	p.bcastSnapshot()
 }
 
-// SwitchSpeaker 切音箱播放（source=speaker，记录 did）
+// SwitchSpeaker 切音箱播放（source=speaker，记录 did，激活对应输出）
 func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.mu.Lock()
 	// 记住切走前 web 的播放态：切回 web 时续播同一首（音箱在播→切回 web 继续播）
 	p.prevWebPlaying = p.cur.Playing
 	p.cur.Source = "speaker"
 	p.cur.SpkDID = did
-	// 清进度：切模式瞬间不残留 web 旧 position/duration，等音箱进度桥（1s tick）推新值覆盖
+	// 清进度：切模式瞬间不残留 web 旧 position/duration，等音箱本地模拟进度推新值覆盖
 	p.cur.Position = 0
 	p.cur.Duration = 0
+	// 对接归位：创建绑定该 did 的输出（SpeakerOutput），核心后续只认 Output
+	if p.outFactory != nil {
+		p.out = p.outFactory(did)
+	}
 	p.mu.Unlock()
 	p.bcastSnapshot()
 }
 
-// prevWebPlaying 切走前 web 的播放态（SwitchWeb 恢复用；非持久化）
-// SwitchWeb 切回 web
+// SwitchWeb 切回 web（source=web，输出回 Null——前端 audio 接管）
 func (p *PlaybackState) SwitchWeb() {
 	p.mu.Lock()
 	p.cur.Source = "web"
@@ -451,6 +459,7 @@ func (p *PlaybackState) SwitchWeb() {
 	// 续播：沿用切走前 web 的播放态（切走时在播→切回继续播；切走时暂停→切回暂停）
 	// 前端 driveAudio 在切回 web 时会强制重载源，p.playing=true → audio.play() 真续播
 	p.cur.Playing = p.prevWebPlaying
+	p.out = NullOutput{} // web：前端 audio 接管，核心不再调输出
 	p.mu.Unlock()
 	p.bcastSnapshot()
 }

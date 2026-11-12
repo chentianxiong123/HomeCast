@@ -411,10 +411,10 @@ func (a *SpeakerAuth) PlayerPlayMusicUrl(deviceID, url, audioID string) (any, er
 	return res, nil
 }
 
-// Pause 暂停
-// 对齐 xiaomusic：需要 music API 的设备（NEED_USE_PLAY_MUSIC_API 列表）调用 pause 后
-// API 状态不会正确更新为 paused（status=2），需改用 player_stop 实现暂停语义（workaround）。
-// hardware 参数化（同 PlayURL，避免共享字段并发串）。
+// Pause 暂停（真暂停语义：player_play_operation {action:"pause"}）。
+// 对齐 xiaomusic force_stop_xiaoai：暂停用 player_pause；player_stop 只用于强制停止，
+// 不做暂停 workaround（那是把 pause 能力错接到 stop——用户指出能力全有、对接错位）。
+// hardware 保留签名（兼容调用方），不再分支——pause 能力对所有设备一致。
 func (a *SpeakerAuth) Pause(deviceID, hardware string) (any, error) {
 	if a.client == nil {
 		return nil, nil
@@ -422,11 +422,7 @@ func (a *SpeakerAuth) Pause(deviceID, hardware string) (any, error) {
 	var res any
 	if err := a.retryOnAuth(func() error {
 		var e error
-		if NeedPlayMusicAPI(hardware) {
-			res, e = a.client.PlayerStop(deviceID) // 暂停语义：music API 设备用 stop
-		} else {
-			res, e = a.client.PlayerPause(deviceID)
-		}
+		res, e = a.client.PlayerPause(deviceID)
 		return e
 	}); err != nil {
 		return nil, err

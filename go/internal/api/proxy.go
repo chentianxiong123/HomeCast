@@ -8,7 +8,8 @@ import (
 	"homecast/internal/service/token"
 )
 
-// ProxyHandler token 化流转发（音箱/DLNA 播放用）
+// ProxyHandler token 化流转发（仅电视/DLNA 投屏视频用）。
+// 音频不再走这里：web 播放器/音箱统一走 /api/v1/music/stream/{bvid}（缓存优先+回源+回写）。
 type ProxyHandler struct {
 	Tokens *token.TokenStore
 }
@@ -18,18 +19,13 @@ func (h *ProxyHandler) Video(w http.ResponseWriter, r *http.Request) {
 	h.stream(w, r, r.PathValue("token"), "video")
 }
 
-// Audio GET /api/v1/proxy/audio/{token}
-func (h *ProxyHandler) Audio(w http.ResponseWriter, r *http.Request) {
-	h.stream(w, r, r.PathValue("token"), "audio")
-}
-
 func (h *ProxyHandler) stream(w http.ResponseWriter, r *http.Request, token, kind string) {
 	entry, ok := h.Tokens.Get(token)
 	if !ok {
 		errResp(w, http.StatusNotFound, "token expired or invalid")
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, entry.URL, nil)
+	req, err := http.NewRequest(http.MethodGet, entry.URL, nil)
 	if err != nil {
 		errResp(w, http.StatusInternalServerError, err.Error())
 		return
