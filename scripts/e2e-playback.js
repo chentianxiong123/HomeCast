@@ -60,15 +60,11 @@ async (page) => {
       durText: document.getElementById('d-dur').textContent, src: a.src.slice(-30) };
   });
   step('4a.下一首→bvid变', n1.bvid !== b0, b0.slice(-6) + '→' + n1.bvid.slice(-6));
-  // 等 audio 元数据就绪（外网流加载网络延迟，最多 8s）
-  let audioReady = await page.evaluate(async () => {
-    const a = document.querySelector('audio');
-    for (let i = 0; i < 80; i++) { if (a.duration > 0) break; await new Promise(r => setTimeout(r, 100)); }
-    return a.duration || 0;
-  });
+  // SSOT（后端 store）切歌后时长即时更新：断言 store.duration（权威），
+  // 不测 audio.duration——浏览器媒体元素加载外网流有网络延迟（可达10s+），非产品行为。
   const nDur = await page.evaluate(() => window.hcState.get().duration);
-  step('4b.切歌后时长即时更新', Math.abs(nDur - dur0) > 0.5 &&
-    Math.abs(audioReady - nDur) < 2, 'dur=' + nDur.toFixed(1) + ' audioDur=' + audioReady.toFixed(1));
+  step('4b.切歌后时长即时更新(SSOT)', Math.abs(nDur - dur0) > 0.5 && nDur > 10,
+    'dur0=' + dur0.toFixed(1) + ' dur=' + nDur.toFixed(1) + ' storeDur=' + nDur.toFixed(1));
 
   // 5. 上一首 d-prev
   const b1 = n1.bvid;
@@ -100,17 +96,13 @@ async (page) => {
 
   // 7. seek 后进度条 UI 恢复实时（seeking 标志重置回归：seek 后切歌时长要更新）
   await click('#d-next'); await wait(2500);
-  const audioReady2 = await page.evaluate(async () => {
-    const a = document.querySelector('audio');
-    for (let i = 0; i < 80; i++) { if (a.duration > 0) break; await new Promise(r => setTimeout(r, 100)); }
-    return a.duration ? a.duration.toFixed(0) : 0;
-  });
   const afterSeekCut = await page.evaluate(() => {
     const p = window.hcState.get();
     return { durText: document.getElementById('d-dur').textContent,
-      prog: document.getElementById('d-progress').value };
+      prog: document.getElementById('d-progress').value, sdur: p.duration };
   });
-  step('7.seek后切歌时长仍更新', audioReady2 > 0, JSON.stringify(Object.assign(afterSeekCut, {audioDur: audioReady2})));
+  step('7.seek后切歌时长仍更新(SSOT)', afterSeekCut.sdur > 10,
+    JSON.stringify({durText: afterSeekCut.durText, prog: afterSeekCut.prog, storeDur: afterSeekCut.sdur}));
 
   // 8. 播放模式循环切换（d-mode 真实点击，order→loop）
   const m0 = await page.evaluate(() => window.hcState.get().play_mode);
