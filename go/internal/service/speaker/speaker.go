@@ -26,6 +26,7 @@ type SpeakerService struct {
 	playing  map[string]string // did -> url（统一端点 URL）
 	blocked  map[string]bool   // did -> 断源（暂停/停止）：其拉流请求被拒
 	progress map[string]*SpeakerProgress // did -> 本地模拟进度（零小米云轮询）
+	failCount map[string]int  // did -> 连续播放失败次数（对齐 xiaomusic _play_failed_cnt，>=5 熔断）
 	port     string
 	// EndedHook 播完回调（did, nextBVID）——重构后核心自动连播，不再自己递归 Play
 	EndedHook func(did, nextBVID string)
@@ -86,6 +87,7 @@ func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, token
 		playing: map[string]string{},
 		blocked: map[string]bool{},
 		progress: map[string]*SpeakerProgress{},
+		failCount: map[string]int{},
 		port:    port,
 	}
 }
@@ -234,9 +236,25 @@ func scoreAddr(ip net.IP, flags net.Flags) int {
 // unifiedAudioURL 音箱可访问的统一音频端点 URL（与 web 播放器同一个）。
 // 源（B站 CDN / 缓存 / 本地文件）全由该端点内部解决，音箱不区分来源、不解析 B站、不用 token。
 // did 带上，供断源闸门识别（暂停/停止 → 拒绝拉流）。
+// v=时间戳：每次播放/恢复/自动连播都是新 URL → 逼音箱重新拉流（对齐 xiaomusic 每次重新
+// play_by_url 的事实行为；不变量会命中音箱缓存，恢复/切歌后音箱继续播旧内容/无声）。
 func (s *SpeakerService) unifiedAudioURL(bvid string, quality int, did string) string {
-	return fmt.Sprintf("http://%s:%s/api/v1/music/stream/%s?quality=%d&did=%s",
-		localIP(), s.port, bvid, quality, url.QueryEscape(did))
+	v := time.Now().UnixNano()
+	return fmt.Sprintf("http://%s:%s/api/v1/music/stream/%s?quality=%d&did=%s&v=%d",
+		localIP(), s.port, bvid, quality, url.QueryEscape(did), v)
+}
+
+// withFreshV 给任意播放 URL 刷新 v=时间戳（对齐 xiaomusic 每次 play 重新下发 URL）：
+// 恢复/重播同一字符串也必须换 v，否则命中音箱缓存 → 播旧内容/无声。
+func withFreshV(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	q := u.Query()
+	q.Set("v", fmt.Sprintf("%d", time.Now().UnixNano()))
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // BlockedStream 断源闸门：该 did 暂停/停止中 → 后续拉流被拒（音箱播完缓冲自然停）。
@@ -254,8 +272,8 @@ type PlayOpts struct {
 	NextBVID string  // 播完自动连播的下一首
 }
 
-// Play 播放到音箱：B站 bvid → DASH 音频 → 代理 URL → 音箱播放。
-// 成功后建立本地模拟进度 + 自动连播定时器（xiaomusic/MiAir 同款方法论）。
+// Play 播放到音箱：B站 bvid → DASH 音频 → 代理 URL → 音箱播放（对齐 xiaomusic play：
+// 先强停旧播放，再下发新 URL；失败累计熔断）。成功后本地进度 + 自动连播定时器。
 func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map[string]any, error) {
 	device, ok := s.getDevice(did)
 	if !ok {
@@ -268,12 +286,19 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 	delete(s.blocked, did) // 重新播放 → 解除断源
 	s.mu.Unlock()
 
-	// 硬件分文：需要 music API 的设备（LX05A/L07A 等）用 play_by_music_url（带 audio_id），
+	// 播放前强停旧播放（对齐 xiaomusic group_force_stop_xiaoai：先 player_pause 再停）
+	if err := s.forceStopBeforePlay(device.DeviceID); err != nil {
+		log.Printf("[speaker] 播放前强停(尽力而为) did=%s: %v", did, err)
+	}
+
+	// 硬件分文：需要 music API 的设备用 play_by_music_url（带 audio_id），
 	// 否则 play_by_url——对齐 MiAir/xiaomusic NEED_USE_PLAY_MUSIC_API 分支
 	ret, err := s.Auth.PlayURL(device.DeviceID, url, device.Hardware)
 	if err != nil {
+		s.recordFail(did)
 		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
 	}
+	s.resetFail(did)
 	// 播放指令下发成功 → 建立本地模拟进度 + 自动连播定时器
 	s.startProgress(did, bvid, opts, quality)
 	log.Printf("[speaker] Play bvid=%s did=%s url=%s", bvid, did, url)
@@ -281,7 +306,7 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 }
 
 // PlayURL 直接投任意 URL 到音箱（mock/测试/外部流用，不拼 B站统一端点）。
-// 用于把独立 mock（如 spkdemo :29111）的流接到真音箱上验证。
+// 对齐 MiAir play_url：先强停旧播放再投新 URL；失败累计熔断。
 func (s *SpeakerService) PlayURL(url, did string, opts PlayOpts) (map[string]any, error) {
 	device, ok := s.getDevice(did)
 	if !ok {
@@ -292,13 +317,55 @@ func (s *SpeakerService) PlayURL(url, did string, opts PlayOpts) (map[string]any
 	delete(s.blocked, did) // 重新播放 → 解除断源
 	s.mu.Unlock()
 
+	if err := s.forceStopBeforePlay(device.DeviceID); err != nil {
+		log.Printf("[speaker] PlayURL 前强停(尽力而为) did=%s: %v", did, err)
+	}
+
 	ret, err := s.Auth.PlayURL(device.DeviceID, url, device.Hardware)
 	if err != nil {
+		s.recordFail(did)
 		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
 	}
+	s.resetFail(did)
 	s.startProgress(did, url, opts, 0)
 	log.Printf("[speaker] PlayURL url=%s did=%s", url, did)
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
+}
+
+// forceStopBeforePlay 播放前强停旧播放（对齐 xiaomusic group_force_stop_xiaoai）：
+// 先 player_pause 让音箱停止消费，再连发 player_stop 彻底清空播放状态（MiAir stop 双保险同款）。
+func (s *SpeakerService) forceStopBeforePlay(deviceID string) error {
+	if _, err := s.Auth.Pause(deviceID, ""); err != nil {
+		return err
+	}
+	_, err := s.Auth.Stop(deviceID)
+	return err
+}
+
+// recordFail 累计连续失败（对齐 xiaomusic _play_failed_cnt：>=5 熔断）
+func (s *SpeakerService) recordFail(did string) {
+	s.mu.Lock()
+	s.failCount[did]++
+	n := s.failCount[did]
+	s.mu.Unlock()
+	log.Printf("[speaker] 播放失败累计 %d/5 did=%s", n, did)
+	if n >= 5 {
+		// 熔断：清状态，后续播放请求直接拒绝（对齐 xiaomusic 熔断保护）
+		s.mu.Lock()
+		delete(s.playing, did)
+		s.blocked[did] = true
+		s.failCount[did] = 0
+		s.stopProgressLocked(did)
+		s.mu.Unlock()
+		log.Printf("[speaker] 连续 5 次播放失败，熔断停止 did=%s（需重新播放以解除）", did)
+	}
+}
+
+// resetFail 播放成功 → 清零失败计数
+func (s *SpeakerService) resetFail(did string) {
+	s.mu.Lock()
+	s.failCount[did] = 0
+	s.mu.Unlock()
 }
 
 // startProgress 建立本地模拟进度（Started=now + duration 定时器）。
@@ -414,11 +481,16 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 	)
 	switch action {
 	case "pause":
-		// 音箱 API 无暂停能力 → 断源：拒绝后续拉流，音箱播完已缓冲的自然停。
+		// 对齐 MiAir/xiaomusic：pause 调 API（player_pause 真暂停）→ 音箱立即停声。
+		// 断源 keep 为兜底：暂停后音箱若还拉旧流则拒绝（MiAir stop+pause 双保险同思路）。
+		ret, err = s.Auth.Pause(device.DeviceID, device.Hardware)
 		s.mu.Lock()
 		s.blocked[did] = true
 		s.mu.Unlock()
 		s.pauseProgress(did)
+		if err != nil {
+			return map[string]any{"code": 500, "message": "操作失败: " + err.Error()}, err
+		}
 		ret = map[string]any{"paused": true}
 	case "stop":
 		s.mu.Lock()
@@ -426,15 +498,25 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 		s.blocked[did] = true // 断源：停止后不再允许拉流
 		s.stopProgressLocked(did)
 		s.mu.Unlock()
+		// 对齐 MiAir stop：player_stop + pause 双保险，彻底清空播放状态
 		ret, err = s.Auth.Stop(device.DeviceID)
+		if err == nil {
+			_, err = s.Auth.Pause(device.DeviceID, device.Hardware)
+		}
 	case "resume", "play":
 		if u, ok := s.playing[did]; ok {
-			// 解除断源 + 重新下发播放指令 → 音箱重新拉流
+			// 解除断源 + 重新下发播放指令。必须换新 v 强制音箱重拉
+			// （对齐 xiaomusic 每次 play 重新下发 URL；同 URL 会命中音箱缓存 → 无声/播旧）
+			fresh := withFreshV(u)
 			s.mu.Lock()
+			s.playing[did] = fresh
 			delete(s.blocked, did)
 			s.mu.Unlock()
-			ret, err = s.Auth.PlayURL(device.DeviceID, u, device.Hardware)
-			if err == nil {
+			ret, err = s.Auth.PlayURL(device.DeviceID, fresh, device.Hardware)
+			if err != nil {
+				s.recordFail(did)
+			} else {
+				s.resetFail(did)
 				s.resumeProgress(did)
 			}
 		} else {
