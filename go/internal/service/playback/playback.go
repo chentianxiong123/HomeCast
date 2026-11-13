@@ -433,6 +433,10 @@ func (p *PlaybackState) SetQueue(list []Song, startIdx int) {
 // SwitchSpeaker 切音箱播放（source=speaker，记录 did，激活对应输出）
 func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.mu.Lock()
+	prevOut := p.out
+	// 同一台音箱重复投送：前端已先真投（SpeakerService 内部强制停旧+播新），
+	// 此处若再停旧输出会误停刚投的歌——仅当 did 变化（web→音箱 / 换台音箱）才停旧设备
+	sameDevice := p.cur.Source == "speaker" && p.cur.SpkDID == did
 	// 记住切走前 web 的播放态：切回 web 时续播同一首（音箱在播→切回 web 继续播）
 	p.prevWebPlaying = p.cur.Playing
 	p.cur.Source = "speaker"
@@ -445,12 +449,28 @@ func (p *PlaybackState) SwitchSpeaker(did string) {
 		p.out = p.outFactory(did)
 	}
 	p.mu.Unlock()
+	// 独占：换设备（另一台音箱）必须让旧设备闭嘴——锁外真网络调用
+	if prevOut != nil && !sameDevice {
+		prevOut.Stop()
+	}
 	p.bcastSnapshot()
+}
+
+// StopSpeaker 设备页“停止”：若该 did 正是当前音箱 → 停音箱 + 回 web（手机按投送前状态续播）；
+// 非当前设备 → no-op（它本来就没在播，无状态可扰）。
+func (p *PlaybackState) StopSpeaker(did string) {
+	p.mu.Lock()
+	active := p.cur.Source == "speaker" && p.cur.SpkDID == did
+	p.mu.Unlock()
+	if active {
+		p.SwitchWeb() // 停旧输出(音箱) + source=web + 按 prevWebPlaying 续播
+	}
 }
 
 // SwitchWeb 切回 web（source=web，输出回 Null——前端 audio 接管）
 func (p *PlaybackState) SwitchWeb() {
 	p.mu.Lock()
+	prevOut := p.out
 	p.cur.Source = "web"
 	p.cur.SpkDID = ""
 	// 切回 web：等浏览器加载后由 loadedmetadata/progress 推真实值，先清避免残留音箱旧进度
@@ -461,6 +481,10 @@ func (p *PlaybackState) SwitchWeb() {
 	p.cur.Playing = p.prevWebPlaying
 	p.out = NullOutput{} // web：前端 audio 接管，核心不再调输出
 	p.mu.Unlock()
+	// 独占：回 web 前必须让旧输出闭嘴（音箱仍在播=双响）
+	if prevOut != nil {
+		prevOut.Stop()
+	}
 	p.bcastSnapshot()
 }
 

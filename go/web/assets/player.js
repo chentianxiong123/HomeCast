@@ -13,7 +13,7 @@
     dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
     cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
-    qualityBtn: $('d-quality'), eq: $('d-eq'), fav: $('d-fav'), spkMode: $('d-spk-mode'),
+    qualityBtn: $('d-quality'), eq: $('d-eq'), fav: $('d-fav'),
   };
   if (!el.dock || !el.toggle) return;
 
@@ -51,8 +51,7 @@
       if (el.artist.textContent !== p.artist) el.artist.textContent = p.artist || '未知作者';
       if (el.cover.getAttribute('src') !== p.cover) { el.cover.src = p.cover || ''; el.cover.alt = p.title || ''; }
       if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
-      // 音箱模式徽标：source=speaker 时显示（点击切回网页播放）
-      if (el.spkMode) el.spkMode.classList.toggle('hidden', p.source !== 'speaker');
+      // 设备切换唯一入口在设备页（投送/停止），dock 不再显示“切回网页”徽标
       renderMode(p.play_mode);
       // 收藏按钮同步：data-* 属性更新 + 状态刷新（统一 hcFav）
       const favBtn = el.fav;
@@ -98,7 +97,13 @@
   // ---- 状态流驱动 HTMLAudio（web 播放引擎）：bvid 变→载源；playing 变→播放/暂停 ----
   function driveAudio() {
     const p = pb();
-    if (p.source !== 'web' || !p.bvid) return; // 音箱模式：web 音频不动
+    // 独占：同一时刻只有一个设备出声。source≠web（音箱模式）时本机必须闭嘴——
+    // 不能只 return 不管 audio，否则音箱在响、手机同时还在放 = 双响
+    if (p.source !== 'web' || !p.bvid) {
+      if (!audio.paused) audio.pause();
+      prevSource = p.source;
+      return;
+    }
     // 从音箱模式切回 web：强制重载当前歌（lastBvid 在音箱模式下可能已被音箱桥更新到同 bvid，
     // 或 audio.src 还停在旧歌——必须重置 lastBvid 让下面载源分支无条件执行）
     if (prevSource !== 'web') lastBvid = '';
@@ -317,8 +322,6 @@
   });
   el.vol.addEventListener('input', () => setVol(el.vol.value));
   el.toggle.addEventListener('click', toggle);
-  // 音箱模式徽标 → 切回网页播放
-  if (el.spkMode) el.spkMode.addEventListener('click', () => window.hcState.cmd('switch_web'));
   el.prev.addEventListener('click', () => step('prev'));
   el.next.addEventListener('click', () => step('next'));
   el.cover.addEventListener('click', () => {

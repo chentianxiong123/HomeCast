@@ -103,6 +103,8 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 		h.Pb.SetQueue(body.Queue, body.QIdx)
 	case "switch_speaker":
 		h.Pb.SwitchSpeaker(body.Did)
+	case "stop_speaker":
+		h.Pb.StopSpeaker(body.Did) // 设备页“停止”：当前音箱→停+回 web；非当前设备→no-op
 	case "switch_web":
 		h.Pb.SwitchWeb()
 	case "remove":

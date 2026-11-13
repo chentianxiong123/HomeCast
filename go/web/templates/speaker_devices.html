@@ -32,8 +32,9 @@
         <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         <span>投送当前歌</span>
       </button>
-      <button hx-post="/hx/speaker/control" hx-vals='{"did":"{{.DID}}","action":"stop"}'
-              class="sp-stop-btn px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-xs hover:brightness-105">停止</button>
+      <button class="sp-stop-btn px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-xs hover:brightness-105"
+              data-did="{{.DID}}"
+              onclick="window.hcState.cmd('stop_speaker',{did:this.dataset.did})">停止</button>
     </div>
     {{/* 播放状态（唯一控制面=播放器面板；卡片只留接入/推送，不重复进度/控制） */}}
     <div class="sp-state mt-2 hidden" data-did="{{.DID}}">
