@@ -140,9 +140,10 @@
     if (enabled) place(); // 歌词写入后条宽变化，重定位（clamp 回视口）
   }
 
-  // 当前行统一走后端（SSE lyric-line，player.js 广播），显示层纯渲染，不本地 sec<=t
-  function applyLyricLine(line) {
+  // 当前行统一走后端（SSE lyric-state：text+ct+offset，player.js 广播），显示层纯渲染
+  function applyLyricLine(ev) {
     if (!enabled) return;
+    const line = typeof ev === 'string' ? ev : (ev && ev.text);
     if (typeof line === 'string' && line) { lastIdx = -1; if (textEl) textEl.textContent = line; if (progEl) progEl.style.width = '0%'; }
     else if (textEl) textEl.textContent = songTitle || '';
   }

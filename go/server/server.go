@@ -132,6 +132,35 @@ func New() http.Handler {
 	playbackStateGlobal = playbackState
 	stateHandler := &api.StateHandler{Pb: playbackState, Widget: widgetState}
 
+	// 歌词驱动统一（speaker 源）：**唯一后端 goroutine** 每秒把当前音箱进度喂 Widget，
+	// 与 web 前端上报（POST /state/progress → Widget.Set）汇入同一条 lyric-state 管道。
+	// 必须住后端且只一份：曾经放在 /speaker/events SSE 循环里 → 每个打开的页面
+	// 都起一个 tick goroutine，多路互相覆盖 widget 进度 → 歌词行来回跳（闪）。
+	// bvid/title/artist/duration 全取音箱自身进度（与歌词源严格一致，不混核心标题）。
+	go func() {
+		t := time.NewTicker(700 * time.Millisecond)
+		defer t.Stop()
+		for range t.C {
+			did := playbackStateGlobal.CurrentSpeakerDid()
+			if did == "" {
+				continue // web 模式：前端 timeupdate 自己上报，不插手
+			}
+			m := speakerSvc.Progress(did)
+			if m == nil || m["state"] == "idle" {
+				continue
+			}
+			bvid, _ := m["bvid"].(string)
+			if bvid == "" {
+				continue
+			}
+			pos, _ := m["position"].(float64)
+			dur, _ := m["duration"].(float64)
+			title, _ := m["title"].(string)
+			playing := m["state"] == "playing"
+			widgetStateGlobal.Set(bvid, title, "", pos, dur, playing)
+		}
+	}()
+
 	mux := api.NewMux(
 		musicHandler, favHandler, lyricHandler, playlistHandler,
 		castHandler, proxyHandler, speakerHandler, sitesHandler, widgetHandler, cacheHandler,

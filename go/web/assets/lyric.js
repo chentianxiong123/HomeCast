@@ -121,11 +121,22 @@
     });
   }
 
-  // 当前行高亮（统一数据流：走后端 SSE lyric-line，不本地 sec<=t 定位）
-  function highlightLine(line) {
-    if (!lines.length || typeof line !== 'string') return;
-    let idx = lines.findIndex((l) => l[1] === line);
-    if (idx < 0 && line) return; // 行不在当前列表（换歌/未匹配）不动
+  // 当前行高亮（统一数据流：走后端 SSE lyric-state，带 text+ct+offset）。
+  // 定位按时间（ct+offset）而非文本匹配：歌词重复句（副歌“啦~~”）文本匹配会
+  // 跳回第一处 → 高亮闪烁（真机验证 10→11→8→13 跳行）。
+  // 兼容旧事件（只传字符串 line）→ 文本匹配回退（web 旧逻辑；ct 缺失时）。
+  function highlightLine(ev) {
+    const text = typeof ev === 'string' ? ev : (ev && ev.text);
+    if (!lines.length || typeof text !== 'string' || !text) return;
+    let idx = -1;
+    if (ev && typeof ev.ct === 'number') {
+      // 后端已按 pickLineAny(lines, ct+offset) 算好当前行，前端按同一逻辑定位
+      const t = ev.ct + (ev.offset || 0);
+      for (let i = 0; i < lines.length; i++) { if (lines[i][0] <= t) idx = i; else break; }
+    } else {
+      idx = lines.findIndex((l) => l[1] === text); // 旧事件回退
+      if (idx < 0) return;
+    }
     if (idx === lastIdx) return;
     lastIdx = idx;
     linesEl.querySelectorAll('.ly-line').forEach((d, i) => {

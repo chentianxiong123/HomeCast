@@ -163,6 +163,16 @@ func (p *PlaybackState) Snapshot() State {
 	return s
 }
 
+// CurrentSpeakerDid 当前出声的音箱 did（source=speaker 时有效，否则空）
+func (p *PlaybackState) CurrentSpeakerDid() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cur.Source == "speaker" {
+		return p.cur.SpkDID
+	}
+	return ""
+}
+
 // bcastSnapshot 广播全量快照（state 事件）+ 持久化
 func (p *PlaybackState) bcastSnapshot() {
 	s := p.Snapshot()

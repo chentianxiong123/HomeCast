@@ -304,9 +304,13 @@
     es.addEventListener('toggle', () => toggle());
     es.addEventListener('prev', () => step('prev'));
     es.addEventListener('next', () => step('next'));
-    // 歌词当前行统一走后端（SSE lyric-state 带 line）→ hcBus 广播给歌词页/字幕条
+    // 歌词当前行统一走后端（SSE lyric-state 带 line + current_time/offset）→ hcBus 广播
+    // 给歌词页/字幕条。前端按 ct 定位高亮（不按文本匹配：重复句会跳行闪烁，刚踩过）
     es.addEventListener('lyric-state', (ev) => {
-      try { const d = JSON.parse(ev.data); if (d && typeof d.line === 'string') hcBus.emit('lyric-line', d.line); } catch (e) {}
+      try {
+        const d = JSON.parse(ev.data);
+        if (d && typeof d.line === 'string') hcBus.emit('lyric-line', { text: d.line, ct: d.current_time, offset: d.offset || 0 });
+      } catch (e) {}
     });
     es.onerror = () => {};
   } catch (e) {}
