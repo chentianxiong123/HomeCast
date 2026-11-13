@@ -94,6 +94,14 @@ func (p *PlaybackState) progressLoop() {
 func (p *PlaybackState) projectProgress(out Output) {
 	info := out.Position()
 	p.mu.Lock()
+	// 输出已被替换（SwitchWeb/SwitchSpeaker 已切走）：本次投影过期，放弃。
+	// 竞态：progressLoop 锁外快照 out 后、这里拿锁前可能已切 web，若继续投影
+	// 会把核心刷回音箱旧状态（source=web 但 bvid=旧歌/playing=true）→ 前端
+	// driveAudio 依此加载旧歌开始播 = 双响（真机踩过同类）。
+	if p.cur.Source != "speaker" || p.out != out {
+		p.mu.Unlock()
+		return
+	}
 	if info.BVID != "" {
 		if p.cur.BVID != info.BVID {
 			if idx := songIndexLocked(p.cur.Queue, info.BVID); idx >= 0 {
@@ -231,6 +239,7 @@ func (p *PlaybackState) Play(s Song) {
 		Song: Song{BVID: p.cur.BVID, Title: p.cur.Title, Artist: p.cur.Artist, Cover: p.cur.Cover, Duration: p.cur.Duration},
 		Position: p.cur.Position,
 		Duration: p.cur.Duration,
+		Playing:  p.cur.Playing,
 	}
 	oldQueue := append([]Song(nil), p.cur.Queue...)
 	// 去重后入队尾
@@ -320,9 +329,16 @@ func (p *PlaybackState) Seek(sec float64) {
 	p.bcastProgress()
 }
 
-// SetProgress web 位置上报（高频，只更新进度，广播 progress）
+// SetProgress web 位置上报（高频，只更新进度，广播 progress）。
+// 仅 source=web 时接受：音箱模式的核心进度唯一写者是 projectProgress（音箱投影），
+// 若此处也写 = 双写（多客户端/切模式瞬间的旧页面 timeupdate 会用 web 位置
+// 覆盖音箱真实进度，同 bvid 时 bvid 校验拦不住——状态脏的结构根源）。
 func (p *PlaybackState) SetProgress(position, duration float64, playing bool) {
 	p.mu.Lock()
+	if p.cur.Source != "web" {
+		p.mu.Unlock()
+		return // 音箱模式：进度由 projectProgress 单写，web 上报一律拒绝（不污染）
+	}
 	p.cur.Position = position
 	needPersist := false
 	if duration > 0 {
@@ -348,6 +364,7 @@ func (p *PlaybackState) rollbackLocked(snap songSnapshot) {
 	p.applyLocked(snap.Song)
 	p.cur.Position = snap.Position
 	p.cur.Duration = snap.Duration
+	p.cur.Playing = snap.Playing
 }
 
 // songSnapshot 切换前状态快照（音箱投送失败回滚用）
@@ -356,6 +373,15 @@ type songSnapshot struct {
 	Song     Song
 	Position float64
 	Duration float64
+	Playing  bool // 切歌前播放态（回滚必须恢复：applyLocked 会置 Playing=true）
+}
+
+// curSongLocked 当前歌快照（QIdx 越界安全：-1/空队列 → 空 Song，不 panic）
+func (p *PlaybackState) curSongLocked() Song {
+	if p.cur.QIdx >= 0 && p.cur.QIdx < len(p.cur.Queue) {
+		return p.cur.Queue[p.cur.QIdx]
+	}
+	return Song{}
 }
 
 // songIndexLocked 找 bvid 在队列中的位置（-1 未找到；调用方持锁）
@@ -368,18 +394,19 @@ func songIndexLocked(q []Song, bvid string) int {
 	return -1
 }
 
-// Next / Prev 队列走位（循环）
+// Next / Prev 队列走位（循环）。QIdx=-1（空队列未播过）→ 无当前歌可走，return。
 func (p *PlaybackState) Next() {
 	p.mu.Lock()
-	if len(p.cur.Queue) < 2 {
+	if p.cur.QIdx < 0 || len(p.cur.Queue) < 2 {
 		p.mu.Unlock()
 		return
 	}
 	old := songSnapshot{
 		QIdx:     p.cur.QIdx,
-		Song:     p.cur.Queue[p.cur.QIdx],
+		Song:     p.curSongLocked(),
 		Position: p.cur.Position,
 		Duration: p.cur.Duration,
+		Playing:  p.cur.Playing,
 	}
 	p.cur.QIdx = (p.cur.QIdx + 1) % len(p.cur.Queue)
 	song := p.cur.Queue[p.cur.QIdx]
@@ -409,15 +436,16 @@ func (p *PlaybackState) nextBVIDLocked() string {
 
 func (p *PlaybackState) Prev() {
 	p.mu.Lock()
-	if len(p.cur.Queue) < 2 {
+	if p.cur.QIdx < 0 || len(p.cur.Queue) < 2 {
 		p.mu.Unlock()
 		return
 	}
 	old := songSnapshot{
 		QIdx:     p.cur.QIdx,
-		Song:     p.cur.Queue[p.cur.QIdx],
+		Song:     p.curSongLocked(),
 		Position: p.cur.Position,
 		Duration: p.cur.Duration,
+		Playing:  p.cur.Playing,
 	}
 	p.cur.QIdx = (p.cur.QIdx - 1 + len(p.cur.Queue)) % len(p.cur.Queue)
 	song := p.cur.Queue[p.cur.QIdx]
@@ -461,19 +489,64 @@ func (p *PlaybackState) SetMode(m string) {
 	p.bcastSnapshot()
 }
 
-// SetQueue 设置整个队列（收藏夹播放全部等）
+// SetQueue 设置整个队列（收藏夹/搜索“全部播放”）：
+// 与 Play/Next/Prev 同构——锁定内快照（含队列副本：失败必须整体回滚）→ 改状态
+// → 解锁后调 out.Play 真投当前输出（音箱模式核心与音箱同步切歌，不再“核心播 B 音箱唱 A")。
+// 队列长度 < 2 时不出声（音箱无歌可连播；web 模式照常渲染）。
 func (p *PlaybackState) SetQueue(list []Song, startIdx int) {
 	p.mu.Lock()
+	old := songSnapshot{
+		QIdx:     p.cur.QIdx,
+		Song:     p.curSongLocked(),
+		Position: p.cur.Position,
+		Duration: p.cur.Duration,
+		Playing:  p.cur.Playing,
+	}
+	oldQueue := append([]Song(nil), p.cur.Queue...)
 	p.cur.Queue = append([]Song(nil), list...)
 	if startIdx >= 0 && startIdx < len(p.cur.Queue) {
 		p.cur.QIdx = startIdx
 		p.applyLocked(p.cur.Queue[startIdx])
+	} else {
+		p.cur.QIdx = -1
+		p.cur.BVID = ""
+		p.cur.Playing = false
+		p.cur.Position = 0
 	}
+	nextBVID := p.nextBVIDLocked()
+	var playSong Song
+	playOK := false
+	if p.cur.QIdx >= 0 && p.cur.QIdx < len(p.cur.Queue) {
+		playSong = p.cur.Queue[p.cur.QIdx] // 锁内拷贝（解锁后 out.Play 用，勿锁外读）
+		playOK = true
+	}
+	out := p.out
 	p.mu.Unlock()
+	if out != nil && playSong.BVID != "" {
+		if playOK {
+			// 队列有歌：真投当前输出（音箱模式核心与音箱同步切歌）
+			if err := out.Play(playSong.BVID, PlayOpts{Title: playSong.Title, Duration: playSong.Duration, NextBVID: nextBVID, Quality: 30280}); err != nil {
+				log.Printf("[playback] queue 投送失败 bvid=%s err=%v → 回滚继续播旧歌", playSong.BVID, err)
+				p.mu.Lock()
+				p.cur.Queue = oldQueue
+				p.rollbackLocked(old)
+				p.mu.Unlock()
+			}
+		} else {
+			// 队列无有效 startIdx（空列表/越界）：清状态后让输出闭嘴（同 ClearQueue 语义）
+			if err := out.Stop(); err != nil && err != ErrUnsupported {
+				log.Printf("[playback] queue 空队列停输出失败: %v", err)
+			}
+		}
+	}
 	p.bcastSnapshot()
 }
 
-// SwitchSpeaker 切音箱播放（source=speaker，记录 did，激活对应输出）
+// SwitchSpeaker 切音箱播放（source=speaker，记录 did，激活对应输出）。
+// 注意入径语义：hx/speaker/play **真投成功后才调本函数**（失败不切）——
+// 所以核心 Playing 必须立即=true（音箱已在响）；沿用 prevWebPlaying 会谎报
+// 暂停 1s（web 切走时暂停 → 音箱在播核心 says paused，等 projectProgress 校准）。
+// prevWebPlaying 仍留给 SwitchWeb 续播用（切回 web 恢复 web 侧播放态）。
 func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.mu.Lock()
 	prevOut := p.out
@@ -484,6 +557,7 @@ func (p *PlaybackState) SwitchSpeaker(did string) {
 	p.prevWebPlaying = p.cur.Playing
 	p.cur.Source = "speaker"
 	p.cur.SpkDID = did
+	p.cur.Playing = true // 已真投成功：音箱在响，核心必须同步（勿沿用旧播放态撒谎）
 	// 清进度：切模式瞬间不残留 web 旧 position/duration，等音箱本地模拟进度推新值覆盖
 	p.cur.Position = 0
 	p.cur.Duration = 0
@@ -531,7 +605,8 @@ func (p *PlaybackState) SwitchWeb() {
 	p.bcastSnapshot()
 }
 
-// RemoveQueue 从队列删除（bvid 匹配），删当前则自动切下一首
+// RemoveQueue 从队列删除（bvid 匹配）。删当前歌：自动切下一首并真投当前输出
+// （音箱模式下核心与音箱同步；失败回滚继续播旧歌）。删到队列空：真停输出。
 func (p *PlaybackState) RemoveQueue(bvid string) {
 	p.mu.Lock()
 	idx := -1
@@ -545,14 +620,32 @@ func (p *PlaybackState) RemoveQueue(bvid string) {
 		p.mu.Unlock()
 		return
 	}
+	old := songSnapshot{
+		QIdx:     p.cur.QIdx,
+		Song:     p.curSongLocked(),
+		Position: p.cur.Position,
+		Duration: p.cur.Duration,
+		Playing:  p.cur.Playing,
+	}
+	oldQueue := append([]Song(nil), p.cur.Queue...)
 	p.cur.Queue = append(p.cur.Queue[:idx], p.cur.Queue[idx+1:]...)
+	var (
+		needPlay bool
+		playSong Song
+		nextBVID string
+	)
 	if idx < p.cur.QIdx {
-		p.cur.QIdx--
+		p.cur.QIdx-- // 删当前歌之前的：当前歌不变，仅下标前移
 	} else if idx == p.cur.QIdx {
 		if len(p.cur.Queue) > 0 {
+			// 删当前歌：自动切下一首（核心+输出同步真投）
 			p.cur.QIdx = idx % len(p.cur.Queue)
 			p.applyLocked(p.cur.Queue[p.cur.QIdx])
+			needPlay = true
+			playSong = p.cur.Queue[p.cur.QIdx]
+			nextBVID = p.nextBVIDLocked()
 		} else {
+			// 删到空：清状态 + 停输出
 			p.cur.QIdx = -1
 			p.cur.BVID = ""
 			p.cur.Title = ""
@@ -560,13 +653,30 @@ func (p *PlaybackState) RemoveQueue(bvid string) {
 			p.cur.Cover = ""
 			p.cur.Playing = false
 			p.cur.Position = 0
+			p.cur.Duration = 0
 		}
 	}
+	out := p.out
 	p.mu.Unlock()
+	if needPlay && out != nil {
+		if err := out.Play(playSong.BVID, PlayOpts{Title: playSong.Title, Duration: playSong.Duration, NextBVID: nextBVID, Quality: 30280}); err != nil {
+			log.Printf("[playback] remove 切下一首失败 bvid=%s err=%v → 回滚继续播旧歌", playSong.BVID, err)
+			p.mu.Lock()
+			p.cur.Queue = oldQueue
+			p.rollbackLocked(old)
+			p.mu.Unlock()
+		}
+	} else if len(p.cur.Queue) == 0 && out != nil {
+		// 删到空：让当前输出闭嘴
+		if err := out.Stop(); err != nil && err != ErrUnsupported {
+			log.Printf("[playback] remove 停输出失败: %v", err)
+		}
+	}
 	p.bcastSnapshot()
 }
 
-// ClearQueue 清空队列（含当前歌——队列空则无歌可播）
+// ClearQueue 清空队列（含当前歌——队列空则无歌可播）：真停当前输出
+// （音箱模式核心清空但音箱继续唱旧歌=状态撒谎，同 RemoveQueue 同族修复）。
 func (p *PlaybackState) ClearQueue() {
 	p.mu.Lock()
 	p.cur.Queue = []Song{}
@@ -578,7 +688,13 @@ func (p *PlaybackState) ClearQueue() {
 	p.cur.Playing = false
 	p.cur.Position = 0
 	p.cur.Duration = 0
+	out := p.out
 	p.mu.Unlock()
+	if out != nil {
+		if err := out.Stop(); err != nil && err != ErrUnsupported {
+			log.Printf("[playback] clear 停输出失败: %v", err)
+		}
+	}
 	p.bcastSnapshot()
 }
 

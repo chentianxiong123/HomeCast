@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -79,7 +78,6 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 		errResp(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	log.Printf("[command] op=%s bvid=%s did=%s sec=%.1f qidx=%d", body.Op, body.BVID, body.Did, body.Sec, body.QIdx) // 临时诊断
 	switch body.Op {
 	case "play":
 		h.Pb.Play(playback.Song{BVID: body.BVID, Title: body.Title, Artist: body.Artist, Cover: body.Cover, Duration: body.Duration})

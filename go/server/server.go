@@ -146,9 +146,7 @@ func New() http.Handler {
 				continue // 只投影状态/进度；toggle/prev/next 是控制事件不走这
 			}
 			s := playbackState.Snapshot()
-			if s.BVID == "" {
-				continue // 无歌不喂（避免清屏闪烁）
-			}
+			// 无歌也喂空（ClearQueue/RemoveQueue 删空后挂件必须清屏，不能残留旧歌词）
 			widgetStateGlobal.Set(s.BVID, s.Title, s.Artist, s.Position, s.Duration, s.Playing)
 		}
 	}()
