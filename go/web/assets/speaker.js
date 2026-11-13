@@ -9,6 +9,22 @@
   var lastData = {}; // did -> 最近一次 SSE 进度（htmx 重绘后即时恢复，不闪空）
   function applyAll(all) {
     if (!all) return;
+    // 音箱进度 → Alpine store（dock 进度条/时间走起来）：source=speaker 时
+    // 把本地模拟位置写进 playback store，并触发 render（render 读 pb().position）
+    try {
+      if (window.Alpine) {
+        var st = Alpine.store('playback');
+        if (st && st.source === 'speaker' && st.spk_did) {
+          var d = all[st.spk_did];
+          if (d && d.bvid) {
+            st.position = d.position || 0;
+            if (d.duration > 0) st.duration = d.duration;
+            st.playing = d.state === 'playing';
+            if (window.hcBus) window.hcBus.emit('state', { state: st.playing ? 'playing' : 'paused' });
+          }
+        }
+      }
+    } catch (e) {}
     // 广播给播放器面板（音响让位模式：进度/状态复用 player-dock）
     try { if (window.hcBus) window.hcBus.emit('speaker-progress', all); } catch (e) {}
     var boxes = document.querySelectorAll('.sp-state[data-did]');
