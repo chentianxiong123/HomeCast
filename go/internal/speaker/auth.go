@@ -411,10 +411,23 @@ func (a *SpeakerAuth) PlayerPlayMusicUrl(deviceID, url, audioID string) (any, er
 	return res, nil
 }
 
-// Pause 暂停（真暂停语义：player_play_operation {action:"pause"}）。
-// 对齐 xiaomusic force_stop_xiaoai：暂停用 player_pause；player_stop 只用于强制停止，
-// 不做暂停 workaround（那是把 pause 能力错接到 stop——用户指出能力全有、对接错位）。
-// hardware 保留签名（兼容调用方），不再分支——pause 能力对所有设备一致。
+// Pause 暂停。
+// 铁证：LX05A（本机真机）player_pause 无效——音箱不停声；改用 player_stop 真停。
+// 对齐 MiAir speaker.py pause()：
+//   “某些使用 play_by_music_url 的设备，调用 pause 后 API 状态不会正确更新为
+//    paused (status=2)，需改用 stop 来实现暂停语义”——MiAir 默认(非兼容模式)
+//    暂停即 player_stop；xiaomusic force_stop_xiaoai 同思路。
+// 注意：判定与投 URL 的 NeedPlayMusicAPI 无关（LX05A 投URL走 play_by_url，
+// 但暂停 player_pause 无效）——这是两张独立的能力表，以真机实测为准。
+// pauseUsesStop 收录实测“player_pause 停不下来”的硬件，暂停改用 player_stop。
+var pauseUsesStop = map[string]bool{
+	"LX05A": true, // 真机实测：player_pause 无效，player_stop 真停
+}
+
+// pauseNeedsStop 判断该硬件暂停是否必须用 player_stop（默认 false 用 player_pause）
+func pauseNeedsStop(hardware string) bool { return pauseUsesStop[hardware] }
+
+// Pause 暂停。
 func (a *SpeakerAuth) Pause(deviceID, hardware string) (any, error) {
 	if a.client == nil {
 		return nil, nil
@@ -422,7 +435,12 @@ func (a *SpeakerAuth) Pause(deviceID, hardware string) (any, error) {
 	var res any
 	if err := a.retryOnAuth(func() error {
 		var e error
-		res, e = a.client.PlayerPause(deviceID)
+		if pauseNeedsStop(hardware) {
+			// 真机铁证：LX05A pause=player_stop（真停声）
+			res, e = a.client.PlayerStop(deviceID)
+		} else {
+			res, e = a.client.PlayerPause(deviceID)
+		}
 		return e
 	}); err != nil {
 		return nil, err
