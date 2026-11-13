@@ -10,7 +10,7 @@
   if (!audio) return;
   const $ = (id) => document.getElementById(id);
   const el = {
-    dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'),
+    dock: $('player-dock'), toggle: $('d-toggle'), prev: $('d-prev'), next: $('d-next'), stop: $('d-stop'),
     cover: $('d-cover'), title: $('d-title'), artist: $('d-artist'),
     cur: $('d-cur'), dur: $('d-dur'), prog: $('d-progress'), vol: $('d-vol'), mode: $('d-mode'), muteBtn: $('d-mute'),
     qualityBtn: $('d-quality'), eq: $('d-eq'), fav: $('d-fav'),
@@ -45,6 +45,8 @@
     el.prev.disabled = el.next.disabled = !hasSong || p.queue.length < 2;
     el.prev.classList.toggle('opacity-40', el.prev.disabled);
     el.next.classList.toggle('opacity-40', el.next.disabled);
+    // 停止按钮：仅音箱模式显示（点了=音箱停+回手机，复用核心 stop_speaker，与设备页同一命令）
+    if (el.stop) el.stop.classList.toggle('hidden', p.source !== 'speaker');
     // 歌曲信息（只在变化时写 DOM，防高频重排）
     if (hasSong) {
       if (el.title.textContent !== p.title) el.title.textContent = p.title || '';
@@ -322,6 +324,11 @@
   });
   el.vol.addEventListener('input', () => setVol(el.vol.value));
   el.toggle.addEventListener('click', toggle);
+  // dock 停止按钮 → 核心停止（当前音箱→停+回web；非当前设备→no-op），与设备页同一命令
+  if (el.stop) el.stop.addEventListener('click', () => {
+    const p = pb();
+    if (p.spk_did) window.hcState.cmd('stop_speaker', { did: p.spk_did });
+  });
   el.prev.addEventListener('click', () => step('prev'));
   el.next.addEventListener('click', () => step('next'));
   el.cover.addEventListener('click', () => {
