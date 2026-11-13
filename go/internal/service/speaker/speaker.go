@@ -46,6 +46,8 @@ type SpeakerProgress struct {
 	Started  time.Time `json:"-"`                    // 本次播放开始（本地时钟基准，回退用）
 	PausedAt time.Time `json:"-"`                    // 暂停开始；零值=未暂停
 	Paused   float64   `json:"-"`                    // 累计暂停秒（恢复时补偿）
+	StartPos float64   `json:"-"`                    // 锚定后应处进度（新播 0 / 续播暂停点）
+	anchorPending bool `json:"-"`                    // 等待音箱首次拉流校准（命令→拉流有延迟，虚增进度待扣）
 	timer    *time.Timer `json:"-"`
 	stopped  bool      `json:"-"`
 }
@@ -428,6 +430,8 @@ func (s *SpeakerService) startProgress(did, bvid string, opts PlayOpts, quality 
 		NextBVID: opts.NextBVID,
 		Quality:  quality,
 		Started:  time.Now(),
+		// 新播等待音箱首次拉流校准（命令→拉流有延迟，锚定后进度才准）
+		anchorPending: true,
 	}
 	if duration > 0 && opts.NextBVID != "" {
 		p.timer = time.AfterFunc(time.Duration(duration*float64(time.Second)), func() {
@@ -542,7 +546,8 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 			// 续播：把暂停位置带上（fMP4 容器级 seek，音箱从中间开始）——暂停时
 			// pause 记录位置（Paused 补偿），resume 转成 start=<秒> 让流端点切流。
 			// 无暂停记录（如直接 play）不带 start，从头播。
-			fresh = withStart(fresh, s.resumePositionSec(did))
+			resumePos := s.resumePositionSec(did)
+			fresh = withStart(fresh, resumePos)
 			s.mu.Lock()
 			s.playing[did] = fresh
 			delete(s.blocked, did)
@@ -552,7 +557,7 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 				s.recordFail(did)
 			} else {
 				s.resetFail(did)
-				s.resumeProgress(did)
+				s.resumeProgress(did, resumePos)
 			}
 		} else {
 			return map[string]any{"code": 400, "message": "无已保存的播放 URL"}, nil
@@ -586,8 +591,9 @@ func (s *SpeakerService) pauseProgress(did string) {
 	}
 }
 
-// resumeProgress 恢复：累计暂停秒 + 重起剩余定时器（播完自动连播仍有效）
-func (s *SpeakerService) resumeProgress(did string) {
+// resumeProgress 恢复：累计暂停秒 + 重起剩余定时器（播完自动连播仍有效）。
+// startPos = 续播位置（暂停点）：下一次音箱拉流（AnchorStream）到达时作为锚定目标。
+func (s *SpeakerService) resumeProgress(did string, startPos float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.progress[did]
@@ -596,6 +602,9 @@ func (s *SpeakerService) resumeProgress(did string) {
 	}
 	p.Paused += time.Since(p.PausedAt).Seconds()
 	p.PausedAt = time.Time{}
+	// 续播后音箱会重新拉流（新 v 强制重拉）→ StartPos=暂停点，等待校准
+	p.StartPos = startPos
+	p.anchorPending = true
 	if p.timer != nil {
 		p.timer.Stop()
 		p.timer = nil
@@ -608,6 +617,27 @@ func (s *SpeakerService) resumeProgress(did string) {
 			})
 		}
 	}
+}
+
+// AnchorStream 音箱首次拉流到达时校准进度基准（StreamGate 接口回调）。
+// 原理：命令下发（resume/play）到音箱真正拉流存在延迟（网络+音箱解析），
+// 若进度从命令时刻起算会虚增这段延迟——锚定后进度从拉流时刻起算：
+//   Position(t) = 锚定时（将 Started 平移）使 Position(拉流时刻)=StartPos
+//   （新播 StartPos=0；续播 StartPos=暂停点，两种都对上）。
+// 拉流可能多次（断点重试），只锚定第一次：anchorPending 置 false。
+func (s *SpeakerService) AnchorStream(did string, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.progress[did]
+	if p == nil || !p.anchorPending {
+		return
+	}
+	p.anchorPending = false
+	// 目标：Position(at) == StartPos
+	//   Position(t) = t.Sub(Started) - Paused   （暂停/恢复时 Paused 已累计）
+	//   即 at.Sub(Started) - Paused == StartPos → Started = at - (StartPos + Paused)
+	p.Started = at.Add(-time.Duration((p.StartPos + p.Paused) * float64(time.Second)))
+	log.Printf("[speaker] 拉流校准锚定 did=%s 进度基准=%.2fs (Started=%s 含补偿%.2fs)", did, p.StartPos, p.Started.Format("15:04:05"), p.Paused)
 }
 
 // stopProgressLocked 停止：清进度 + 停定时器（调用方需持锁）

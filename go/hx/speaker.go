@@ -89,10 +89,16 @@ func (h *H) SpeakerPlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	duration, _ := strconv.ParseFloat(r.PostFormValue("duration"), 64)
+	// 自动连播 next 由核心队列 SSOT 算（不依赖前端传参——前端传""会断链：
+	// startProgress 只在 next!="" 时才设定时器，next 空=播完永不切歌）
+	next := r.PostFormValue("next_bvid")
+	if next == "" && h.NextBVID != nil {
+		next = h.NextBVID()
+	}
 	res, err := h.Speaker.Play(bvid, did, 30280, spk.PlayOpts{
 		Title:    r.PostFormValue("title"),
 		Duration: duration,
-		NextBVID: r.PostFormValue("next_bvid"),
+		NextBVID: next,
 	})
 	log.Printf("[speaker play] bvid=%s did=%s err=%v res=%v", bvid, did, err, res)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -102,6 +108,11 @@ func (h *H) SpeakerPlay(w http.ResponseWriter, r *http.Request) {
 	}
 	if !speakerOK(res, &w) {
 		return
+	}
+	// 投送成功 → 同步切核心 source=speaker（消除双响窗口：分两步时前端在
+	// “音箱已响但核心还是 web/playing”的间隙让手机也开播）
+	if h.SwitchSpeaker != nil {
+		h.SwitchSpeaker(did)
 	}
 	w.Write([]byte(`<span class="text-green-400 text-sm">正在音箱播放 ✓</span>`))
 }

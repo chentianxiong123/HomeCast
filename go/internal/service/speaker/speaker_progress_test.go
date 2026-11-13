@@ -107,7 +107,7 @@ func TestSpeakerPauseResume(t *testing.T) {
 		t.Errorf("暂停中 position 应固定: %v → %v", frozen, again)
 	}
 
-	s.resumeProgress("did1")
+	s.resumeProgress("did1", 0)
 	time.Sleep(120 * time.Millisecond)
 	pos := s.Progress("did1")["position"].(float64)
 	// 恢复后继续增长；暂停的 150ms 不应计入
@@ -173,5 +173,44 @@ func TestSpeakerAllProgress(t *testing.T) {
 	all = s.AllProgress()
 	if _, ok := all["did2"]; ok {
 		t.Errorf("stopped 设备不应推")
+	}
+}
+
+// TestAnchorStream 拉流校准：新播锚定后进度从拉流时刻起算（砍掉命令→拉流延迟）
+func TestAnchorStream(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	// 新播：命令时刻起跑，600ms 后才被音箱拉流校准
+	s.startProgress("did1", "BV1test", PlayOpts{Duration: 260}, 30280)
+	time.Sleep(300 * time.Millisecond)
+	s.AnchorStream("did1", time.Now()) // 模拟音箱拉流到达
+
+	// 锚定后 Position 应 ≈ 锚定时刻进度 0（新播 StartPos=0），只走锚定后的时钟
+	p := s.Progress("did1")
+	if p["state"] != "playing" {
+		t.Fatalf("锚定后 state = %v", p["state"])
+	}
+	pos := p["position"].(float64)
+	if pos < 0 || pos > 1.5 {
+		t.Errorf("锚定后 position 应从拉流时刻起算(≈0): %v", pos)
+	}
+}
+
+// TestAnchorStreamResume 续播锚定：暂停位置=4s，续播后拉流到达，进度从 4s 继续
+func TestAnchorStreamResume(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	s.startProgress("did1", "BV1test", PlayOpts{Duration: 260}, 30280)
+	// 模拟播放 4s 后暂停（直接改 Paused 语义给锚定提供起点）
+	s.mu.Lock()
+	p := s.progress["did1"]
+	p.Started = time.Now().Add(-4 * time.Second)
+	s.mu.Unlock()
+	s.pauseProgress("did1")
+	s.resumeProgress("did1", 4.0) // 暂停点 4s，续播目标
+	time.Sleep(200 * time.Millisecond)
+	s.AnchorStream("did1", time.Now()) // 音箱拉到 start=4 的流
+
+	pos := s.Progress("did1")["position"].(float64)
+	if pos < 4.0 || pos > 6.0 {
+		t.Errorf("续播锚定后应从暂停点 4s 继续: %v", pos)
 	}
 }

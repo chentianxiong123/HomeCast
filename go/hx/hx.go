@@ -26,6 +26,13 @@ type H struct {
 	Speaker *spk.SpeakerService
 	QR      *speaker.QRLogin
 	Tpl     *template.Template
+	// NextBVID 当前歌的下一首 bvid（自动连播用）。由 server 注入核心队列 SSOT，
+	// 投送/切歌时 next 一律从核心算——不依赖前端传参（前端传=不可靠，会断链）
+	NextBVID func() string
+	// SwitchSpeaker 投送成功后同步切核心模式（source=speaker）。由 server 注入核心
+	// PlaybackState。投送与切模式必须一步完成——分两步会在中间窗口产生双响：
+	// 音箱已在响、但核心还是 web/playing=true → 前端 driveAudio 让手机也开播。
+	SwitchSpeaker func(did string)
 }
 
 // page 页面渲染数据：激活 tab + 预渲染的 content HTML

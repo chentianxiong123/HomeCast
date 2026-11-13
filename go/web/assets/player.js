@@ -394,8 +394,9 @@
     fetch('/hx/speaker/play', { method: 'POST', body })
       .then((r) => r.text())
       .then((t) => {
-        const ok = t.includes('音箱播放');
-        if (ok) window.hcState.cmd('switch_speaker', { did: d.did }); // 切音箱模式（后端统一）
+        const ok = t.includes('正在音箱播放');
+        // 注意：投送成功即切音箱模式由后端一步完成（/hx/speaker/play 内同步
+        // switch_speaker）——前端不再二次发命令，消除双响时间窗口
         hcBus.emit('speaker-result', { ok, did: d.did, msg: ok ? '音箱播放' : '投送失败' });
       })
       .catch(() => hcBus.emit('speaker-result', { ok: false, did: d.did, msg: '网络错误' }));

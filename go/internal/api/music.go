@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"homecast/internal/bilibili"
 	"homecast/internal/service/cache"
@@ -21,6 +22,9 @@ import (
 // web 播放器不带 did，不受影响。
 type StreamGate interface {
 	BlockedStream(did string) bool // did 是否已被暂停/停止（是 → 断源）
+	// AnchorStream 音箱首次拉流校准：命令下发到音箱真正拉流有延迟，进度基准
+	// 应从拉流时刻起算（AnchorPos=拉流瞬间应处进度），否则 dock 进度虚增那段延迟
+	AnchorStream(did string, at time.Time)
 }
 
 
@@ -107,6 +111,11 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[stream] 拒绝 %s: did=%s 已暂停/停止（断源）", bvid, did)
 		errResp(w, http.StatusServiceUnavailable, "stream suspended")
 		return
+	}
+	// 拉流校准：命令下发到音箱真正拉流有延迟，音箱拉流时刻为进度真实起点。
+	// 每次拉流都上报（锚定逻辑内部只在首次/续播后生效，重复拉流幂等）
+	if did != "" && h.Gate != nil {
+		h.Gate.AnchorStream(did, time.Now())
 	}
 
 	// 续播/跳播秒：音箱端 resume 时带 start=暂停位置（fMP4 容器级 seek 切流，从中间开始）

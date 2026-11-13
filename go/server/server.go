@@ -139,7 +139,9 @@ func New() http.Handler {
 	)
 
 	// htmx 层（Go 渲染页面 + 功能切片）：/ 首页、/assets 静态、/hx/* 切片
-	hxH := &hx.H{Music: musicSvc, Fav: fav.NewFavService(db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates()}
+	hxH := &hx.H{Music: musicSvc, Fav: fav.NewFavService(db), Cast: castSvc, Speaker: speakerSvc, QR: speakerQR, Tpl: web.MustTemplates(),
+		NextBVID:     func() string { return playbackState.NextBVID() },
+		SwitchSpeaker: func(did string) { playbackState.SwitchSpeaker(did) }}
 	outer := http.NewServeMux()
 	outer.Handle("/", hxH.Router())
 	outer.Handle("/api/", mux)
