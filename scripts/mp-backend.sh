@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../go"
 
 echo "[1/2] 起 mockbili :39001 (假 B站)"
-HC_BILI_BASE=http://127.0.0.1:39001 HC_DATA_DIR=/tmp/hc-mp go run ./cmd/mockbili > /tmp/hc-mp-mockbili.log 2>&1 &
+HC_BILI_BASE=http://127.0.0.1:39001 HC_DATA_DIR=/tmp/hc-mp go run ./cmd/mock/bili > /tmp/hc-mp-mockbili.log 2>&1 &
 echo $! > /tmp/hc-mp-mockbili.pid
 
 sleep 1

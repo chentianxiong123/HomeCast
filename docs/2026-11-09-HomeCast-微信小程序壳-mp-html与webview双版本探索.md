@@ -64,7 +64,7 @@ components/mp-html/     B 版本用
 | 工具 | 版本 | 用途 | 装法 |
 |---|---|---|---|
 | Go | 1.26.5 | 后端 | 官网 tar.gz → `~/.local/go`（Mac） |
-| mockbili | go run | 假 B站（E2E 数据） | `go/cmd/mockbili` |
+| mockbili | go run | 假 B站（E2E 数据） | `go/cmd/mock/bili` |
 | server | go run | 后端 28976 | `go/cmd/server` |
 | miniprogram-ci | 2.1.31 | 真机扫码预览 | `/home/a1/hc-mp-ci`（免全局） |
 | 微信开发者工具 | 2.02.2609250 | 模拟器调试 | Mac `/Applications/wechatwebdevtools.app` |

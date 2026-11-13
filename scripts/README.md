@@ -29,7 +29,7 @@ cd go && go test ./server/ -run TestE2E -v
 （widget/events 收 lyric-state）、歌词偏移持久化、设置页渲染、音箱 SSE 订阅。
 **不依赖外网、不污染用户数据**（临时 DB + 假 B站）。CI `backend-test` 的 `go test ./...` 自动覆盖。
 
-mock B站 server：`go run ./cmd/mockbili`（:39001，提供 search/view/playurl/静音音频流），
+mock B站 server：`go run ./cmd/mock/bili`（:39001，提供 search/view/playurl/静音音频流），
 前端/壳级 E2E 可 `HC_BILI_BASE=http://127.0.0.1:39001` 接它，无外网跑。
 
 ## 3. Linux 壳级 E2E 冒烟（Xvfb 启动真实 wails3 app，进 CI）
