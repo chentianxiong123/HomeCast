@@ -20,7 +20,15 @@
             st.position = d.position || 0;
             if (d.duration > 0) st.duration = d.duration;
             st.playing = d.state === 'playing';
-            if (window.hcBus) window.hcBus.emit('state', { state: st.playing ? 'playing' : 'paused' });
+            if (window.hcBus) {
+              // 必须带完整 song（与 state.js applyState 同构）：subtitle.js 的 state 处理
+              // 见到无 song 的 state 就 hideBar()——音箱模式两条 state 流交替（state.js 带
+              // song + 本处不带）会导致字幕条每秒反复开关=闪烁（真机实测）。
+              window.hcBus.emit('state', {
+                state: st.playing ? 'playing' : 'paused',
+                song: st.bvid ? { bvid: st.bvid, title: st.title, artist: st.artist, cover: st.cover, duration: st.duration } : null,
+              });
+            }
           }
         }
       }

@@ -55,6 +55,11 @@ type SpeakerProgress struct {
 // Position 当前位置（秒）：优先拉流字节/码率（音箱实际消费，用户思路），
 // 无字节/码率时回退本地时钟（暂停中固定，播放中随本地时钟走）。
 func (p *SpeakerProgress) Position() float64 {
+	// 锚定前（命令下发→音箱真正拉流的窗口）：凝固在目标基准（新播0/续播暂停点），
+	// 不按命令时刻虚增——否则拉流到达锚定瞬间进度从虚增值回跳（一开始播放就跳一下）。
+	if p.anchorPending {
+		return p.StartPos
+	}
 	if p.Bitrate > 0 && p.LoadedBytes > 0 {
 		return float64(p.LoadedBytes) / float64(p.Bitrate/8) // 字节/字节每秒 = 秒
 	}
@@ -637,6 +642,21 @@ func (s *SpeakerService) AnchorStream(did string, at time.Time) {
 	//   Position(t) = t.Sub(Started) - Paused   （暂停/恢复时 Paused 已累计）
 	//   即 at.Sub(Started) - Paused == StartPos → Started = at - (StartPos + Paused)
 	p.Started = at.Add(-time.Duration((p.StartPos + p.Paused) * float64(time.Second)))
+	// 结束点也校准：自动连播定时器之前从命令时刻起算（会提前一个命令→拉流延迟），
+	// 锚定后按真实拉流时刻 + 剩余时长重建，结束点对齐真实开播。
+	if p.Duration > 0 && p.NextBVID != "" {
+		if p.timer != nil {
+			p.timer.Stop()
+			p.timer = nil
+		}
+		remaining := p.Duration - p.StartPos
+		if remaining > 0 {
+			did, quality := did, p.Quality
+			p.timer = time.AfterFunc(time.Duration(remaining*float64(time.Second)), func() {
+				s.playNextAuto(did, p.NextBVID, quality)
+			})
+		}
+	}
 	log.Printf("[speaker] 拉流校准锚定 did=%s 进度基准=%.2fs (Started=%s 含补偿%.2fs)", did, p.StartPos, p.Started.Format("15:04:05"), p.Paused)
 }
 

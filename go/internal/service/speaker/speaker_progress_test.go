@@ -68,10 +68,12 @@ func newTestSpeaker(t *testing.T, withClient bool) *SpeakerService {
 	return s
 }
 
-// TestSpeakerLocalProgress 本地模拟进度：播放中随本地时钟走
+// TestSpeakerLocalProgress 本地模拟进度：播放中随本地时钟走（需先拉流锚定，
+// 未锚定进度凝固在 0=命令→拉流窗口不虚增，这是设计语义）
 func TestSpeakerLocalProgress(t *testing.T) {
 	s := newTestSpeaker(t, false)
 	s.startProgress("did1", "BV1test", PlayOpts{Title: "测试歌", Duration: 260}, 30280)
+	s.AnchorStream("did1", time.Now()) // 模拟音箱拉流到达 → 锚定
 	time.Sleep(150 * time.Millisecond)
 
 	p := s.Progress("did1")
@@ -94,6 +96,7 @@ func TestSpeakerLocalProgress(t *testing.T) {
 func TestSpeakerPauseResume(t *testing.T) {
 	s := newTestSpeaker(t, false)
 	s.startProgress("did1", "BV1test", PlayOpts{Duration: 260}, 30280)
+	s.AnchorStream("did1", time.Now()) // 模拟拉流锚定
 	time.Sleep(120 * time.Millisecond)
 
 	s.pauseProgress("did1")
@@ -107,10 +110,11 @@ func TestSpeakerPauseResume(t *testing.T) {
 		t.Errorf("暂停中 position 应固定: %v → %v", frozen, again)
 	}
 
-	s.resumeProgress("did1", 0)
+	s.resumeProgress("did1", frozen) // 真实路径传暂停点（resumePositionSec），非 0
+	s.AnchorStream("did1", time.Now()) // 续播会重新拉流 → 模拟锚定后再走时钟
 	time.Sleep(120 * time.Millisecond)
 	pos := s.Progress("did1")["position"].(float64)
-	// 恢复后继续增长；暂停的 150ms 不应计入
+	// 恢复后锚定完成继续增长；暂停的 150ms 不应计入
 	if pos <= frozen || pos > frozen+0.5 {
 		t.Errorf("恢复后 position 继续走且排除暂停: %v (frozen=%v)", pos, frozen)
 	}
@@ -149,6 +153,7 @@ func TestSpeakerStopClears(t *testing.T) {
 func TestSpeakerAllProgress(t *testing.T) {
 	s := newTestSpeaker(t, false)
 	s.startProgress("did1", "BV1test", PlayOpts{Title: "测试歌", Duration: 260}, 30280)
+	s.AnchorStream("did1", time.Now()) // 模拟拉流锚定
 	time.Sleep(120 * time.Millisecond)
 
 	all := s.AllProgress()
@@ -213,4 +218,66 @@ func TestAnchorStreamResume(t *testing.T) {
 	if pos < 4.0 || pos > 6.0 {
 		t.Errorf("续播锚定后应从暂停点 4s 继续: %v", pos)
 	}
+}
+
+// TestAnchorPendingFrozen 校准前进度凝固：命令下发→音箱真正拉流之间有延迟，
+// 此窗口 position 必须固定在基准点（新播 0 / 续播暂停点），不能按命令时刻虚增，
+// 否则拉流到达锚定瞬间进度会从虚增值回跳（一开始播放就跳一下）。
+func TestAnchorPendingFrozen(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	s.startProgress("did1", "BV1test", PlayOpts{Duration: 260}, 30280)
+	time.Sleep(200 * time.Millisecond) // 模拟命令→拉流延迟
+	if pos := s.Progress("did1")["position"].(float64); pos != 0 {
+		t.Errorf("锚定前新播 position 应凝固在 0（不虚增）: %v", pos)
+	}
+	s.AnchorStream("did1", time.Now())
+	time.Sleep(100 * time.Millisecond)
+	if pos := s.Progress("did1")["position"].(float64); pos <= 0 || pos > 1 {
+		t.Errorf("锚定后应正常走秒: %v", pos)
+	}
+}
+
+// TestAnchorResumeFrozen 续播校准前凝固在暂停点（不虚增、不回跳）
+func TestAnchorResumeFrozen(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	s.startProgress("did1", "BV1test", PlayOpts{Duration: 260}, 30280)
+	s.AnchorStream("did1", time.Now())
+	s.mu.Lock()
+	s.progress["did1"].Started = time.Now().Add(-10 * time.Second) // 模拟已播 10s
+	s.mu.Unlock()
+	s.pauseProgress("did1")
+	s.resumeProgress("did1", 10.0)
+	time.Sleep(200 * time.Millisecond) // 命令→拉流延迟
+	if pos := s.Progress("did1")["position"].(float64); pos != 10.0 {
+		t.Errorf("锚定前续播 position 应凝固在暂停点 10s（不虚增）: %v", pos)
+	}
+	s.AnchorStream("did1", time.Now())
+	time.Sleep(100 * time.Millisecond)
+	if pos := s.Progress("did1")["position"].(float64); pos < 10 || pos > 11 {
+		t.Errorf("锚定后应从暂停点继续: %v", pos)
+	}
+}
+
+// TestAnchorResetsAutoNextTimer 结束点校准：自动连播定时器按真实拉流时刻重建，
+// 命令→拉流延迟不再让定时器提前触发（播完点对齐真实开播）。
+func TestAnchorResetsAutoNextTimer(t *testing.T) {
+	s := newTestSpeaker(t, true)
+	var gotNext string
+	s.EndedHook = func(did, nextBVID string) { gotNext = nextBVID }
+	// 时长 2s：命令时刻建定时器；模拟 1s 延迟后才拉流锚定
+	s.startProgress("did1", "BV1old", PlayOpts{Duration: 2, NextBVID: "BV1next"}, 30280)
+	time.Sleep(1 * time.Second)
+	s.AnchorStream("did1", time.Now()) // 真实开播时刻 = 现在 → 播完点应顺延到 now+2s
+	time.Sleep(1300 * time.Millisecond)
+	if gotNext == "BV1next" {
+		t.Fatalf("定时器未对准拉流时刻：锚定后刚 1.3s 就触发自动连播（提前了）")
+	}
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		if gotNext == "BV1next" {
+			return // 锚定后 ~2s 触发 = 正确
+		}
+	}
+	t.Fatal("锚定后自动连播未触发")
 }
