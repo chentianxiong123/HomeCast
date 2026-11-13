@@ -209,9 +209,17 @@ func (p *PlaybackState) persistNow() {
 
 // ---- 命令（前端发命令 → 后端改状态 → 广播） ----
 
-// Play 播放某歌：入队（去重）+ 定位 + 播（source 保持；web 由前端执行 audio.play，音箱由后端推）
+// Play 播放某歌：入队（去重）+ 定位 + 播（source 保持；web=Null 前端 audio 接管，speaker=真投音箱）
 func (p *PlaybackState) Play(s Song) {
 	p.mu.Lock()
+	// 快照（含队列副本：Play 会去重+入队尾，失败必须整体回滚，只还原 QIdx 会导致元素错位）
+	old := songSnapshot{
+		QIdx: p.cur.QIdx,
+		Song: Song{BVID: p.cur.BVID, Title: p.cur.Title, Artist: p.cur.Artist, Cover: p.cur.Cover, Duration: p.cur.Duration},
+		Position: p.cur.Position,
+		Duration: p.cur.Duration,
+	}
+	oldQueue := append([]Song(nil), p.cur.Queue...)
 	// 去重后入队尾
 	for i, q := range p.cur.Queue {
 		if q.BVID == s.BVID {
@@ -228,8 +236,20 @@ func (p *PlaybackState) Play(s Song) {
 	p.cur.Duration = s.Duration
 	p.cur.Position = 0
 	p.cur.Playing = true
+	nextBVID := p.nextBVIDLocked()
+	out := p.out
 	p.mu.Unlock()
 	log.Printf("[playback] Play bvid=%s source=%s", s.BVID, p.Snapshot().Source)
+	// 当前输出真切歌（web=Null 前端重载；speaker=真投新歌；失败回滚继续播旧歌）
+	if out != nil {
+		if err := out.Play(s.BVID, PlayOpts{Title: s.Title, Duration: s.Duration, NextBVID: nextBVID, Quality: 30280}); err != nil {
+			log.Printf("[playback] play 投送失败 bvid=%s err=%v → 回滚继续播旧歌", s.BVID, err)
+			p.mu.Lock()
+			p.cur.Queue = oldQueue
+			p.rollbackLocked(old)
+			p.mu.Unlock()
+		}
+	}
 	p.bcastSnapshot()
 }
 

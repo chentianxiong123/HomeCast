@@ -2,6 +2,7 @@ package playback
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -180,5 +181,56 @@ func TestPersistRestore(t *testing.T) {
 	}
 	if s.Playing {
 		t.Fatal("restore should not auto-play")
+	}
+}
+
+// mockOutput 记录 Play 调用,可模拟投送失败
+type mockOutput struct {
+	playCalls []string
+	failOn    string // 匹配到该 bvid 时返回错误
+}
+
+func (m *mockOutput) Play(bvid string, opts PlayOpts) error {
+	m.playCalls = append(m.playCalls, bvid)
+	if m.failOn == bvid {
+		return errors.New("mock fail")
+	}
+	return nil
+}
+func (m *mockOutput) Pause() error                { return nil }
+func (m *mockOutput) Resume() error               { return nil }
+func (m *mockOutput) Stop() error                 { return nil }
+func (m *mockOutput) Seek(sec float64) error      { return nil }
+func (m *mockOutput) SetVolume(v int) error       { return nil }
+func (m *mockOutput) Position() (float64, float64, bool) { return 0, 0, false }
+func (m *mockOutput) Caps() Capabilities          { return Capabilities{Play: true} }
+func (m *mockOutput) SetEndedHook(func())         {}
+func (m *mockOutput) Name() string                { return "mock" }
+
+// 音箱模式下 Play 必须真投当前输出(收藏夹/搜索点歌=切歌);失败回滚继续播旧歌
+func TestPlayCallsOutputAndRollback(t *testing.T) {
+	mock := &mockOutput{}
+	p := NewPlaybackState()
+	p.SetOutput(mock)
+	p.Play(Song{BVID: "A", Title: "a"}) // source 保持 web,Null 语义;但 out 是 mock → 也投
+	if len(mock.playCalls) != 1 || mock.playCalls[0] != "A" {
+		t.Fatalf("Play 未调用输出: %v", mock.playCalls)
+	}
+	// 投送 B 失败 → 回滚到 A
+	mock.failOn = "B"
+	p.Play(Song{BVID: "B", Title: "b"})
+	s := p.Snapshot()
+	if s.BVID != "A" || s.Title != "a" {
+		t.Fatalf("失败未回滚: cur=%s/%s", s.BVID, s.Title)
+	}
+	if len(s.Queue) != 1 || s.Queue[0].BVID != "A" {
+		t.Fatalf("失败后队列错位: %+v", s.Queue)
+	}
+	// 恢复成功路径:再播 C 成功
+	mock.failOn = ""
+	p.Play(Song{BVID: "C", Title: "c"})
+	s = p.Snapshot()
+	if s.BVID != "C" {
+		t.Fatalf("成功未切: %s", s.BVID)
 	}
 }
