@@ -8,8 +8,10 @@
 //   - 位置记忆 ~/.config/homecast/widget.json；整窗可拖
 //   - 播放进度本地平滑推进 + 状态校准
 //
-// 数据流：前端 WebView 上报 /widget/state → 后端内存 → 本窗口 SSE 订阅推送（去轮询）；
-// 歌词走内嵌后端 /music/lyric?bvid= （已选源优先，与歌词页同步）。
+// 数据流：后端内存（核心状态投影 → widgetState）→ 本窗口 SSE 订阅推送（去轮询）；
+// 挂件按钮 ⏸/◀/▶ → POST /api/v1/widget/{toggle,prev,next}（后端广播，前端消费）；
+// 歌词状态走后端唯一驱动链（widget/subscriber 投影 + lyric-state SSE），
+// 歌词文本走内嵌后端 /music/lyric?bvid= （已选源优先，与歌词页同步）。
 //
 // 显示层多态（Display 接口）：linux=GTK4(display_linux.go)、windows=Win32(控制条待补)、
 // 安卓=悬浮窗 Service(待)——核心逻辑全在这个文件，显示层只填空。
