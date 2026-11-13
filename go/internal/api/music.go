@@ -2,11 +2,9 @@
 package api
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
@@ -74,7 +72,9 @@ func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
 	ok(w, res)
 }
 
-// serveFile 本地缓存文件响应（支持 Range：拖动进度条）
+// serveFile 缓存文件响应（web 播放器 / 音箱 同一入口，支持 Range）。
+// http.ServeFile 对 bytes=0- 返回全量（0→末尾），越界返回 416——
+// 正是铁证结论：全量一次给完 = 音箱稳定；文件尾探测须 416。
 func serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
@@ -83,88 +83,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	http.ServeFile(w, r, path)
 }
 
-// chunkSize 音箱分片片长：~100KB（音箱自身 Range 步长约 100KB，见 memstream 实测
-// 6097011→6196962=97.6KB）。片太小（6KB）→ 音箱一秒狂发 23 次仍凑不满就放弃→响一下没声；
-// ~100KB 让音箱正常续传，同时缓冲仅 ~4s（200kbps）→ 暂停/切歌跟手（vs 全量 877KB≈20s）。
-const chunkSize = 100 * 1024
-
-// serveSpeakerChunk 音箱分片喂流：解析 Range（无则从头），每次回一片（206 + Content-Range）。
-// 保留 Content-Type 透传意图（octet-stream，音箱自嗅探）；播完不自循环，返回 416。
-func serveSpeakerChunk(w http.ResponseWriter, r *http.Request, path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		errResp(w, http.StatusInternalServerError, "open cache: "+err.Error())
-		return
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		errResp(w, http.StatusInternalServerError, "stat: "+err.Error())
-		return
-	}
-	size := st.Size()
-	if size <= 0 {
-		errResp(w, http.StatusNotFound, "empty cache file")
-		return
-	}
-
-	start := int64(0)
-	if n, ok := rangeStart(r.Header.Get("Range")); ok {
-		start = n
-	}
-	if start >= size {
-		// 播完：不再回 0 循环（那会造成无限重放、掩盖不切歌 bug）。返回 416 让音箱自然结束。
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
-		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-		return
-	}
-	end := start + chunkSize
-	if end > size {
-		end = size
-	}
-
-	log.Printf("[stream-speaker] %s range=%q → %d-%d/%d", path, r.Header.Get("Range"), start, end-1, size)
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, size))
-	w.Header().Set("Content-Length", strconv.FormatInt(end-start, 10))
-	w.WriteHeader(http.StatusPartialContent) // 206：只回一片
-	if r.Method == http.MethodHead {
-		return
-	}
-	if _, err := f.Seek(start, io.SeekStart); err != nil {
-		return
-	}
-	_, _ = io.CopyN(w, f, end-start)
-}
-
-// rangeStart 解析单段 Range 头（bytes=N- / bytes=N-M），返回起始字节（无/解析失败 → false）。
-func rangeStart(rg string) (int64, bool) {
-	const p = "bytes="
-	if !strings.HasPrefix(rg, p) {
-		return 0, false
-	}
-	rest := strings.TrimSpace(rg[len(p):])
-	if rest == "" || strings.Contains(rest, ",") {
-		return 0, false
-	}
-	dash := strings.IndexByte(rest, '-')
-	if dash <= 0 {
-		return 0, false
-	}
-	n, err := strconv.ParseInt(strings.TrimSpace(rest[:dash]), 10, 64)
-	if err != nil || n < 0 {
-		return 0, false
-	}
-	return n, true
-}
-
 // Stream GET /api/v1/music/stream/{bvid}?quality=192[&did=音箱设备id]
-// 唯一的音频供给入口（web 播放器 / 音箱 / 未来本地文件 全走这里，源不区分）。
-// 缓存优先（秒开）：命中缓存文件直接 serve；未命中带 referer 直转发 B站流 + 回写缓存。
-// 支持 Range（断点续传/拖动进度条）。
+// 唯一的音频供给入口（web 播放器 / 音箱 / 本地文件 全走这里，源不区分）。
+// 缓存优先（秒开）：命中缓存文件直接 serve（web 与音箱同一条 serveFile）；
+// 未命中带 referer 直转发 B站流 + 回写缓存。支持 Range（断点续传/拖动进度条）。
 // did 非空时受 gate 控制：暂停/停止中 → 断源（音箱拉流失败自然停）。
 func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	bvid := r.PathValue("bvid")
@@ -185,16 +107,11 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. 缓存命中：serve 本地文件
-	//    音箱（did 非空）→ 分片喂流（每次 0.25s 一片，缓冲常小 → 暂停/切歌跟手）
-	//    web → 完整 serveFile（浏览器自己控制缓冲/拖动）
+	// 1. 缓存命中：serve 本地文件（web 与音箱同一条 serveFile，不分叉。
+	//    全量 200/全量 Range 一次给 = 音箱铁证稳定；206 分片喂流已证伪删除）
 	if h.Cache != nil {
 		if _, _, ok := h.Cache.Get(bvid); ok {
-			if did != "" {
-				serveSpeakerChunk(w, r, h.Cache.FilePath(bvid))
-			} else {
-				serveFile(w, r, h.Cache.FilePath(bvid))
-			}
+			serveFile(w, r, h.Cache.FilePath(bvid))
 			return
 		}
 	}
