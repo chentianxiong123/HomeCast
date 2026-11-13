@@ -347,6 +347,19 @@
     load(song);
   });
 
+  // 换歌跟随：面板打开时切歌（音箱自动连播/手动 next/切回 web）→ 自动重载新歌歌词。
+  // 否则面板永远停留在打开时那首（lyric-line 的 ct 来自新歌时间轴，打到旧歌词上 → 闪烁）。
+  // 同 subtitle.js 的 state 跟随：仅 bvid 变化 & 面板开着 & 不是自己刚打开的同一首才 load。
+  let lastFollowBVID = '';
+  hcBus.on('state', (d) => {
+    if (!d || !d.song || !d.song.bvid) return;
+    if (panel.classList.contains('ly-hidden')) { lastFollowBVID = d.song.bvid; return; }
+    if (d.song.bvid === lastFollowBVID) return;
+    lastFollowBVID = d.song.bvid;
+    load(d.song);
+  });
+  hcBus.on('lyric-open', (s) => { if (s && s.bvid) lastFollowBVID = s.bvid; });
+
   // 关闭：X 按钮 / ESC / 封面再点（hc:lyric-close）
   document.getElementById('ly-close').addEventListener('click', hide);
   hcBus.on('lyric-close', hide);
