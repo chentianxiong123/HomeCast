@@ -117,6 +117,12 @@ func New() http.Handler {
 	playbackState := playback.NewPlaybackState()
 	playbackState.SetDB(db)     // 持久化（settings kv，变更即存）
 	playbackState.Restore(db)   // 启动恢复：队列/模式/上次歌（不自动播）
+	// 自动连播关键接线：SpeakerService 定时器到点 → playNextAuto → 该 hook 必须非 nil！
+	// （之前漏接：timer 到了调 nil hook，什么都不做 → 播完不切歌、一直放）
+	speakerSvc.EndedHook = func(did, nextBVID string) {
+		log.Printf("[server] 音箱播完(本地定时器) → 核心自动连播 did=%s next=%s", did, nextBVID)
+		playbackState.Next()
+	}
 	// 对接归位：核心只认 Output。音箱输出工厂（SwitchSpeaker(did) 时创建绑定该 did 的输出）
 	playbackState.SetOutputFactory(func(did string) playback.Output {
 		out := spk.NewSpeakerOutput(speakerSvc, did)

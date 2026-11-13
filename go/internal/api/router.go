@@ -43,6 +43,7 @@ func NewMux(music *MusicHandler, fav *FavHandler, lyric *LyricHandler, playlist 
 	mux.HandleFunc("POST /api/v1/speaker/token/import", speaker.TokenImport)
 	mux.HandleFunc("GET /api/v1/speaker/devices", speaker.Devices)
 	mux.HandleFunc("POST /api/v1/speaker/play", speaker.Play)
+	mux.HandleFunc("POST /api/v1/speaker/play_url", speaker.PlayURL) // 任意 URL 直投（mock/外部流）
 	mux.HandleFunc("POST /api/v1/speaker/control", speaker.Control)
 	mux.HandleFunc("GET /api/v1/speaker/volume/{did}", speaker.GetVolume)
 	mux.HandleFunc("POST /api/v1/speaker/volume", speaker.SetVolume)

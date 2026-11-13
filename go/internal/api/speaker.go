@@ -204,6 +204,26 @@ func (h *SpeakerHandler) Play(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// PlayURL POST /api/v1/speaker/play_url  body: {url, did, title, duration}
+// 直接投任意 URL 到真音箱（mock/外部流测试用，不拼 B站统一端点）
+func (h *SpeakerHandler) PlayURL(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		URL      string  `json:"url"`
+		DID      string  `json:"did"`
+		Title    string  `json:"title"`
+		Duration float64 `json:"duration"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" || body.DID == "" {
+		errResp(w, http.StatusBadRequest, "url and did required")
+		return
+	}
+	res, err := h.Svc.PlayURL(body.URL, body.DID, spk.PlayOpts{Title: body.Title, Duration: body.Duration})
+	if err != nil {
+		log.Printf("[speaker play_url] %v", err)
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
 // Progress GET /api/v1/speaker/progress/{did} 本地模拟进度（前端轮询本端点，不打小米云）
 func (h *SpeakerHandler) Progress(w http.ResponseWriter, r *http.Request) {
 	ok(w, h.Svc.Progress(r.PathValue("did")))

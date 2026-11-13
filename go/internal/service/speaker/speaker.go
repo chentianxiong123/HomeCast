@@ -280,6 +280,27 @@ func (s *SpeakerService) Play(bvid, did string, quality int, opts PlayOpts) (map
 	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
 }
 
+// PlayURL 直接投任意 URL 到音箱（mock/测试/外部流用，不拼 B站统一端点）。
+// 用于把独立 mock（如 spkdemo :29111）的流接到真音箱上验证。
+func (s *SpeakerService) PlayURL(url, did string, opts PlayOpts) (map[string]any, error) {
+	device, ok := s.getDevice(did)
+	if !ok {
+		return map[string]any{"code": 404, "message": "设备未找到，请先刷新设备列表"}, nil
+	}
+	s.mu.Lock()
+	s.playing[did] = url
+	delete(s.blocked, did) // 重新播放 → 解除断源
+	s.mu.Unlock()
+
+	ret, err := s.Auth.PlayURL(device.DeviceID, url, device.Hardware)
+	if err != nil {
+		return map[string]any{"code": 500, "message": "音箱播放失败: " + err.Error()}, err
+	}
+	s.startProgress(did, url, opts, 0)
+	log.Printf("[speaker] PlayURL url=%s did=%s", url, did)
+	return map[string]any{"code": 0, "message": "success", "data": ret}, nil
+}
+
 // startProgress 建立本地模拟进度（Started=now + duration 定时器）。
 // 自动连播：duration 后触发下一首（NextBVID 非空）；duration 优先前端（本地播放器已知），
 // 否则回退 B 站 view duration（自动连播场景）。

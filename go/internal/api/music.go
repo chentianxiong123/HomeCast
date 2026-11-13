@@ -83,14 +83,14 @@ func serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	http.ServeFile(w, r, path)
 }
 
-// chunkSize 音箱分片喂流片长：0.25s @192k ≈ 6KB（11-10 二分实测最优）。
-// 每个 Range 请求只回这一小片就断连 → 音箱解码器永远只缓冲 0.25s →
-// 暂停/切歌立即生效（不再等 877KB 预缓冲播完 20s+）。
-const chunkSize = 6 * 1024
+// chunkSize 音箱分片片长：~100KB（音箱自身 Range 步长约 100KB，见 memstream 实测
+// 6097011→6196962=97.6KB）。片太小（6KB）→ 音箱一秒狂发 23 次仍凑不满就放弃→响一下没声；
+// ~100KB 让音箱正常续传，同时缓冲仅 ~4s（200kbps）→ 暂停/切歌跟手（vs 全量 877KB≈20s）。
+const chunkSize = 100 * 1024
 
-// serveSpeakerChunk 音箱分片喂流：解析 Range（无则从头），每次只回 6KB 一片（206 + Content-Range），
-// 写完即返回断连。音箱播完这片自带下次 Range 请求 → 缓冲常小。ct = 内容类型。
-func serveSpeakerChunk(w http.ResponseWriter, r *http.Request, path string, ct string) {
+// serveSpeakerChunk 音箱分片喂流：解析 Range（无则从头），每次回一片（206 + Content-Range）。
+// 保留 Content-Type 透传意图（octet-stream，音箱自嗅探）；播完不自循环，返回 416。
+func serveSpeakerChunk(w http.ResponseWriter, r *http.Request, path string) {
 	f, err := os.Open(path)
 	if err != nil {
 		errResp(w, http.StatusInternalServerError, "open cache: "+err.Error())
@@ -113,16 +113,21 @@ func serveSpeakerChunk(w http.ResponseWriter, r *http.Request, path string, ct s
 		start = n
 	}
 	if start >= size {
-		start = 0 // 超出末尾回开头（循环/重放场景）
+		// 播完：不再回 0 循环（那会造成无限重放、掩盖不切歌 bug）。返回 416 让音箱自然结束。
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		return
 	}
 	end := start + chunkSize
 	if end > size {
 		end = size
 	}
 
+	log.Printf("[stream-speaker] %s range=%q → %d-%d/%d", path, r.Header.Get("Range"), start, end-1, size)
+
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, size))
 	w.Header().Set("Content-Length", strconv.FormatInt(end-start, 10))
 	w.WriteHeader(http.StatusPartialContent) // 206：只回一片
@@ -186,7 +191,7 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	if h.Cache != nil {
 		if _, _, ok := h.Cache.Get(bvid); ok {
 			if did != "" {
-				serveSpeakerChunk(w, r, h.Cache.FilePath(bvid), "audio/mpeg")
+				serveSpeakerChunk(w, r, h.Cache.FilePath(bvid))
 			} else {
 				serveFile(w, r, h.Cache.FilePath(bvid))
 			}
