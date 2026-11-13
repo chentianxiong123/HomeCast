@@ -34,6 +34,17 @@ type PlayOpts struct {
 	Quality  int     // 音质（0=输出端默认）
 }
 
+// ProgressInfo 输出端当前进度（统一上报：带真实 bvid/title，音箱模式核心据此
+// 对齐当前歌——音箱自动连播/蓝牙直播后核心与设备不再分裂）。web=Null 只有
+// pos/dur（bvid 空，核心不覆盖——web 当前歌由前端 Play 命令定）。
+type ProgressInfo struct {
+	BVID   string  // 输出端实际在播的歌（音箱自报；web 空）
+	Title  string  // 同上（歌词/显示用，避免核心旧标题）
+	Pos    float64 // 秒
+	Dur    float64 // 秒
+	Playing bool
+}
+
 // Output 播放后端：装 web / 小爱 / DLNA 电视，核心只认这个接口。
 //
 // 契约：
@@ -53,8 +64,8 @@ type Output interface {
 	Seek(sec float64) error
 	// SetVolume 音量（0-100）
 	SetVolume(v int) error
-	// Position 当前进度（秒，时长秒，是否在播）
-	Position() (pos, dur float64, playing bool)
+	// Position 当前进度（真实或模拟：pos/dur/playing + 音箱自报 bvid/title）
+	Position() ProgressInfo
 	// Caps 能力声明
 	Caps() Capabilities
 	// SetEndedHook 注入"播完"回调（核心填自身 Next）
@@ -72,7 +83,7 @@ func (NullOutput) Resume() error                { return nil }
 func (NullOutput) Stop() error                  { return nil }
 func (NullOutput) Seek(float64) error          { return nil }
 func (NullOutput) SetVolume(int) error         { return nil }
-func (NullOutput) Position() (float64, float64, bool) { return 0, 0, false }
+func (NullOutput) Position() ProgressInfo         { return ProgressInfo{} }
 func (NullOutput) Caps() Capabilities           { return Capabilities{} }
 func (NullOutput) SetEndedHook(func())          {}
 func (NullOutput) Name() string                 { return "null" }

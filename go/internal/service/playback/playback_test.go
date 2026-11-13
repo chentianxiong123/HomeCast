@@ -127,36 +127,6 @@ func TestNextBVID(t *testing.T) {
 	}
 }
 
-func TestSetSpeakerProgress(t *testing.T) {
-	p := NewPlaybackState()
-	p.Play(Song{BVID: "A", Title: "songA"})
-	// 未切音箱：progress 不同步状态（source 仍 web）
-	p.SetSpeakerProgress("did1", "A", "songA", 10, 200, true)
-	s := p.Snapshot()
-	if s.Source != "web" || s.Position != 0 {
-		t.Fatalf("should not sync before switch: %+v", s)
-	}
-	// 切音箱后：progress 同步
-	p.SwitchSpeaker("did1")
-	p.SetSpeakerProgress("did1", "A", "songA", 30, 200, true)
-	s = p.Snapshot()
-	if s.Source != "speaker" || s.Position != 30 || s.Duration != 200 || !s.Playing {
-		t.Fatalf("speaker progress not synced: %+v", s)
-	}
-	// 其他 did 不同步
-	p.SetSpeakerProgress("did2", "B", "songB", 99, 300, true)
-	s = p.Snapshot()
-	if s.Position != 30 || s.BVID != "A" {
-		t.Fatalf("other did should not sync: %+v", s)
-	}
-	// 播完
-	p.SetSpeakerStopped("did1")
-	s = p.Snapshot()
-	if s.Playing || s.Position != 0 {
-		t.Fatalf("stopped wrong: %+v", s)
-	}
-}
-
 func TestPersistRestore(t *testing.T) {
 	// 临时 SQLite
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -202,7 +172,7 @@ func (m *mockOutput) Resume() error               { return nil }
 func (m *mockOutput) Stop() error                 { return nil }
 func (m *mockOutput) Seek(sec float64) error      { return nil }
 func (m *mockOutput) SetVolume(v int) error       { return nil }
-func (m *mockOutput) Position() (float64, float64, bool) { return 0, 0, false }
+func (m *mockOutput) Position() ProgressInfo         { return ProgressInfo{} }
 func (m *mockOutput) Caps() Capabilities          { return Capabilities{Play: true} }
 func (m *mockOutput) SetEndedHook(func())         {}
 func (m *mockOutput) Name() string                { return "mock" }
@@ -232,5 +202,47 @@ func TestPlayCallsOutputAndRollback(t *testing.T) {
 	s = p.Snapshot()
 	if s.BVID != "C" {
 		t.Fatalf("成功未切: %s", s.BVID)
+	}
+}
+
+// speakerProgOut 模拟音箱输出:Position() 带 bvid/title(音箱自报)
+type speakerProgOut struct {
+	bvid, title string
+	pos         float64
+	dur         float64
+	playing     bool
+}
+
+func (m *speakerProgOut) Play(bvid string, opts PlayOpts) error { return nil }
+func (m *speakerProgOut) Pause() error                          { return nil }
+func (m *speakerProgOut) Resume() error                         { return nil }
+func (m *speakerProgOut) Stop() error                           { return nil }
+func (m *speakerProgOut) Seek(sec float64) error                { return ErrUnsupported }
+func (m *speakerProgOut) SetVolume(v int) error                 { return nil }
+func (m *speakerProgOut) Position() ProgressInfo {
+	return ProgressInfo{BVID: m.bvid, Title: m.title, Pos: m.pos, Dur: m.dur, Playing: m.playing}
+}
+func (m *speakerProgOut) Caps() Capabilities     { return Capabilities{Play: true} }
+func (m *speakerProgOut) SetEndedHook(func())    {}
+func (m *speakerProgOut) Name() string           { return "speaker" }
+
+// TestProgressLoopProjectsSpeakerSong 重构图核心：progressLoop 全量投影——
+// 音箱自报 bvid/title 同步进核心（自动连播/蓝牙切换后核心与设备不分裂）。
+// 替代已删的 SetSpeakerProgress 桥（当时无生产调用=死代码，语义迁到此处）。
+func TestProgressLoopProjectsSpeakerSong(t *testing.T) {
+	out := &speakerProgOut{bvid: "BV1x", title: "音箱自唱歌", pos: 30, dur: 200, playing: true}
+	p := NewPlaybackState()
+	p.Play(Song{BVID: "core-old", Title: "核心旧歌"})
+	p.SwitchSpeaker("did1")
+	p.SetOutput(out)
+
+	// 直接调一次投影逻辑（progressLoop 内部等价路径，不依赖 1s 时钟）
+	p.projectProgress(out)
+	s := p.Snapshot()
+	if s.BVID != "BV1x" || s.Title != "音箱自唱歌" {
+		t.Fatalf("核心未投影音箱当前歌: %+v", s)
+	}
+	if s.Position != 30 || s.Duration != 200 || !s.Playing || s.Source != "speaker" {
+		t.Fatalf("核心未同步音箱进度: %+v", s)
 	}
 }

@@ -82,16 +82,39 @@ func (p *PlaybackState) progressLoop() {
 		if src != "speaker" || out == nil {
 			continue
 		}
-		pos, dur, playing := out.Position()
-		p.mu.Lock()
-		p.cur.Position = pos
-		if dur > 0 {
-			p.cur.Duration = dur
-		}
-		p.cur.Playing = playing
-		p.mu.Unlock()
-		p.bcastProgress()
+		p.projectProgress(out)
 	}
+}
+
+// projectProgress 音箱进度全量投影到核心（唯一入口，测试复用）：
+// init —— 进度 + 音箱自报当前歌（bvid/title）→ 核心对齐。
+// 音箱自动连播/蓝牙切换后核心 bvid/title 与设备同步（源不分裂），
+// bvid 若在队列中同步 QIdx（队头高亮对齐，Next 从正确位置走位）。
+// 位置防回零校验：只信 playing 或非零位置的来源（偶发 0 不殓正在播的进度）。
+func (p *PlaybackState) projectProgress(out Output) {
+	info := out.Position()
+	p.mu.Lock()
+	if info.BVID != "" {
+		if p.cur.BVID != info.BVID {
+			if idx := songIndexLocked(p.cur.Queue, info.BVID); idx >= 0 {
+				p.cur.QIdx = idx
+			}
+			p.cur.BVID = info.BVID
+		}
+		if info.Title != "" && p.cur.Title != info.Title {
+			p.cur.Title = info.Title
+		}
+	}
+	// 偶发 position=0 上报不殓正在播的进度（review 低能 #5 防殪）
+	if info.Playing || info.Pos > 0 || !p.cur.Playing {
+		p.cur.Position = info.Pos
+	}
+	if info.Dur > 0 {
+		p.cur.Duration = info.Dur
+	}
+	p.cur.Playing = info.Playing
+	p.mu.Unlock()
+	p.bcastProgress()
 }
 
 // SetDB 注入持久化句柄（变更即 Save）
@@ -161,16 +184,6 @@ func (p *PlaybackState) Snapshot() State {
 	s := p.cur
 	s.Queue = append([]Song(nil), p.cur.Queue...)
 	return s
-}
-
-// CurrentSpeakerDid 当前出声的音箱 did（source=speaker 时有效，否则空）
-func (p *PlaybackState) CurrentSpeakerDid() string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.cur.Source == "speaker" {
-		return p.cur.SpkDID
-	}
-	return ""
 }
 
 // bcastSnapshot 广播全量快照（state 事件）+ 持久化
@@ -577,66 +590,6 @@ func (p *PlaybackState) NextBVID() string {
 		return ""
 	}
 	return p.cur.Queue[(p.cur.QIdx+1)%len(p.cur.Queue)].BVID
-}
-
-// SetDuration 设置时长（歌词/元数据到齐后更新）
-func (p *PlaybackState) SetDuration(d float64) {
-	p.mu.Lock()
-	p.cur.Duration = d
-	needPersist := false
-	if p.cur.QIdx >= 0 && p.cur.QIdx < len(p.cur.Queue) && p.cur.Queue[p.cur.QIdx].Duration != d {
-		p.cur.Queue[p.cur.QIdx].Duration = d
-		needPersist = true
-	}
-	p.mu.Unlock()
-	if needPersist {
-		p.persistNow() // 锁已释放，安全调（内部自己加锁）
-	}
-	p.bcastProgress()
-}
-
-// SetSpeakerProgress 音箱进度上报（后端桥：SpeakerService 1s tick → 统一状态流）。
-// 音箱模式（source=speaker 且 did 匹配）才同步状态；否则仅广播进度供前端参考。
-func (p *PlaybackState) SetSpeakerProgress(did, bvid, title string, position, duration float64, playing bool) {
-	p.mu.Lock()
-	isSpk := p.cur.Source == "speaker" && p.cur.SpkDID == did
-	if isSpk && bvid != "" {
-		// BVID/QIdx 同步：自动连播后音箱桥推新 bvid，队头必须对齐
-		// （否则队列高亮错位 + Next() 从旧 QIdx 走位，SSOT 内部自相矛盾）
-		if p.cur.BVID != bvid {
-			if idx := songIndexLocked(p.cur.Queue, bvid); idx >= 0 {
-				p.cur.QIdx = idx
-			}
-		}
-		p.cur.BVID = bvid
-		if title != "" {
-			p.cur.Title = title
-		}
-		// position 校验：来源可信才覆盖（playing 或 非零位置），
-		// 防偶发 position=0 上报把正在播的进度砸回 0（review 低能 #5）
-		if playing || position > 0 || !p.cur.Playing {
-			p.cur.Position = position
-		}
-		if duration > 0 {
-			p.cur.Duration = duration
-		}
-		p.cur.Playing = playing
-	}
-	p.mu.Unlock()
-	if isSpk {
-		p.bcastProgress()
-	}
-}
-
-// SetSpeakerStopped 音箱播完/停止：音箱模式切回 web（若 source=speaker 且 did 匹配）
-func (p *PlaybackState) SetSpeakerStopped(did string) {
-	p.mu.Lock()
-	if p.cur.Source == "speaker" && p.cur.SpkDID == did {
-		p.cur.Playing = false
-		p.cur.Position = 0
-	}
-	p.mu.Unlock()
-	p.bcastProgress()
 }
 
 // ---- 持久化（settings kv，key=playback_state）：存队列/播放模式/上次歌，重启恢复 ----

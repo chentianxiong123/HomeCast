@@ -28,6 +28,11 @@ type SpeakerService struct {
 	progress map[string]*SpeakerProgress // did -> 本地模拟进度（零小米云轮询）
 	failCount map[string]int  // did -> 连续播放失败次数（对齐 xiaomusic _play_failed_cnt，>=5 熔断）
 	port     string
+	// eventsSubs /speaker/events SSE 订阅者（服务端唯一 1s tick 广播所有设备进度——
+	// 取代过去每连接自起 tick goroutine：N 个页面=N 个 tick 同时 AllProgress，
+	// 与 /state/stream 双轨推同源进度；统一后与 PlaybackState/Widget 同构的订阅模型）
+	eventsSubs map[chan map[string]map[string]any]struct{}
+	pendingStops map[string]map[string]any // did -> idle 通知（停止时暂存，下次 tick 广播给前端设备卡刷回静止态）
 	// EndedHook 播完回调（did, nextBVID）——重构后核心自动连播，不再自己递归 Play
 	EndedHook func(did, nextBVID string)
 }
@@ -86,7 +91,7 @@ func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, token
 	if port == "" {
 		port = "28976"
 	}
-	return &SpeakerService{
+	s := &SpeakerService{
 		Auth:    auth,
 		client:  client,
 		tokens:  tokens,
@@ -96,7 +101,11 @@ func NewSpeakerService(auth *speaker.SpeakerAuth, client *bilibili.Client, token
 		progress: map[string]*SpeakerProgress{},
 		failCount: map[string]int{},
 		port:    port,
+		eventsSubs: map[chan map[string]map[string]any]struct{}{},
 	}
+	// 服务端唯一广播者：/speaker/events 订阅模型（取代每连接自带 tick）
+	go s.progressBroadcaster()
+	return s
 }
 
 // ListDevices 设备列表（无则尝试刷新）
@@ -495,7 +504,7 @@ func (s *SpeakerService) Progress(did string) map[string]any {
 	return sprogressMap(p)
 }
 
-// AllProgress 所有设备本地模拟进度（{did: progress}，SSE 单流推所有，不打小米云）
+// AllProgress 所有设备进度快照（/speaker/events 服务端单 tick 广播用）
 func (s *SpeakerService) AllProgress() map[string]map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -507,6 +516,57 @@ func (s *SpeakerService) AllProgress() map[string]map[string]any {
 		out[did] = sprogressMap(p)
 	}
 	return out
+}
+
+// Subscribe /speaker/events SSE 订阅（服务端唯一 tick 推所有设备进度；订阅模型统一）
+func (s *SpeakerService) Subscribe() chan map[string]map[string]any {
+	ch := make(chan map[string]map[string]any, 8)
+	s.mu.Lock()
+	s.eventsSubs[ch] = struct{}{}
+	s.mu.Unlock()
+	return ch
+}
+
+// Unsubscribe 注销 /speaker/events 订阅者
+func (s *SpeakerService) Unsubscribe(ch chan map[string]map[string]any) {
+	s.mu.Lock()
+	delete(s.eventsSubs, ch)
+	s.mu.Unlock()
+}
+
+// progressBroadcaster 服务端唯一 1s tick：向 /speaker/events 订阅者广播所有设备进度
+//（取代过去每个 SSE 连接自带 tick goroutine → N 页面=N 个协程同时 AllProgress；
+// 与 PlaybackState/Widget 同构的订阅模型，非阻塞丢弃）
+func (s *SpeakerService) progressBroadcaster() {
+	tick := time.NewTicker(1 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		all := s.AllProgress()
+		// 合并停止通知：设备被停/切走后面板没有活跃条目，但必须让前端把设备卡
+		// 刷回静止态（否则 UI 永远停在“播放中”撒谎）。idle 通知在一次广播后过期。
+		s.mu.Lock()
+		if len(s.pendingStops) > 0 {
+			if all == nil {
+				all = map[string]map[string]any{}
+			}
+			for did, idle := range s.pendingStops {
+				all[did] = idle
+			}
+			s.pendingStops = nil
+		}
+		s.mu.Unlock()
+		if len(all) == 0 {
+			continue
+		}
+		s.mu.Lock()
+		for ch := range s.eventsSubs {
+			select {
+			case ch <- all:
+			default: // 通道满则丢（前端未及时消费）
+			}
+		}
+		s.mu.Unlock()
+	}
 }
 
 // Control 控制：pause/stop/resume/volume
@@ -670,6 +730,12 @@ func (s *SpeakerService) stopProgressLocked(did string) {
 		p.timer.Stop()
 	}
 	p.stopped = true
+	// 先广播一条 idle 通知（前端设备卡刷回静止态），再移除条目。
+	// 旧实现直接 delete：前端收不到任何事件，设备卡永远停在“播放中”（状态撒谎）。
+	if s.pendingStops == nil {
+		s.pendingStops = map[string]map[string]any{}
+	}
+	s.pendingStops[did] = map[string]any{"state": "idle", "bvid": "", "title": "", "position": 0, "duration": 0}
 	delete(s.progress, did)
 }
 

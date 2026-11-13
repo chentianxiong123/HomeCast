@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 )
 
 // sseMsg SSE 广播载荷：name=事件名（toggle/lyric-state），data=JSON payload
@@ -78,6 +79,7 @@ type WidgetState struct {
 	cacheOff   float64
 	cacheOK    bool
 	pendingBvid string // 拉取在途的 bvid（防重复异步拉）
+	lastFailAt time.Time // 最近一次拉取失败时间（去抖：失败后 5s 内不重拉）
 }
 
 // NewWidgetState 构造（lineSrc 可后续用 SetLineSrc 注入，避免循环依赖）
@@ -99,6 +101,7 @@ func (w *WidgetState) InvalidateLines() {
 	w.cacheLines = nil
 	w.cacheOK = false
 	w.pendingBvid = ""
+	w.lastFailAt = time.Time{} // 清失败冷却：手动失效（选源/offset）后应立即可重拉
 	w.mu.Unlock()
 }
 
@@ -169,6 +172,9 @@ func (w *WidgetState) ensureLines(bvid string) {
 	}
 	w.mu.Lock()
 	need := w.cacheBvid != bvid || !w.cacheOK
+	if need && !w.lastFailAt.IsZero() && time.Since(w.lastFailAt) < 5*time.Second {
+		need = false // 拉取失败冷却中：不重试（去抖，防每次 currentLine 触发起 goroutine 刷屏）
+	}
 	if !need {
 		w.mu.Unlock()
 		return
@@ -186,13 +192,24 @@ func (w *WidgetState) ensureLines(bvid string) {
 	if pending {
 		return // 已有一个拉取在途
 	}
-	// 异步拉：源可能联网（网易云搜歌词），不能阻塞 SSE；拉到后广播带真 line
+	// 异步拉：源可能联网（网易云搜歌词），不能阻塞 SSE；拉到后广播带真 line。
+	// 拉取结束后必须清 pendingBvid（成功/失败都清）：否则首次拉取失败时
+	// cacheOK=false + pendingBvid 残留 → 之后每次 ensureLines 都误判“在途”直接
+	// return，该 bvid 的歌词行永远不会被拉到（真机实测：line 永远空）。
 	b := bvid
 	go func() {
 		lines, off, ok := w.lineSrc.Lines(b)
 		w.mu.Lock()
 		if w.cacheBvid == b {
 			w.cacheLines, w.cacheOff, w.cacheOK = lines, off, ok
+		}
+		if w.pendingBvid == b {
+			w.pendingBvid = ""
+		}
+		if ok {
+			w.lastFailAt = time.Time{} // 成功：清失败冷却
+		} else {
+			w.lastFailAt = time.Now() // 失败：冷却 5s，期间不重拉
 		}
 		w.mu.Unlock()
 		if ok {

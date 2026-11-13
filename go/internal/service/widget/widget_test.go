@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 )
 
 // ── 全 mock：不联网、不依赖真实 lyric service、不起进程 ──
@@ -210,3 +211,47 @@ func TestBroadcastLyricState_切歌拉源(t *testing.T) {
 }
 
 var _ = sync.Mutex{}
+
+// TestEnsureLinesRetryAfterFail 拉取失败后必须能重试：
+// 旧 bug 是 pendingBvid 拉完不清 → 首次失败后 cacheOK 恒 false 且每次
+// currentLine 都误判"在途"直接 return → 该歌歌词永远拉不到（line 恒空，真机踩过）。
+func TestEnsureLinesRetryAfterFail(t *testing.T) {
+	w := NewWidgetState()
+	src := &fakeSource{ok: false} // 首次失败
+	w.SetLineSrc(src)
+	// 首次 ensureLines：异步拉，失败
+	w.currentLine2("BV1x", 0) // 触发 ensureLines（异步）
+	// 等 goroutine 完成（失败不给广播，轮询 fakeSource.calls 判断结束）
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		src.mu.Lock()
+		c := src.calls
+		src.mu.Unlock()
+		if c > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// 切到成功源，越过失败冷却（直接清 lastFailAt，模拟 5s 后）
+	src.mu.Lock()
+	src.ok = true
+	src.lines = [][3]any{{0.0, "第一行", 0.0}}
+	src.mu.Unlock()
+	w.mu.Lock()
+	w.lastFailAt = time.Time{}
+	w.mu.Unlock()
+
+	// 再拉：必须真的发起第二次拉取并拿到行（旧 bug 这里 calls 不再增长 / line 恒空）
+	w.currentLine2("BV1x", 0)
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if line, _ := w.currentLine2("BV1x", 0); line == "第一行" {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	src.mu.Lock()
+	c := src.calls
+	src.mu.Unlock()
+	t.Fatalf("失败后重试未生效：calls=%d（应在失败冷却后重新拉并拿到行）", c)
+}

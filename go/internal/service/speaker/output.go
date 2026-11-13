@@ -100,13 +100,21 @@ func (o *SpeakerOutput) SetVolume(v int) error {
 	return nil
 }
 
-// Position 本地模拟进度（一切以我为准：不查音箱，本地时钟 + 暂停补偿）
-func (o *SpeakerOutput) Position() (pos, dur float64, playing bool) {
+// Position 音箱当前进度（本地模拟；bvid/title 取自音箱自身进度——核心据此
+// 对齐当前歌，自动连播/外部投送后核心与音箱不分裂）
+func (o *SpeakerOutput) Position() playback.ProgressInfo {
 	d := o.svc.Progress(o.did)
-	pos, _ = d["position"].(float64)
-	dur, _ = d["duration"].(float64)
-	playing = d["state"] == "playing"
-	return pos, dur, playing
+	bvid, _ := d["bvid"].(string)
+	title, _ := d["title"].(string)
+	pos, _ := d["position"].(float64)
+	dur, _ := d["duration"].(float64)
+	return playback.ProgressInfo{
+		BVID:    bvid,
+		Title:   title,
+		Pos:     pos,
+		Dur:     dur,
+		Playing: d["state"] == "playing",
+	}
 }
 
 // Caps 能力声明（小爱唯一不支持：真 seek；进度为本地模拟非真实）

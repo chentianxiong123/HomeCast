@@ -281,3 +281,73 @@ func TestAnchorResetsAutoNextTimer(t *testing.T) {
 	}
 	t.Fatal("锚定后自动连播未触发")
 }
+
+// TestEventsSubscribeDedup 订阅模型：/speaker/events 由服务端唯一 tick 广播，
+// 订阅者从 ch 收全量进度（取代每连接自带 goroutine；多订阅者并存不互相覆盖）。
+func TestEventsSubscribe(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	s.startProgress("did1", "BV1test", PlayOpts{Title: "测试歌", Duration: 260}, 30280)
+	defer s.stopForTest("did1")
+
+	ch := s.Subscribe()
+	defer s.Unsubscribe(ch)
+
+	// 手动触发一次广播逻辑（服务端唯一 broadcaster 的等价路径，不依赖 1s 时钟）
+	s.broadcastProgressForTest()
+	select {
+	case all := <-ch:
+		m, ok := all["did1"]
+		if !ok || m["bvid"] != "BV1test" {
+			t.Fatalf("订阅未收到 did1 进度: %v", all)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("订阅 2s 未收到广播")
+	}
+}
+
+func (s *SpeakerService) stopForTest(did string) {
+	s.mu.Lock()
+	s.stopProgressLocked(did)
+	s.mu.Unlock()
+}
+
+// broadcastProgressForTest 等价于 progressBroadcaster 的广播体（测试不依赖真实 tick）
+func (s *SpeakerService) broadcastProgressForTest() {
+	all := s.AllProgress()
+	if len(all) == 0 {
+		return
+	}
+	s.mu.Lock()
+	for ch := range s.eventsSubs {
+		select {
+		case ch <- all:
+		default:
+		}
+	}
+	s.mu.Unlock()
+}
+
+// TestStopBroadcastsIdle 停止必须广播一条 idle 通知（前端设备卡刷回静止态）：
+// 旧实现直接 delete 条目 → 设备卡永远停在"播放中"撒谎（真机踩过：切回 web 后卡片不刷新）。
+func TestStopBroadcastsIdle(t *testing.T) {
+	s := newTestSpeaker(t, false)
+	s.startProgress("did1", "BV1test", PlayOpts{Title: "测试歌", Duration: 260}, 30280)
+
+	// 停掉（模拟切回 web / 用户停止）
+	s.mu.Lock()
+	s.stopProgressLocked("did1")
+	s.mu.Unlock()
+
+	// 等价 progressBroadcaster 的下次广播路径：合并 pendingStops → 前端
+	all := map[string]map[string]any{}
+	s.mu.Lock()
+	for did, idle := range s.pendingStops {
+		all[did] = idle
+	}
+	s.mu.Unlock()
+
+	m, ok := all["did1"]
+	if !ok || m["state"] != "idle" {
+		t.Fatalf("停止后应产生 idle 通知，got %v", all)
+	}
+}

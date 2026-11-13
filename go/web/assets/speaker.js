@@ -1,40 +1,11 @@
-// 音箱推送进度（本地模拟，xiaomusic/MiAir 方法论）：
-// 前端 1 秒轮询自己的后端 /api/v1/speaker/progress/{did}（服务端本地时钟算位置），
-// 不打小米云。轮询期间设备列表可能被 htmx 重绘 → 每 tick 重新遍历 DOM 动态绑定。
+// 音箱设备列表状态（设备卡片 播放中/已暂停 标签）：
+// 单流 SSE /speaker/events 收所有音响状态（不打小米云），htmx 重绘时 lastData 防闪恢复。
+// 进度统一由 state.js 从 /state/stream 拿（store 单写者，勿双写——双写=状态脏/回跳根因）。
 (function () {
-  'use strict';
-  // 单流 SSE（零轮询）：一个 /speaker/events 连接收所有音响本地模拟进度（不打小米云）。
-  // 服务端 1s 定时推 {did: {state,position,duration,title}}；htmx 重绘设备列表时
-  // 每帧重新遍历 DOM 动态绑定（progress 事件驱动渲染，不再 setInterval 轮询）。
   var lastData = {}; // did -> 最近一次 SSE 进度（htmx 重绘后即时恢复，不闪空）
   function applyAll(all) {
     if (!all) return;
-    // 音箱进度 → Alpine store（dock 进度条/时间走起来）：source=speaker 时
-    // 把本地模拟位置写进 playback store，并触发 render（render 读 pb().position）
-    try {
-      if (window.Alpine) {
-        var st = Alpine.store('playback');
-        if (st && st.source === 'speaker' && st.spk_did) {
-          var d = all[st.spk_did];
-          if (d && d.bvid) {
-            st.position = d.position || 0;
-            if (d.duration > 0) st.duration = d.duration;
-            st.playing = d.state === 'playing';
-            if (window.hcBus) {
-              // 必须带完整 song（与 state.js applyState 同构）：subtitle.js 的 state 处理
-              // 见到无 song 的 state 就 hideBar()——音箱模式两条 state 流交替（state.js 带
-              // song + 本处不带）会导致字幕条每秒反复开关=闪烁（真机实测）。
-              window.hcBus.emit('state', {
-                state: st.playing ? 'playing' : 'paused',
-                song: st.bvid ? { bvid: st.bvid, title: st.title, artist: st.artist, cover: st.cover, duration: st.duration } : null,
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {}
-    // 广播给播放器面板（音响让位模式：进度/状态复用 player-dock）
-    try { if (window.hcBus) window.hcBus.emit('speaker-progress', all); } catch (e) {}
+    // 注：不写 Alpine store（进度由 state.js 单写，双写=状态脏/回跳的根因）。
     var boxes = document.querySelectorAll('.sp-state[data-did]');
     if (!boxes.length) return;
     boxes.forEach(function (b) {

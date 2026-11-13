@@ -130,34 +130,26 @@ func New() http.Handler {
 		return out
 	})
 	playbackStateGlobal = playbackState
-	stateHandler := &api.StateHandler{Pb: playbackState, Widget: widgetState}
+	stateHandler := &api.StateHandler{Pb: playbackState}
 
-	// 歌词驱动统一（speaker 源）：**唯一后端 goroutine** 每秒把当前音箱进度喂 Widget，
-	// 与 web 前端上报（POST /state/progress → Widget.Set）汇入同一条 lyric-state 管道。
-	// 必须住后端且只一份：曾经放在 /speaker/events SSE 循环里 → 每个打开的页面
-	// 都起一个 tick goroutine，多路互相覆盖 widget 进度 → 歌词行来回跳（闪）。
-	// bvid/title/artist/duration 全取音箱自身进度（与歌词源严格一致，不混核心标题）。
+	// 歌词驱动统一：widget = 核心状态的投影订阅者（唯一喂入）。
+	// 订阅核心广播（state/progress 事件）：web 模式由前端 timeupdate 上报
+	// （SetProgress → bcastProgress）驱动；音箱模式由 progressLoop 把音箱进度
+	// 投影进核心后广播。两路汇成核心一源——widget 只信核心，不再有独立喂入
+	// goroutine（曾放在 /speaker/events SSE 循环→每页面一个 tick 互相覆盖歌词
+	// 进度闪；也曾 700ms 独立 goroutine + web 上报双写。统一后 bvid/title 取自
+	// 核心（音箱模式下已投影为音箱自报），歌词源严格对齐）。
 	go func() {
-		t := time.NewTicker(700 * time.Millisecond)
-		defer t.Stop()
-		for range t.C {
-			did := playbackStateGlobal.CurrentSpeakerDid()
-			if did == "" {
-				continue // web 模式：前端 timeupdate 自己上报，不插手
+		ch := playbackState.Subscribe()
+		for m := range ch {
+			if m.Name != "state" && m.Name != "progress" {
+				continue // 只投影状态/进度；toggle/prev/next 是控制事件不走这
 			}
-			m := speakerSvc.Progress(did)
-			if m == nil || m["state"] == "idle" {
-				continue
+			s := playbackState.Snapshot()
+			if s.BVID == "" {
+				continue // 无歌不喂（避免清屏闪烁）
 			}
-			bvid, _ := m["bvid"].(string)
-			if bvid == "" {
-				continue
-			}
-			pos, _ := m["position"].(float64)
-			dur, _ := m["duration"].(float64)
-			title, _ := m["title"].(string)
-			playing := m["state"] == "playing"
-			widgetStateGlobal.Set(bvid, title, "", pos, dur, playing)
+			widgetStateGlobal.Set(s.BVID, s.Title, s.Artist, s.Position, s.Duration, s.Playing)
 		}
 	}()
 

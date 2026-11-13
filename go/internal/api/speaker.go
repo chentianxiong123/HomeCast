@@ -21,8 +21,9 @@ type SpeakerHandler struct {
 	QR  *speaker.QRLogin
 }
 
-// Events GET /api/v1/speaker/events —— SSE 单流：定时推所有音响本地模拟进度。
-// 零小米云轮询（进度本地时钟算）；手机面板一个连接收所有音响（一对多单流）。
+// Events GET /api/v1/speaker/events —— SSE 单流：订阅服务端唯一 tick 推送的所有音响进度。
+// （服务端一个广播者，所有连接只订阅转发——不再每连接自起 1s tick goroutine，
+// 与 /state/stream、/widget/events 同构的订阅模型）
 func (h *SpeakerHandler) Events(w http.ResponseWriter, r *http.Request) {
 	fl, ok := w.(http.Flusher)
 	if !ok {
@@ -34,11 +35,10 @@ func (h *SpeakerHandler) Events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 	fl.Flush()
-	// 心跳 + 定时推所有音响进度（本地时钟算，不打小米云；客户端断开自动退出）
+	ch := h.Svc.Subscribe()
+	defer h.Svc.Unsubscribe(ch)
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
-	tick := time.NewTicker(1 * time.Second)
-	defer tick.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
@@ -46,13 +46,10 @@ func (h *SpeakerHandler) Events(w http.ResponseWriter, r *http.Request) {
 		case <-heartbeat.C:
 			fmt.Fprintf(w, ": ping\n\n")
 			fl.Flush()
-		case <-tick.C:
-			all := h.Svc.AllProgress()
-			if len(all) > 0 {
-				b, _ := json.Marshal(all)
-				fmt.Fprintf(w, "event: progress\ndata: %s\n\n", b)
-				fl.Flush()
-			}
+		case all := <-ch:
+			b, _ := json.Marshal(all)
+			fmt.Fprintf(w, "event: progress\ndata: %s\n\n", b)
+			fl.Flush()
 		}
 	}
 }
