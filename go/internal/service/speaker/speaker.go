@@ -65,13 +65,21 @@ func (p *SpeakerProgress) Position() float64 {
 	if p.anchorPending {
 		return p.StartPos
 	}
+	var pos float64
 	if p.Bitrate > 0 && p.LoadedBytes > 0 {
-		return float64(p.LoadedBytes) / float64(p.Bitrate/8) // 字节/字节每秒 = 秒
+		pos = float64(p.LoadedBytes) / float64(p.Bitrate/8) // 字节/字节每秒 = 秒
+	} else if !p.PausedAt.IsZero() {
+		pos = p.PausedAt.Sub(p.Started).Seconds() - p.Paused
+	} else {
+		pos = time.Since(p.Started).Seconds() - p.Paused
 	}
-	if !p.PausedAt.IsZero() {
-		return p.PausedAt.Sub(p.Started).Seconds() - p.Paused
+	// 兜底 clamp：本地时钟只能走到 duration，禁止虚涨（真机单曲无 timer 时
+	// pos=1415/118 的根源；timer 修复后此分支仍有保护意义——buffered>duration
+	// 或 timer 被内核调度延迟时不许进度超歌）。
+	if p.Duration > 0 && pos > p.Duration {
+		return p.Duration
 	}
-	return time.Since(p.Started).Seconds() - p.Paused
+	return pos
 }
 
 // State 播放状态
@@ -447,9 +455,12 @@ func (s *SpeakerService) startProgress(did, bvid string, opts PlayOpts, quality 
 		// 新播等待音箱首次拉流校准（命令→拉流有延迟，锚定后进度才准）
 		anchorPending: true,
 	}
-	if duration > 0 && opts.NextBVID != "" {
+	if duration > 0 {
+		// 无条件建播完 timer（单曲/队列最后一首 NextBVID="" 也必须检测播完：
+		// 旧实现只在有下一首时建 → 单曲播完本地时钟永不走完，pos 虚涨到
+		// duration 几倍，音箱早已物理静音核心还说“播放中”（真机 pos=1415/118）。
 		p.timer = time.AfterFunc(time.Duration(duration*float64(time.Second)), func() {
-			s.playNextAuto(did, opts.NextBVID, quality)
+			s.progressTimer(did, p.NextBVID, p.Quality, p)
 		})
 	}
 	s.progress[did] = p
@@ -466,12 +477,31 @@ func (s *SpeakerService) RecordLoaded(did string, bytes int64) {
 	s.mu.Unlock()
 }
 
-// playNextAuto 自动连播：上一首播完（本地定时器到点）通知 EndedHook（核心统一走位）
-func (s *SpeakerService) playNextAuto(did, nextBVID string, quality int) {
-	log.Printf("[speaker] 定时器到点（本地模拟播完）→ 通知核心自动连播 next=%s did=%s", nextBVID, did)
+// progressTimer 本地模拟播完（定时器到点，唯一出口）：
+//   - 有下一首 → 通知核心自动连播（EndedHook 传 nextBVID）
+//   - 无下一首（单曲/最后一首）→ 播完即停：清进度 + idle 广播 + 通知核心停播态。
+// 旧实现只在 NextBVID!="" 时建 timer，单曲播完本地时钟永不走完（pos 虚涨）、
+// 音箱早已静音核心还说播放中 → 设备卡永远“播放中”撒谎。
+func (s *SpeakerService) progressTimer(did, nextBVID string, quality int, p *SpeakerProgress) {
+	// 校验：本次播放的进度对象仍是当前条目（期间可能已切歌/停止/新建重投）
 	s.mu.Lock()
+	if s.progress[did] != p {
+		s.mu.Unlock()
+		return // 过期 timer：已在超时前被切歌/重投替换
+	}
 	hook := s.EndedHook
+	if nextBVID == "" {
+		// 播完无下一首：音箱物理已停（静音），本地条目同步停止 + 广播 idle
+		log.Printf("[speaker] 播完（无下一首）did=%s → 停止+idle", did)
+		s.stopProgressLocked(did)
+		s.mu.Unlock()
+		if hook != nil {
+			hook(did, "") // 通知核心：音箱播完停（核心落停播态，不进自动连播）
+		}
+		return
+	}
 	s.mu.Unlock()
+	log.Printf("[speaker] 定时器到点（本地模拟播完）→ 通知核心自动连播 next=%s did=%s", nextBVID, did)
 	if hook != nil {
 		hook(did, nextBVID)
 	}
@@ -674,11 +704,11 @@ func (s *SpeakerService) resumeProgress(did string, startPos float64) {
 		p.timer.Stop()
 		p.timer = nil
 	}
-	if p.Duration > 0 && p.NextBVID != "" {
+	if p.Duration > 0 {
 		remaining := p.Duration - p.Position()
 		if remaining > 0 {
 			p.timer = time.AfterFunc(time.Duration(remaining*float64(time.Second)), func() {
-				s.playNextAuto(did, p.NextBVID, p.Quality)
+				s.progressTimer(did, p.NextBVID, p.Quality, p)
 			})
 		}
 	}
@@ -704,7 +734,8 @@ func (s *SpeakerService) AnchorStream(did string, at time.Time) {
 	p.Started = at.Add(-time.Duration((p.StartPos + p.Paused) * float64(time.Second)))
 	// 结束点也校准：自动连播定时器之前从命令时刻起算（会提前一个命令→拉流延迟），
 	// 锚定后按真实拉流时刻 + 剩余时长重建，结束点对齐真实开播。
-	if p.Duration > 0 && p.NextBVID != "" {
+	// 无条件建 timer（单曲/最后一首也必须播完即停：旧实现只在有 NextBVID 时建）。
+	if p.Duration > 0 {
 		if p.timer != nil {
 			p.timer.Stop()
 			p.timer = nil
@@ -713,7 +744,7 @@ func (s *SpeakerService) AnchorStream(did string, at time.Time) {
 		if remaining > 0 {
 			did, quality := did, p.Quality
 			p.timer = time.AfterFunc(time.Duration(remaining*float64(time.Second)), func() {
-				s.playNextAuto(did, p.NextBVID, quality)
+				s.progressTimer(did, p.NextBVID, quality, p)
 			})
 		}
 	}

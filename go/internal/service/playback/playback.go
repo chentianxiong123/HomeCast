@@ -113,6 +113,13 @@ func (p *PlaybackState) projectProgress(out Output) {
 			p.cur.Title = info.Title
 		}
 	}
+	// 音箱已无活动进度（播完→SpeakerFinished / 手动停）：不投影空态覆盖核心。
+	// 否则下面 !p.cur.Playing 条件成立会无条件把 position 刷 0（播完显示跳到 0:00），
+	// 且每 1s 空广播——progressLoop 对已停音箱的无意义临访。
+	if info.BVID == "" {
+		p.mu.Unlock()
+		return
+	}
 	// 偶发 position=0 上报不殓正在播的进度（review 低能 #5 防殪）
 	if info.Playing || info.Pos > 0 || !p.cur.Playing {
 		p.cur.Position = info.Pos
@@ -316,6 +323,21 @@ func (p *PlaybackState) Toggle() {
 		}
 	}
 	p.bcastProgress()
+}
+
+// SpeakerFinished 音箱播完且无下一首（后端 SpeakerService.progressTimer 到点、
+// EndedHook(did, "")）：音箱物理已静音，核心落停播态——playing=false、
+// 队列/当前歌保留（用户可再播/切歌），不切回 web（音箱仍在首选输出）。
+// 旧实现：无此通知，单曲播完核心永远 “playing”、本地时钟虚涨到几倍 duration。
+func (p *PlaybackState) SpeakerFinished(did string) {
+	p.mu.Lock()
+	if p.cur.Source != "speaker" || p.cur.SpkDID != did {
+		p.mu.Unlock()
+		return // 不是这台音箱在播（已切走/已停）：忽略
+	}
+	p.cur.Playing = false
+	p.mu.Unlock()
+	p.bcastSnapshot()
 }
 
 // Seek 定位（web 由前端 audio.currentTime 执行，这里只存状态）

@@ -351,3 +351,52 @@ func TestStopBroadcastsIdle(t *testing.T) {
 		t.Fatalf("停止后应产生 idle 通知，got %v", all)
 	}
 }
+
+// TestSpeakerNoNextStopsIdle 单曲/最后一首播完必须"即停"：本地定时器到点 →
+// 清进度 + 广播 idle + EndedHook("" )（核心落停播态）。
+// 旧实现：NextBVID=="" 时不建 timer → 本地时钟永不走完，pos 虚涨到几倍
+// duration、音箱早已静音核心还说"播放中"（真机 pos=1415/118 的根源）。
+func TestSpeakerNoNextStopsIdle(t *testing.T) {
+	s := newTestSpeaker(t, true)
+	var (
+		called  bool
+		gotNext string
+	)
+	s.EndedHook = func(did, nextBVID string) { called = true; gotNext = nextBVID }
+	s.startProgress("did1", "BV1solo", PlayOpts{Duration: 0.15}, 30280) // 无 NextBVID（单曲）
+	deadline := time.Now().Add(3 * time.Second)
+	for !called && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !called {
+		t.Fatal("单曲播完 EndedHook 未被调用（timer 未触发）")
+	}
+	if gotNext != "" {
+		t.Fatalf("单曲播完应传空 next（无下一首）, got=%q", gotNext)
+	}
+	// 进度条目应已清（不再 "playing"），前端设备卡收 idle
+	p := s.Progress("did1")
+	if p["state"] != "idle" || p["bvid"] != "" {
+		t.Fatalf("播完应 idle 且无当前歌: %v", p)
+	}
+}
+
+// TestPositionClampedAtDuration 进度 clamp 兜底：本地时钟不超过 duration
+// （timer 被替换/调度延迟时也不许虚涨——Position() 上限保护）。
+func TestPositionClampedAtDuration(t *testing.T) {
+	// 构造超时进度（Started 提前）直接测 Position()：即使没有 timer，
+	// 本地时钟也绝不虚涨到 duration 之外（真机 pos=1415/118 的独立兜底）。
+	p := &SpeakerProgress{
+		BVID:     "BV1clamp",
+		Duration: 30, // 30s 歌
+		Started:  time.Now().Add(-120 * time.Second), // 假设已播 2 分钟
+	}
+	if pos := p.Position(); pos > 30 {
+		t.Fatalf("position 虚涨超 duration: %v (duration=30)", pos)
+	}
+	// 铉定前凝固（StartPos）不受 clamp 影响
+	p2 := &SpeakerProgress{BVID: "BV2", Duration: 30, Started: time.Now(), StartPos: 12, anchorPending: true}
+	if pos := p2.Position(); pos != 12 {
+		t.Fatalf("锚定前应凝固 StartPos: %v", pos)
+	}
+}
