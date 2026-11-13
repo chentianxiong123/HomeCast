@@ -257,6 +257,37 @@ func withFreshV(raw string) string {
 	return u.String()
 }
 
+// withStart 给拉流 URL 带 start=<秒>（续播从中间开始；sec<=0 不带）
+func withStart(raw string, sec float64) string {
+	if sec <= 0 {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	q := u.Query()
+	q.Set("start", fmt.Sprintf("%.0f", sec))
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// resumePositionSec 续播位置：当前 progress 的 Position()（暂停中已含 Paused 补偿）。
+// 只在有播放记录时返回 >0 的位置；否则 0（从头）。
+func (s *SpeakerService) resumePositionSec(did string) float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.progress[did]
+	if p == nil {
+		return 0
+	}
+	pos := p.Position()
+	if pos < 0 {
+		return 0
+	}
+	return pos
+}
+
 // BlockedStream 断源闸门：该 did 暂停/停止中 → 后续拉流被拒（音箱播完缓冲自然停）。
 // 实现 api.StreamGate。
 func (s *SpeakerService) BlockedStream(did string) bool {
@@ -508,6 +539,10 @@ func (s *SpeakerService) Control(did, action string, volume int) (map[string]any
 			// 解除断源 + 重新下发播放指令。必须换新 v 强制音箱重拉
 			// （对齐 xiaomusic 每次 play 重新下发 URL；同 URL 会命中音箱缓存 → 无声/播旧）
 			fresh := withFreshV(u)
+			// 续播：把暂停位置带上（fMP4 容器级 seek，音箱从中间开始）——暂停时
+			// pause 记录位置（Paused 补偿），resume 转成 start=<秒> 让流端点切流。
+			// 无暂停记录（如直接 play）不带 start，从头播。
+			fresh = withStart(fresh, s.resumePositionSec(did))
 			s.mu.Lock()
 			s.playing[did] = fresh
 			delete(s.blocked, did)

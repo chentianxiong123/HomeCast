@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"homecast/internal/bilibili"
 	"homecast/internal/service/cache"
+	"homecast/internal/service/fmp4"
 	"homecast/internal/service/music"
 )
 
@@ -107,10 +109,32 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 续播/跳播秒：音箱端 resume 时带 start=暂停位置（fMP4 容器级 seek 切流，从中间开始）
+	startSec := 0.0
+	if v := r.URL.Query().Get("start"); v != "" {
+		startSec, _ = strconv.ParseFloat(v, 64)
+	}
+
 	// 1. 缓存命中：serve 本地文件（web 与音箱同一条 serveFile，不分叉。
 	//    全量 200/全量 Range 一次给 = 音箱铁证稳定；206 分片喂流已证伪删除）
 	if h.Cache != nil {
 		if _, _, ok := h.Cache.Get(bvid); ok {
+			if startSec > 0 {
+				// 从中间开始：fMP4 sample 级 seek 切流（纯容器操作不转码）。
+				// 解析失败/非 fMP4 一律回退全量从头播（绝不给音箱喂非法字节）
+				if out, err := fmp4.Seek(h.Cache.FilePath(bvid), startSec); err == nil && len(out) > 0 {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+					w.Header().Set("Content-Type", "application/octet-stream")
+					w.Header().Set("Content-Length", fmt.Sprint(len(out)))
+					w.WriteHeader(http.StatusOK)
+					if r.Method != http.MethodHead {
+						_, _ = w.Write(out)
+					}
+					log.Printf("[stream] %s start=%.1fs 切流 %dB (源 %s)", bvid, startSec, len(out), h.Cache.FilePath(bvid))
+					return
+				}
+				log.Printf("[stream] %s start=%.1fs 切流失败 → 回退全量", bvid, startSec)
+			}
 			serveFile(w, r, h.Cache.FilePath(bvid))
 			return
 		}
