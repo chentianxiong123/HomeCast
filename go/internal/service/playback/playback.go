@@ -43,6 +43,7 @@ type State struct {
 	Queue    []Song `json:"queue"`
 	QIdx     int    `json:"qidx"`
 	SpkDID   string `json:"spk_did,omitempty"` // source=speaker 时目标设备 did
+	Volume   int    `json:"volume"` // 音量 0-100（仅 source=speaker 有意义；web 音量走前端本地 audio）。不加 omitempty：volume=0(静音)是合法值必须广播
 }
 
 // PlaybackState 统一状态管理器（线程安全）
@@ -62,6 +63,12 @@ type PlaybackState struct {
 	// 错乱，真机踩过）。窗口内且音箱 bvid 滞后 → 跳过投影等音箱 startProgress 跟上。
 	// 蓝牙跟随（音箱领先、不经 Next/Prev）与自动连播（EndedHook→Next，音箱同步换歌）不受影响。
 	manualSwitchAt time.Time
+	// prevBVID 主动切歌前那首：让守卫只挡"音箱还报旧歌"（滞后），不误伤"音箱换到别的歌"
+	// （蓝牙领先）。窗口内若音箱报 prevBVID = 还没换歌（滞后）→跳过；报别的 bvid = 领先→跟随。
+	prevBVID string
+	// wantVolume 音箱模式期望音量（SSOT）：播放入口重应用，防换歌/音箱重启后音量/静音丢失。
+	// 仅 source=speaker 有意义；-1 = 未设（不重应用）。
+	wantVolume int
 }
 
 // NewPlaybackState 构造
@@ -70,6 +77,7 @@ func NewPlaybackState() *PlaybackState {
 		cur:  State{Source: "web", PlayMode: "order", QIdx: -1, Queue: []Song{}},
 		subs: make(map[chan SSEMsg]struct{}),
 		out:  NullOutput{}, // 默认 web：前端 audio 接管
+		wantVolume: -1,
 	}
 	go p.progressLoop() // 后台：音箱本地模拟进度 → SSOT（一切以我为准，不查音箱）
 	return p
@@ -109,9 +117,10 @@ func (p *PlaybackState) projectProgress(out Output) {
 		return
 	}
 	if info.BVID != "" && p.cur.BVID != info.BVID {
-		// 主动切歌保护窗（3s）：Next/Prev 后音箱还没 startProgress 换歌，其 Position()
-		// 仍报旧歌。若跟随会把核心 bvid/title/qidx 刷回旧歌 = 切歌错乱。窗口内跳过本次投影。
-		if time.Since(p.manualSwitchAt) < 3*time.Second {
+		// 主动切歌保护窗（3s）：Play/Next/Prev 后音箱还没 startProgress 换歌，其 Position()
+		// 仍报旧歌。若跟随会把核心 bvid/title/qidx 刷回旧歌 = 切歌错乱。仅当音箱还报
+		// prevBVID（刚切走那首 = 滞后）时跳过投影；若报别的 bvid = 音箱领先（蓝牙）→ 跟随。
+		if time.Since(p.manualSwitchAt) < 3*time.Second && info.BVID == p.prevBVID {
 			p.mu.Unlock()
 			return
 		}
@@ -276,6 +285,11 @@ func (p *PlaybackState) Play(s Song) {
 	p.cur.Duration = s.Duration
 	p.cur.Position = 0
 	p.cur.Playing = true
+	// 主动切歌（搜歌点播放/点队列歌）：开防污染窗。out.Play 真投音箱有延迟，这窗口内
+	// 音箱 Position() 仍报旧歌，若不挡，progressLoop→projectProgress 会把核心刷回旧歌
+	// = "歌切了面板不切"（与 Next/Prev 同一保护，Play 之前漏设）。
+	p.manualSwitchAt = time.Now()
+	p.prevBVID = old.Song.BVID // 守卫只挡音箱还报这首（滞后），放行蓝牙领先
 	nextBVID := p.nextBVIDLocked()
 	out := p.out
 	p.mu.Unlock()
@@ -288,6 +302,10 @@ func (p *PlaybackState) Play(s Song) {
 			p.cur.Queue = oldQueue
 			p.rollbackLocked(old)
 			p.mu.Unlock()
+		}
+		// 音箱模式：重应用期望音量（防换歌/音箱重启后音量/静音丢失）。wantVolume<0=从未设过，跳过。
+		if p.cur.Source == "speaker" && p.wantVolume >= 0 {
+			_ = out.SetVolume(p.wantVolume)
 		}
 	}
 	p.bcastSnapshot()
@@ -445,6 +463,7 @@ func (p *PlaybackState) Next() {
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
 	p.manualSwitchAt = time.Now() // 主动切歌：开防污染窗（projectProgress 跳过滞后旧歌投影）
+	p.prevBVID = old.Song.BVID // 守卫只挡音箱还报这首（滞后），放行蓝牙领先
 	nextBVID := p.nextBVIDLocked()
 	out := p.out
 	p.mu.Unlock()
@@ -485,6 +504,7 @@ func (p *PlaybackState) Prev() {
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
 	p.manualSwitchAt = time.Now() // 主动切歌：开防污染窗
+	p.prevBVID = old.Song.BVID // 守卫只挡音箱还报这首（滞后），放行蓝牙领先
 	nextBVID := p.nextBVIDLocked()
 	out := p.out
 	p.mu.Unlock()
@@ -521,6 +541,31 @@ func (p *PlaybackState) SetMode(m string) {
 	p.mu.Lock()
 	p.cur.PlayMode = m
 	p.mu.Unlock()
+	p.bcastSnapshot()
+}
+
+// SetVolume 设置音量（0-100）。仅 source=speaker 走 Output 接口真调音箱 + 存 SSOT + 广播；
+// web 音量由前端本地 audio 控制（不进 SSOT，多浏览器各自为政）。这是音箱音量的唯一正轨：
+// 激活此前无人调用的 Output.SetVolume，让音量/静音入 SSOT、SSE 多端同步、播放入口可重应用。
+func (p *PlaybackState) SetVolume(v int) {
+	if v < 0 {
+		v = 0
+	}
+	if v > 100 {
+		v = 100
+	}
+	p.mu.Lock()
+	if p.cur.Source != "speaker" {
+		p.mu.Unlock()
+		return // web 音量前端本地管，核心不管
+	}
+	p.cur.Volume = v
+	p.wantVolume = v
+	out := p.out
+	p.mu.Unlock()
+	if out != nil {
+		_ = out.SetVolume(v) // 真调音箱；失败也存 SSOT（设备可能暂离，恢复后重应用）
+	}
 	p.bcastSnapshot()
 }
 
@@ -604,6 +649,17 @@ func (p *PlaybackState) SwitchSpeaker(did string) {
 	// 独占：换设备（另一台音箱）必须让旧设备闭嘴——锁外真网络调用
 	if prevOut != nil && !sameDevice {
 		prevOut.Stop()
+	}
+	// 回读音箱真实音量 → SSOT + 广播（前端滑块/静音态对齐设备，不靠猜 localStorage）。
+	// 仅 speaker 输出能回读（web 音量前端本地管）。用结构化接口断言（避免 playback→speaker
+	// 循环依赖：speaker 已 import playback）。失败（设备暂离）→ 保留原值/默认，不阻斷切音箱。
+	if vr, ok := p.out.(interface{ Volume() int }); ok {
+		if v := vr.Volume(); v >= 0 {
+			p.mu.Lock()
+			p.cur.Volume = v
+			p.wantVolume = v
+			p.mu.Unlock()
+		}
 	}
 	p.bcastSnapshot()
 }

@@ -48,8 +48,11 @@ func (h *H) searchFragment(kw string) (template.HTML, error) {
 //   - 直接访问 → 完整页（shell + 搜索框 + 预渲染结果），刷新/直达可用
 func (h *H) Search(w http.ResponseWriter, r *http.Request) {
 	kw := strings.TrimSpace(r.URL.Query().Get("kw"))
-	// 安卓壳（wails3 asset 桥不透传 HX-Request 头）由前端补 hc=1 参数区分 htmx 请求
-	isHX := r.Header.Get("HX-Request") != "" || r.URL.Query().Get("hc") == "1"
+	// htmx 请求带 HX-Request 头（htmx 所有请求自动带）；浏览器直达/刷新是裸请求不带。
+	// 旧逻辑还认 ?hc=1（曾给 wails 壳补的标记），但 hc=1 被 hx-push-url 写进地址栏，
+	// 浏览器刷新带 hc=1 会被误判成 htmx 请求 → 返回裸片段（无 shell/CSS）= "搜索页刷新 CSS 全丢"。
+	// 故只认 HX-Request 头：htmx 请求 → 片段；直达/刷新 → 完整页。
+	isHX := r.Header.Get("HX-Request") != ""
 
 	if kw == "" {
 		if isHX {

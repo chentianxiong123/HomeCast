@@ -21,6 +21,7 @@
   let quality = parseInt(localStorage.getItem('hc:quality') || '192', 10); // 64/128/192
   if (el.qualityBtn) el.qualityBtn.textContent = quality + 'k';
   let volMuted = false; // 静音（WebKit audio.muted 同帧读取旧值，用 JS 变量）
+  let lastSource = null; // 上次音源（web/speaker）：切回 web 时恢复 web 本地音量态用
   let seeking = false;  // 拖动进度条中（暂停上报，松手再上报）
 
   const fmt = (s) => {
@@ -177,52 +178,41 @@
   function setVol(v) {
     v = Number(v) || 0; // range input value 是字符串，后端 Volume int 解码数字必须转
     volMuted = v === 0;
-    // 音箱模式：音量走音箱 API（设备实际音量）；web 模式仍走本地 audio
+    try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
     if (pb().source === 'speaker') {
-      const did = pb().spk_did;
-      if (did) {
-        fetch('/api/v1/speaker/volume', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ did, volume: v }),
-        }).catch(() => {});
-      }
+      // 音箱模式：音量走后端 SSOT（set_volume command → Output.SetVolume 真调音箱 + 广播）。
+      // 后端 bcastSnapshot → SSE state → applyState 回填滑块（spk-volume 事件），不在此处直接调 API。
+      window.hcState && window.hcState.cmd('set_volume', { volume: v });
     } else {
+      // web 模式：本地 audio 直控
       audio.volume = v / 100;
       audio.muted = volMuted;
     }
-    try { localStorage.setItem('hc:vol', String(v)); } catch (e) {}
     renderMute();
   }
   function mute() {
-    // 音箱模式：静音=音量 0 走音箱 API；web 模式仍走本地 audio.muted
     if (pb().source === 'speaker') {
       const did = pb().spk_did;
-      const wasMuted = volMuted || audio.volume === 0;
+      const wasMuted = volMuted; // 音箱静音态只看 volMuted（audio.volume 在音箱模式无意义）
       if (wasMuted) {
-        // 取消静音 → 恢复上次音量
+        // 取消静音 → 恢复上次音量（def=0 兜底 80，否则取消静音没声）
         volMuted = false;
-        const def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
-        if (did && def > 0) {
-          fetch('/api/v1/speaker/volume', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ did, volume: def }),
-          }).catch(() => {});
-        }
+        let def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+        if (def <= 0) def = 80;
+        if (did) window.hcState && window.hcState.cmd('set_volume', { volume: def });
+        if (el.vol) el.vol.value = def; // ★补：滑块 UI 同步（旧实现漏，取消静音滑块停 0）
+        try { localStorage.setItem('hc:vol', String(def)); } catch (e) {}
       } else {
-        // 静音 → 音量 0
+        // 静音 → 音量 0（走后端 SSOT，换歌/重启后 Play 重应用 wantVolume=0 保持静音）
         volMuted = true;
-        if (did) {
-          fetch('/api/v1/speaker/volume', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ did, volume: 0 }),
-          }).catch(() => {});
-        }
+        if (did) window.hcState && window.hcState.cmd('set_volume', { volume: 0 });
       }
     } else {
       if (volMuted || audio.volume === 0) {
         volMuted = false;
         if (audio.volume === 0) {
-          const def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+          let def = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+          if (def <= 0) def = 80;
           audio.volume = def / 100;
           if (el.vol) el.vol.value = def;
           try { localStorage.setItem('hc:vol', String(def)); } catch (e) {}
@@ -418,7 +408,21 @@
   // state.js applyState/applyProgress 更新 Alpine.store 后 emit 'state'（含进度变化），
   // 音箱模式 bvid/playing/source 不变、position 每秒变化 → 直接依赖该事件触发重绘。
   if (window.hcBus) {
-    hcBus.on('state', () => { driveAudio(); render(); updateMediaMeta(); });
+    hcBus.on('state', () => {
+      // 切回 web：恢复 web 本地音量态。web/speaker 是独立音域，speaker 静音（volMuted=true）
+      // 不得残留到 web（否则切回 web 音频被静音/滑块被压 0）。web 音量只认 localStorage。
+      const src = window.hcState?.get()?.source;
+      if (src === 'web' && lastSource === 'speaker') {
+        volMuted = false;
+        const v = parseInt(localStorage.getItem('hc:vol') || '80', 10) || 80;
+        audio.volume = v / 100;
+        audio.muted = false;
+        if (el.vol) el.vol.value = v;
+        renderMute();
+      }
+      if (src) lastSource = src;
+      driveAudio(); render(); updateMediaMeta();
+    });
   }
 
   // ---- 音量/静音初始化（本地设备偏好）----

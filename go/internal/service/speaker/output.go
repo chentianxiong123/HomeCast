@@ -100,6 +100,30 @@ func (o *SpeakerOutput) SetVolume(v int) error {
 	return nil
 }
 
+// Volume 回读音箱当前真实音量（0-100）。切音箱时调一次对齐前端滑块/静音态（否则滑块
+// 靠猜 localStorage，与设备实际脱节）。仅切音箱时读一次，非进度轮询（不违反"不读状态"契约——
+// 那契约指进度；音量是设备设置项，回读一次对齐 UI 合理）。失败返回 -1（调用方降级用默认）。
+func (o *SpeakerOutput) Volume() int {
+	status, err := o.svc.GetStatus(o.did)
+	if err != nil {
+		return -1
+	}
+	if c, _ := status["code"].(int); c != 0 {
+		return -1
+	}
+	data, _ := status["data"].(map[string]any)
+	if data == nil {
+		return -1
+	}
+	if v, ok := data["volume"].(float64); ok {
+		return int(v)
+	}
+	if v, ok := data["volume"].(int); ok {
+		return v
+	}
+	return -1
+}
+
 // Position 音箱当前进度（本地模拟；bvid/title 取自音箱自身进度——核心据此
 // 对齐当前歌，自动连播/外部投送后核心与音箱不分裂）
 func (o *SpeakerOutput) Position() playback.ProgressInfo {

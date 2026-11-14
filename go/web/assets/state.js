@@ -29,7 +29,17 @@
       queue: Array.isArray(s.queue) ? s.queue : [],
       qidx: typeof s.qidx === 'number' ? s.qidx : -1,
       spk_did: s.spk_did || '',
+      volume: typeof s.volume === 'number' ? s.volume : null, // 音箱音量（SSOT）；web 为 null（本地管）
     });
+    // 音箱音量 → 滑块/静音态对齐后端 SSOT（切音箱回读真实音量、多端同步）。
+    // ★仅 speaker 模式应用：volume 是音箱专属概念；web 音量前端本地管（audio.volume），
+    // 后端 web 态 volume 恒 0（无人设），若应用会把 web 滑块错压成 0。直接赋 el.vol.value
+    // 不触发 input 事件 → 不会回环（setVol 只在用户拖动时发 command）。
+    if (s.source === 'speaker' && typeof s.volume === 'number' && s.volume >= 0) {
+      const vol = document.getElementById('d-vol');
+      if (vol && Number(vol.value) !== s.volume) vol.value = s.volume;
+      if (window.hcBus) window.hcBus.emit('spk-volume', s.volume);
+    }
     // 桥接 hcBus（现有孤岛不改）：nowplaying / state / queue
     const song = s.bvid ? { bvid: s.bvid, title: s.title, artist: s.artist, cover: s.cover, duration: s.duration } : null;
     try {

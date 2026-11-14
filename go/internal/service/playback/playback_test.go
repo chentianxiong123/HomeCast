@@ -215,6 +215,7 @@ type speakerProgOut struct {
 	playFn      func(bvid string) error
 	stopFn      func() error
 	lastPlayed  string
+	lastVolume  int // 最近一次 SetVolume（验证 Play 重应用音量）
 }
 
 func (m *speakerProgOut) Play(bvid string, opts PlayOpts) error {
@@ -233,7 +234,7 @@ func (m *speakerProgOut) Stop() error {
 	return nil
 }
 func (m *speakerProgOut) Seek(sec float64) error { return ErrUnsupported }
-func (m *speakerProgOut) SetVolume(v int) error { return nil }
+func (m *speakerProgOut) SetVolume(v int) error { m.lastVolume = v; return nil }
 func (m *speakerProgOut) Position() ProgressInfo {
 	return ProgressInfo{BVID: m.bvid, Title: m.title, Pos: m.pos, Dur: m.dur, Playing: m.playing}
 }
@@ -246,6 +247,65 @@ func (m *speakerProgOut) Name() string        { return "speaker" }
 // TestProgressLoopProjectsSpeakerSong 重构图核心：progressLoop 全量投影——
 // 音箱自报 bvid/title 同步进核心（自动连播/蓝牙切换后核心与设备不分裂）。
 // 替代已删的 SetSpeakerProgress 桥（当时无生产调用=死代码，语义迁到此处）。
+// TestPlayGuardAgainstStaleSpeakerProgress 搜歌点播放（走 Play() 而非 Next()）防污染回归：
+// 音箱正播旧歌时用户搜歌点新歌，Play() 核心已换新歌+bcastSnapshot，但 out.Play 音箱还没换
+// （Position() 仍报旧歌）。这窗口 progressLoop 投影会把核心刷回旧歌 = "歌切了面板不切"
+// （真机踩过）。根因：Play() 之前漏设 manualSwitchAt，守卫窗不生效。修法：Play() 也开窗。
+func TestPlayGuardAgainstStaleSpeakerProgress(t *testing.T) {
+	out := &speakerProgOut{bvid: "BV-old", title: "旧歌", pos: 50, dur: 200, playing: true}
+	p := NewPlaybackState()
+	p.SetOutputFactory(func(did string) Output { return out })
+	p.Play(Song{BVID: "BV-old", Title: "旧歌"})
+	p.SwitchSpeaker("did1")
+	out.bvid, out.title = "BV-old", "旧歌"
+
+	// 音箱播旧歌时，用户搜歌点新歌（走 Play，非 Next）
+	p.Play(Song{BVID: "BV-new", Title: "新歌"})
+	// out.Position() 仍报旧歌（模拟 out.Play 未完成窗口）→ 滞后投影必须被守卫拦截
+	p.projectProgress(out)
+
+	s := p.Snapshot()
+	if s.BVID != "BV-new" || s.Title != "新歌" {
+		t.Fatalf("搜歌点播放被音箱旧进度污染（面板刷回旧歌）: bvid=%s title=%s", s.BVID, s.Title)
+	}
+}
+
+// TestVolumeSSOTAndReapply 音量 SSOT 回归：
+// 1) SetVolume 存 SSOT（State.Volume + wantVolume）并下发 Output.SetVolume；
+// 2) 换歌（Play）后重应用 wantVolume——防换歌/音箱重启后音量/静音丢失（静音=volume 0，
+//    换歌若不重应用会突然出声）。
+func TestVolumeSSOTAndReapply(t *testing.T) {
+	out := &speakerProgOut{}
+	p := NewPlaybackState()
+	p.SetOutputFactory(func(did string) Output { return out })
+	p.Play(Song{BVID: "BV1", Title: "歌1"})
+	p.SwitchSpeaker("did1")
+
+	p.SetVolume(0) // 静音
+	s := p.Snapshot()
+	if s.Volume != 0 {
+		t.Fatalf("SetVolume 未入 SSOT: volume=%d", s.Volume)
+	}
+	if out.lastVolume != 0 {
+		t.Fatalf("SetVolume 未下发 Output: lastVolume=%d", out.lastVolume)
+	}
+
+	// 换歌：Play 重应用 wantVolume=0（保持静音，不突然出声）
+	out.lastVolume = 100 // 模拟音箱重启后音量回默认
+	p.Play(Song{BVID: "BV2", Title: "歌2"})
+	if out.lastVolume != 0 {
+		t.Fatalf("换歌未重应用静音音量: lastVolume=%d（应保持 0 静音）", out.lastVolume)
+	}
+
+	// 调高音量再换歌：重应用新音量
+	p.SetVolume(60)
+	out.lastVolume = 100
+	p.Play(Song{BVID: "BV3", Title: "歌3"})
+	if out.lastVolume != 60 {
+		t.Fatalf("换歌未重应用音量: lastVolume=%d（应 60）", out.lastVolume)
+	}
+}
+
 func TestProgressLoopProjectsSpeakerSong(t *testing.T) {
 	out := &speakerProgOut{bvid: "BV1x", title: "音箱自唱歌", pos: 30, dur: 200, playing: true}
 	p := NewPlaybackState()

@@ -73,6 +73,7 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 		Did    string  `json:"did"`
 		Queue  []playback.Song `json:"queue"`
 		QIdx   int     `json:"qidx"`
+		Volume int     `json:"volume"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		errResp(w, http.StatusBadRequest, "invalid body")
@@ -95,6 +96,8 @@ func (h *StateHandler) Command(w http.ResponseWriter, r *http.Request) {
 		h.Pb.Prev()
 	case "mode":
 		h.Pb.SetMode(body.Mode)
+	case "set_volume":
+		h.Pb.SetVolume(body.Volume)
 	case "queue":
 		h.Pb.SetQueue(body.Queue, body.QIdx)
 	case "switch_speaker":
