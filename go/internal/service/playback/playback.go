@@ -56,6 +56,12 @@ type PlaybackState struct {
 	out        Output
 	outFactory OutputFactory // 创建绑定 did 的输出（SwitchSpeaker 用）
 	prevWebPlaying bool // 切走前 web 播放态（SwitchWeb 续播用，非持久化）
+	// manualSwitchAt 主动切歌（Next/Prev）时刻：projectProgress 的防污染窗口用。
+	// 主动切歌时序 = 核心先换新歌+bcastSnapshot，后 out.Play 音箱才换——中间窗口
+	// progressLoop tick 会读到音箱还播旧歌，若一律跟随会把核心刷回旧歌（前端歌名/进度
+	// 错乱，真机踩过）。窗口内且音箱 bvid 滞后 → 跳过投影等音箱 startProgress 跟上。
+	// 蓝牙跟随（音箱领先、不经 Next/Prev）与自动连播（EndedHook→Next，音箱同步换歌）不受影响。
+	manualSwitchAt time.Time
 }
 
 // NewPlaybackState 构造
@@ -102,16 +108,21 @@ func (p *PlaybackState) projectProgress(out Output) {
 		p.mu.Unlock()
 		return
 	}
-	if info.BVID != "" {
-		if p.cur.BVID != info.BVID {
-			if idx := songIndexLocked(p.cur.Queue, info.BVID); idx >= 0 {
-				p.cur.QIdx = idx
-			}
-			p.cur.BVID = info.BVID
+	if info.BVID != "" && p.cur.BVID != info.BVID {
+		// 主动切歌保护窗（3s）：Next/Prev 后音箱还没 startProgress 换歌，其 Position()
+		// 仍报旧歌。若跟随会把核心 bvid/title/qidx 刷回旧歌 = 切歌错乱。窗口内跳过本次投影。
+		if time.Since(p.manualSwitchAt) < 3*time.Second {
+			p.mu.Unlock()
+			return
 		}
-		if info.Title != "" && p.cur.Title != info.Title {
-			p.cur.Title = info.Title
+		// 非主动切歌窗口的 bvid 不一致 = 音箱领先（蓝牙/外部换歌）→ 核心跟随设备
+		if idx := songIndexLocked(p.cur.Queue, info.BVID); idx >= 0 {
+			p.cur.QIdx = idx
 		}
+		p.cur.BVID = info.BVID
+	}
+	if info.Title != "" && p.cur.Title != info.Title {
+		p.cur.Title = info.Title
 	}
 	// 音箱已无活动进度（播完→SpeakerFinished / 手动停）：不投影空态覆盖核心。
 	// 否则下面 !p.cur.Playing 条件成立会无条件把 position 刷 0（播完显示跳到 0:00），
@@ -433,6 +444,7 @@ func (p *PlaybackState) Next() {
 	p.cur.QIdx = (p.cur.QIdx + 1) % len(p.cur.Queue)
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
+	p.manualSwitchAt = time.Now() // 主动切歌：开防污染窗（projectProgress 跳过滞后旧歌投影）
 	nextBVID := p.nextBVIDLocked()
 	out := p.out
 	p.mu.Unlock()
@@ -472,6 +484,7 @@ func (p *PlaybackState) Prev() {
 	p.cur.QIdx = (p.cur.QIdx - 1 + len(p.cur.Queue)) % len(p.cur.Queue)
 	song := p.cur.Queue[p.cur.QIdx]
 	p.applyLocked(song)
+	p.manualSwitchAt = time.Now() // 主动切歌：开防污染窗
 	nextBVID := p.nextBVIDLocked()
 	out := p.out
 	p.mu.Unlock()

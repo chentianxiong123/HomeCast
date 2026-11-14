@@ -385,3 +385,30 @@ func TestSetProgressRejectedWhenSpeaker(t *testing.T) {
 		t.Fatalf("web 模式上报被误拒: %+v", s)
 	}
 }
+
+// TestNextGuardAgainstStaleSpeakerProgress 主动切歌防污染回归：
+// Next() 核心已换新歌+bcastSnapshot，但 out.Play 音箱还没换（Position() 仍报旧歌）。
+// 这个窗口 progressLoop tick 投影时，旧实现会把核心 bvid/title/qidx 反向刷回旧歌 =
+// 前端歌名/进度错乱（真机踩过）。守卫：manualSwitchAt 窗口内跳过投影，核心守新歌。
+func TestNextGuardAgainstStaleSpeakerProgress(t *testing.T) {
+	// 音箱还播旧歌 BV-old（out.Play 没真换，Position() 仍报旧歌）
+	out := &speakerProgOut{bvid: "BV-old", title: "旧歌", pos: 50, dur: 200, playing: true}
+	p := NewPlaybackState()
+	p.SetOutputFactory(func(did string) Output { return out })
+	p.Play(Song{BVID: "BV-old", Title: "旧歌"})
+	p.SwitchSpeaker("did1")
+	// 队列两首，当前第一首 BV-old
+	p.SetQueue([]Song{{BVID: "BV-old", Title: "旧歌"}, {BVID: "BV-new", Title: "新歌"}}, 0)
+	out.bvid, out.title = "BV-old", "旧歌"
+
+	p.Next() // 核心换到 BV-new，但 out.Position() 仍报 BV-old（模拟 out.Play 未完成窗口）
+	p.projectProgress(out) // 滞后投影——必须被守卫拦截
+
+	s := p.Snapshot()
+	if s.BVID != "BV-new" || s.Title != "新歌" {
+		t.Fatalf("主动切歌被音箱旧进度污染（核心刷回旧歌）: bvid=%s title=%s qidx=%d", s.BVID, s.Title, s.QIdx)
+	}
+	if s.Position != 0 {
+		t.Fatalf("新歌进度被旧歌位置覆盖: pos=%v", s.Position)
+	}
+}
