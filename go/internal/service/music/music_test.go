@@ -77,7 +77,7 @@ func TestMusicServiceSearch(t *testing.T) {
 		})))
 	})
 	m := &MusicService{Client: client}
-	res, err := m.Search("周杰伦", 1, 30)
+	res, err := m.SearchRaw("周杰伦", 1, 30) // 测排序：用未过滤的 SearchRaw（教程 BV-E 才在结果里）
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
