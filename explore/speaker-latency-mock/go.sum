@@ -1,0 +1,4 @@
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/lsongdev/miservice-go v0.0.0-20260317060819-b3e39634cd06 h1:sngzpvCv2TlAWHIcq87awOt/MFyXSkIxgpwm58rwcj0=
+github.com/lsongdev/miservice-go v0.0.0-20260317060819-b3e39634cd06/go.mod h1:mKEJZdI3vdMNqBCxKumR013WHoF0e0WX10OwM5md88A=

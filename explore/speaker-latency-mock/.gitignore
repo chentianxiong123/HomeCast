@@ -1,0 +1,6 @@
+# 探索 mock 不入仓：编译产物、下载/转码的歌曲缓存
+sptest2
+songs/
+*.m4s
+*.mp3
+*.tmp
