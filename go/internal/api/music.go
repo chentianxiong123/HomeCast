@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"homecast/internal/service/cache"
 	"homecast/internal/service/fmp4"
 	"homecast/internal/service/music"
+	"homecast/internal/service/transcode"
 )
 
 // StreamGate 音频供给闸门：播放端（音箱）暂停/停止时，其后续拉流请求被断（断源）。
@@ -43,9 +45,10 @@ func errResp(w http.ResponseWriter, status int, msg string) {
 
 // MusicHandler 音乐端点集合
 type MusicHandler struct {
-	Music *music.MusicService
-	Cache *cache.CacheService // 音频缓存（可空：无缓存功能时直转发）
-	Gate  StreamGate          // 音频供给闸门（音箱断源用；可空）
+	Music  *music.MusicService
+	Cache  *cache.CacheService    // 音频缓存（可空：无缓存功能时直转发）
+	Gate   StreamGate             // 音频供给闸门（音箱断源用；可空）
+	Xcoder *transcode.Transcoder  // 音箱软转码 mp3 秒开（可空/ffmpeg 缺失 → 音箱回退原 m4s 路径）
 }
 
 // NewMusicHandler 构造
@@ -124,6 +127,14 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		startSec, _ = strconv.ParseFloat(v, 64)
 	}
 
+	// ★ 音箱秒开分支：喂转码 mp3（fMP4 容器是三四秒出声根因，mp3 流式帧拿到即出声）。
+	// 仅音箱（did 非空）走此路径；web 播放器（did 空）保持原 m4s 路径（浏览器原生解 fMP4，
+	// 不需转码且保留 fMP4 容器级 seek）。Xcoder 不可用（ffmpeg 缺失/未注入）→ 回退原 m4s 路径。
+	if did != "" && h.Xcoder != nil && h.Xcoder.Available() && h.Cache != nil {
+		h.streamSpeakerMP3(w, r, bvid, quality, startSec)
+		return
+	}
+
 	// 1. 缓存命中：serve 本地文件（web 与音箱同一条 serveFile，不分叉。
 	//    全量 200/全量 Range 一次给 = 音箱铁证稳定；206 分片喂流已证伪删除）
 	if h.Cache != nil {
@@ -200,4 +211,99 @@ func (h *MusicHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	} else {
 		_, _ = io.Copy(w, upResp.Body)
 	}
+}
+
+// streamSpeakerMP3 音箱秒开供给：缓存 mp3 命中直接 serve；未命中取源 m4s → 转码 mp3
+// （转完落缓存）→ serve。续播用字节 seek（mp3 无容器级 seek，CBR 线性换算 + 帧对齐）。
+// 全程 200 全量续流（踩"200 全量稳定 / 206 分片炸音"铁证；音箱是哑执行器，给它一段
+// 从指定字节起的完整剩余 mp3，不等它 Range 自己 seek）。
+func (h *MusicHandler) streamSpeakerMP3(w http.ResponseWriter, r *http.Request, bvid string, quality int, startSec float64) {
+	// 1. mp3 缓存命中 → 直接 seek serve（同曲二次秒开）
+	if _, ok := h.Xcoder.Get(bvid, quality); ok {
+		h.serveMP3Seek(w, r, h.Xcoder.FilePath(bvid, quality), startSec)
+		return
+	}
+	// 2. 确保源 m4s 落盘（mp3 从 m4s 派生；m4s 复用现有缓存，不重复下载）
+	m4sPath, err := h.ensureM4S(bvid, quality)
+	if err != nil {
+		log.Printf("[stream] 音箱转码取源失败 %s: %v", bvid, err)
+		errResp(w, http.StatusInternalServerError, "source error: "+err.Error())
+		return
+	}
+	// 3. 转码 mp3（转完落 mp3 缓存；同步转整首，纯 CPU 几十倍实时，几秒）
+	mp3Path, err := h.Xcoder.EnsureMP3(m4sPath, bvid, quality)
+	if err != nil {
+		log.Printf("[stream] 音箱转码失败 %s: %v", bvid, err)
+		errResp(w, http.StatusInternalServerError, "transcode error: "+err.Error())
+		return
+	}
+	// 4. seek serve mp3
+	h.serveMP3Seek(w, r, mp3Path, startSec)
+}
+
+// ensureM4S 确保源 m4s 已落缓存并返回路径。命中直接返回；未命中拉 B站全量落盘
+// （复用现有 Cache.Put，不改 cache 包）。音箱转码需要本地 m4s 文件作 ffmpeg 输入。
+func (h *MusicHandler) ensureM4S(bvid string, quality int) (string, error) {
+	if _, _, ok := h.Cache.Get(bvid); ok {
+		return h.Cache.FilePath(bvid), nil
+	}
+	stream, err := h.Music.GetAudioStream(bvid, quality)
+	if err != nil {
+		return "", err
+	}
+	if stream.URL == "" {
+		return "", fmt.Errorf("empty audio URL")
+	}
+	upResp, err := h.Music.Client.GetRaw(stream.URL, nil)
+	if err != nil {
+		return "", err
+	}
+	defer upResp.Body.Close()
+	if upResp.StatusCode != http.StatusOK && upResp.StatusCode != http.StatusPartialContent {
+		return "", fmt.Errorf("upstream %d", upResp.StatusCode)
+	}
+	data, err := io.ReadAll(upResp.Body)
+	if err != nil {
+		return "", err
+	}
+	// 完整性校验（对齐现有缓存纪律）：声明长度却下不满 → 截断，丢弃不污染缓存
+	if upResp.ContentLength > 0 && int64(len(data)) != upResp.ContentLength {
+		return "", fmt.Errorf("truncated %d/%d", len(data), upResp.ContentLength)
+	}
+	if err := h.Cache.Put(bvid, quality, data); err != nil {
+		return "", err
+	}
+	return h.Cache.FilePath(bvid), nil
+}
+
+// serveMP3Seek 从 mp3 指定字节起 serve 完整剩余段（200 全量 + Content-Length=剩余）。
+// 起始字节由 SeekOffset 按 CBR 线性换算（秒→字节 + 帧对齐）；越界回退从头。
+// 不处理 Range（音箱不自己 seek，全量续流稳定）。
+func (h *MusicHandler) serveMP3Seek(w http.ResponseWriter, r *http.Request, mp3Path string, startSec float64) {
+	fi, err := os.Stat(mp3Path)
+	if err != nil || fi.Size() == 0 {
+		errResp(w, http.StatusInternalServerError, "mp3 missing")
+		return
+	}
+	offset := h.Xcoder.SeekOffset(startSec)
+	if offset >= fi.Size() {
+		offset = 0
+	}
+	f, err := os.Open(mp3Path)
+	if err != nil {
+		errResp(w, http.StatusInternalServerError, "mp3 open")
+		return
+	}
+	defer f.Close()
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return
+	}
+	// ServeContent 原生处理 Range（206 + Content-Range + Accept-Ranges: bytes）。
+	// 关键：音箱会发 Range: bytes=N- 分段续拉（拉一段缓冲够就停，播完回来续拉）。
+	// 旧实现无视 Range 回 200 全量 → 打乱音箱缓冲节奏 → 多次重拉 = 出声延迟。
+	// 正确 206 续拉 → 音箱要哪段给哪段，缓冲够即出声（实测 ~1s）。
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "audio/mpeg")
+	http.ServeContent(w, r, "", time.Now(), f)
+	log.Printf("[stream] serveMP3 %s start=%.1fs offset=%d size=%d Range=%q", mp3Path, startSec, offset, fi.Size(), r.Header.Get("Range"))
 }

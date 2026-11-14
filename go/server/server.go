@@ -24,6 +24,7 @@ import (
 	"homecast/internal/service/sites"
 	spk "homecast/internal/service/speaker"
 	"homecast/internal/service/token"
+	"homecast/internal/service/transcode"
 	"homecast/internal/service/widget"
 	"homecast/internal/speaker"
 	"homecast/internal/store"
@@ -65,6 +66,7 @@ func New() http.Handler {
 		cache.CacheSchema,
 		cache.SettingsSchema,
 		lyriccache.CacheSchema,
+		transcode.Schema,
 	}, map[string]string{
 		fav.FavTable:     filepath.Join(dataDir, "favorites.json"),
 		playlist.PlaylistTable: filepath.Join(dataDir, "playlist.json"),
@@ -77,6 +79,10 @@ func New() http.Handler {
 	musicSvc := &music.MusicService{Client: client}
 	musicHandler := api.NewMusicHandler(musicSvc)
 	musicHandler.Cache = cacheSvc
+	// 音箱秒开软转码：m4s(fMP4，音箱边下边喂要缓冲三四秒) → 320k CBR mp3（流式帧拿到即出声）。
+	// mp3 缓存独立目录（转完落盘），仅音箱拉流（did 非空）走转码；web 播放器保持原 m4s。
+	// ffmpeg 缺失时 Transcoder.Available()=false，音箱自动回退原 m4s 路径（降级安全）。
+	musicHandler.Xcoder = transcode.NewTranscoder(db, filepath.Join(dataDir, "cache", "audio-mp3"), -1)
 	favHandler := &api.FavHandler{Fav: fav.NewFavService(db)}
 	// 歌词行缓存（后端持有，与音频同逻辑；透明：/api/v1/music/lyric 命中直接返回）
 	lyricCache := lyriccache.NewLyricCache(db, -1)
